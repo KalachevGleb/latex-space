@@ -4,16 +4,18 @@ import { Folder } from './folder'
 export type ProjectMember = {
   _id: string
   type: 'user'
-  privileges: 'readOnly' | 'readAndWrite'
+  privileges: 'readOnly' | 'readAndWrite' | 'review' | 'anonymousReview'
   name: string
   email: string
+  alias?: string
 }
 
 type ProjectInvite = {
   _id: string
-  privileges: 'readOnly' | 'readAndWrite'
+  privileges: 'readOnly' | 'readAndWrite' | 'review' | 'anonymousReview'
   name: string
   email: string
+  alias?: string
 }
 
 export type Project = {

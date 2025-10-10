@@ -76,7 +76,7 @@ export default function EditMember({
   function shouldWarnMember() {
     return (
       hasExceededCollaboratorLimit &&
-      ['readAndWrite', 'review'].includes(privileges)
+      ['readAndWrite', 'review', 'anonymousReview'].includes(privileges)
     )
   }
 
@@ -166,7 +166,7 @@ export default function EditMember({
               }
             />
             <div className="email-warning">
-              {member.email}
+              {member.alias ? `${member.alias} (${member.email})` : member.email}
               {member.pendingEditor && (
                 <div className="subtitle">{t('view_only_downgraded')}</div>
               )}
@@ -253,6 +253,7 @@ function SelectPrivilege({
             { key: 'owner', label: t('make_owner') },
             { key: 'readAndWrite', label: t('editor') },
             { key: 'review', label: t('reviewer') },
+            { key: 'anonymousReview', label: t('anonymous_reviewer') },
             { key: 'readOnly', label: t('viewer') },
             { key: 'removeAccess', label: t('remove_access') },
           ]
@@ -271,13 +272,14 @@ function SelectPrivilege({
   }
 
   function getPrivilegeSubtitle(privilege: PermissionsOption) {
-    if (!['readAndWrite', 'review'].includes(privilege)) {
+    if (!['readAndWrite', 'review', 'anonymousReview'].includes(privilege)) {
       return ''
     }
 
     if (
       hasBeenDowngraded ||
-      (!canAddCollaborators && !['readAndWrite', 'review'].includes(value))
+      (!canAddCollaborators &&
+        !['readAndWrite', 'review', 'anonymousReview'].includes(value))
     ) {
       return t('limited_to_n_collaborators_per_project', {
         count: features.collaborators,
@@ -290,8 +292,9 @@ function SelectPrivilege({
   function isPrivilegeDisabled(privilege: PermissionsOption) {
     return (
       !canAddCollaborators &&
-      ['readAndWrite', 'review'].includes(privilege) &&
-      (hasBeenDowngraded || !['readAndWrite', 'review'].includes(value))
+      ['readAndWrite', 'review', 'anonymousReview'].includes(privilege) &&
+      (hasBeenDowngraded ||
+        !['readAndWrite', 'review', 'anonymousReview'].includes(value))
     )
   }
 

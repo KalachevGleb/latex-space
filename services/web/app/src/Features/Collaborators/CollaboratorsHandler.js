@@ -37,6 +37,7 @@ async function removeUserFromProject(projectId, userId) {
           collaberator_refs: userId,
           readOnly_refs: userId,
           reviewer_refs: userId,
+          anonymous_reviewer_refs: userId,
           pendingEditor_refs: userId,
           pendingReviewer_refs: userId,
           tokenAccessReadOnly_refs: userId,
@@ -44,6 +45,7 @@ async function removeUserFromProject(projectId, userId) {
           archived: userId,
           trashed: userId,
         },
+        $unset: { [`memberAliases.${userId}`]: '' },
       }
     )
   } catch (err) {
@@ -101,16 +103,31 @@ async function addUserIdToProject(
     collaberator_refs: 1,
     readOnly_refs: 1,
     reviewer_refs: 1,
+    anonymous_reviewer_refs: 1,
+    memberAliases: 1,
     track_changes: 1,
   })
   let level
   let existingUsers = project.collaberator_refs || []
   existingUsers = existingUsers.concat(project.reviewer_refs || [])
+  existingUsers = existingUsers.concat(project.anonymous_reviewer_refs || [])
   existingUsers = existingUsers.concat(project.readOnly_refs || [])
   existingUsers = existingUsers.map(u => u.toString())
   if (existingUsers.includes(userId.toString())) {
     return // User already in Project
   }
+  
+  // For anonymous reviewers, generate an alias
+  let aliasUpdate = {}
+  if (privilegeLevel === PrivilegeLevels.ANONYMOUS_REVIEW) {
+    const memberAliases = project.memberAliases || {}
+    // Count existing anonymous reviewers to determine the next number
+    const anonymousReviewerCount = (project.anonymous_reviewer_refs || []).length
+    const alias = `Reviewer ${anonymousReviewerCount + 1}`
+    memberAliases[userId.toString()] = alias
+    aliasUpdate = { memberAliases }
+  }
+  
   if (privilegeLevel === PrivilegeLevels.READ_AND_WRITE) {
     level = { collaberator_refs: userId }
     logger.debug(
@@ -137,6 +154,9 @@ async function addUserIdToProject(
   } else if (privilegeLevel === PrivilegeLevels.REVIEW) {
     level = { reviewer_refs: userId }
     logger.debug({ privileges: 'reviewer', userId, projectId }, 'adding user')
+  } else if (privilegeLevel === PrivilegeLevels.ANONYMOUS_REVIEW) {
+    level = { anonymous_reviewer_refs: userId }
+    logger.debug({ privileges: 'anonymousReview', userId, projectId }, 'adding user')
   } else {
     throw new Error(`unknown privilegeLevel: ${privilegeLevel}`)
   }
@@ -145,7 +165,7 @@ async function addUserIdToProject(
     ContactManager.addContact(addingUserId, userId, () => {})
   }
 
-  if (privilegeLevel === PrivilegeLevels.REVIEW) {
+  if (privilegeLevel === PrivilegeLevels.REVIEW || privilegeLevel === PrivilegeLevels.ANONYMOUS_REVIEW) {
     const trackChanges = await convertTrackChangesToExplicitFormat(
       projectId,
       project.track_changes
@@ -154,7 +174,7 @@ async function addUserIdToProject(
 
     await Project.updateOne(
       { _id: projectId },
-      { track_changes: trackChanges, $addToSet: level }
+      { track_changes: trackChanges, $addToSet: level, ...aliasUpdate }
     ).exec()
 
     EditorRealTimeController.emitToRoom(
@@ -163,7 +183,7 @@ async function addUserIdToProject(
       trackChanges
     )
   } else {
-    await Project.updateOne({ _id: projectId }, { $addToSet: level }).exec()
+    await Project.updateOne({ _id: projectId }, { $addToSet: level, ...aliasUpdate }).exec()
   }
 
   // Ensure there is a dedicated folder for this "new" project.
@@ -278,6 +298,7 @@ async function setCollaboratorPrivilegeLevel(
       { collaberator_refs: userId },
       { readOnly_refs: userId },
       { reviewer_refs: userId },
+      { anonymous_reviewer_refs: userId },
     ],
   }
   let update
@@ -289,9 +310,11 @@ async function setCollaboratorPrivilegeLevel(
           readOnly_refs: userId,
           pendingEditor_refs: userId,
           reviewer_refs: userId,
+          anonymous_reviewer_refs: userId,
           pendingReviewer_refs: userId,
         },
         $addToSet: { collaberator_refs: userId },
+        $unset: { [`memberAliases.${userId}`]: '' },
       }
       break
     }
@@ -301,9 +324,11 @@ async function setCollaboratorPrivilegeLevel(
           readOnly_refs: userId,
           pendingEditor_refs: userId,
           collaberator_refs: userId,
+          anonymous_reviewer_refs: userId,
           pendingReviewer_refs: userId,
         },
         $addToSet: { reviewer_refs: userId },
+        $unset: { [`memberAliases.${userId}`]: '' },
       }
 
       const project = await ProjectGetter.promises.getProject(projectId, {
@@ -323,10 +348,58 @@ async function setCollaboratorPrivilegeLevel(
       }
       break
     }
+    case PrivilegeLevels.ANONYMOUS_REVIEW: {
+      update = {
+        $pull: {
+          readOnly_refs: userId,
+          pendingEditor_refs: userId,
+          collaberator_refs: userId,
+          reviewer_refs: userId,
+          pendingReviewer_refs: userId,
+        },
+        $addToSet: { anonymous_reviewer_refs: userId },
+      }
+
+      const project = await ProjectGetter.promises.getProject(projectId, {
+        track_changes: true,
+        memberAliases: true,
+        anonymous_reviewer_refs: true,
+      })
+      
+      // Assign alias if not already present
+      const memberAliases = project.memberAliases || {}
+      if (!memberAliases[userId.toString()]) {
+        const anonymousReviewerCount = (project.anonymous_reviewer_refs || []).length
+        const alias = `Reviewer ${anonymousReviewerCount + 1}`
+        update.$set = update.$set || {}
+        update.$set[`memberAliases.${userId}`] = alias
+      }
+      
+      const newTrackChangesState = await convertTrackChangesToExplicitFormat(
+        projectId,
+        project.track_changes
+      )
+      if (newTrackChangesState[userId] !== true) {
+        newTrackChangesState[userId] = true
+      }
+      if (typeof project.track_changes === 'object') {
+        update.$set = update.$set || {}
+        update.$set[`track_changes.${userId}`] = true
+      } else {
+        update.$set = update.$set || {}
+        update.$set.track_changes = newTrackChangesState
+      }
+      break
+    }
     case PrivilegeLevels.READ_ONLY: {
       update = {
-        $pull: { collaberator_refs: userId, reviewer_refs: userId },
+        $pull: {
+          collaberator_refs: userId,
+          reviewer_refs: userId,
+          anonymous_reviewer_refs: userId,
+        },
         $addToSet: { readOnly_refs: userId },
+        $unset: { [`memberAliases.${userId}`]: '' },
       }
 
       if (pendingEditor) {

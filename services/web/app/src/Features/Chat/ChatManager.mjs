@@ -2,7 +2,7 @@ import UserInfoController from '../User/UserInfoController.js'
 import UserGetter from '../User/UserGetter.js'
 import { callbackify } from '@overleaf/promise-utils'
 
-async function injectUserInfoIntoThreads(threads) {
+async function injectUserInfoIntoThreads(threads, memberAliases = {}) {
   const userIds = new Set()
   for (const thread of Object.values(threads)) {
     if (thread.resolved) {
@@ -22,10 +22,13 @@ async function injectUserInfoIntoThreads(threads) {
   const users = await UserGetter.promises.getUsers(userIds, projection)
   const usersById = new Map()
   for (const user of users) {
-    usersById.set(
-      user._id.toString(),
-      UserInfoController.formatPersonalInfo(user)
-    )
+    const userInfo = UserInfoController.formatPersonalInfo(user)
+    const userId = user._id.toString()
+    // Add alias if present for this user
+    if (memberAliases[userId]) {
+      userInfo.alias = memberAliases[userId]
+    }
+    usersById.set(userId, userInfo)
   }
   for (const thread of Object.values(threads)) {
     if (thread.resolved) {

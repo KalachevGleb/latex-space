@@ -71,7 +71,7 @@ module.exports = ProjectEditorHandler = {
 
   buildUserModelView(member) {
     const user = member.user
-    return {
+    const view = {
       _id: user._id,
       first_name: user.first_name,
       last_name: user.last_name,
@@ -81,6 +81,11 @@ module.exports = ProjectEditorHandler = {
       pendingEditor: member.pendingEditor,
       pendingReviewer: member.pendingReviewer,
     }
+    // Add alias if present
+    if (user.alias) {
+      view.alias = user.alias
+    }
+    return view
   },
 
   buildFolderModelView(folder) {

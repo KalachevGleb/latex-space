@@ -470,5 +470,7 @@
   "your_sessions": "Ваши сессии",
   "your_subscription": "Ваша подписка",
   "your_subscription_has_expired": "Срок Вашей подписки истёк.",
-  "zh-CN": "Китайский"
+  "zh-CN": "Китайский",
+  "reviewer": "Рецензент",
+  "anonymous_reviewer": "Анонимный рецензент"
 }
