@@ -17,7 +17,7 @@ COPY services/real-time/package.json /overleaf/services/real-time/
 COPY libraries/ /overleaf/libraries/
 COPY patches/ /overleaf/patches/
 
-RUN cd /overleaf && npm ci --quiet
+RUN cd /overleaf && npm ci --quiet --no-optional || npm ci --quiet --legacy-peer-deps
 
 COPY services/real-time/ /overleaf/services/real-time/
 

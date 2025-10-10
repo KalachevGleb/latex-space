@@ -988,7 +988,12 @@ module.exports = {
     pdfPreviewPromotions: [],
     diagnosticActions: [],
     sourceEditorCompletionSources: [],
-    sourceEditorSymbolPalette: [],
+    sourceEditorSymbolPalette: [
+      Path.resolve(
+        __dirname,
+        '../modules/symbol-palette/frontend/js/components/math-symbols-panel.tsx'
+      ),
+    ],
     sourceEditorToolbarComponents: [],
     mainEditorLayoutModals: [],
     langFeedbackLinkingWidgets: [],
@@ -1041,6 +1046,8 @@ module.exports = {
     'launchpad',
     'server-ce-scripts',
     'user-activate',
+    // Enable the symbol palette feature and module imports
+    'symbol-palette',
   ],
   viewIncludes: {},
 

@@ -8,6 +8,8 @@ import { useOutlinePane } from '@/features/ide-react/hooks/use-outline-pane'
 import React, { ElementType } from 'react'
 import importOverleafModules from '../../../../macros/import-overleaf-module.macro'
 import { t } from 'i18next'
+import SymbolPalettePane from '@/features/ide-react/components/editor/symbol-palette-pane'
+import { useEditorPropertiesContext } from '@/features/ide-react/context/editor-properties-context'
 
 const editorSidebarComponents = importOverleafModules(
   'editorSidebarComponents'
@@ -15,6 +17,8 @@ const editorSidebarComponents = importOverleafModules(
 
 export default function EditorSidebar() {
   const { view } = useLayoutContext()
+  const { showSymbolPalette, symbolPalettePlacement } =
+    useEditorPropertiesContext()
 
   const { outlineEnabled, outlinePanelRef } = useOutlinePane()
 
@@ -54,6 +58,21 @@ export default function EditorSidebar() {
         >
           <OutlineContainer />
         </Panel>
+
+        {showSymbolPalette && symbolPalettePlacement === 'sidebar' && (
+          <>
+            <VerticalResizeHandle />
+            <Panel
+              defaultSize={25}
+              minSize={10}
+              maxSize={50}
+              id="panel-symbol-palette-sidebar"
+              order={3}
+            >
+              <SymbolPalettePane />
+            </Panel>
+          </>
+        )}
       </PanelGroup>
     </nav>
   )

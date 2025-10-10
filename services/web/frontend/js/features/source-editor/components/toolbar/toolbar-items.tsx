@@ -31,8 +31,12 @@ export const ToolbarItems: FC<{
   listDepth,
 }) {
   const { t } = useTranslation()
-  const { showSymbolPalette, toggleSymbolPalette } =
-    useEditorPropertiesContext()
+  const {
+    showSymbolPalette,
+    toggleSymbolPalette,
+    symbolPalettePlacement,
+    setSymbolPalettePlacement,
+  } = useEditorPropertiesContext()
   const { writefullInstance } = useEditorContext()
   const { features } = useProjectContext()
   const permissions = usePermissionsContext()
@@ -106,15 +110,38 @@ export const ToolbarItems: FC<{
             >
               <MathDropdown />
               {symbolPaletteAvailable && (
-                <ToolbarButton
-                  id="toolbar-toggle-symbol-palette"
-                  label={t('toolbar_toggle_symbol_palette')}
-                  active={showSymbolPalette}
-                  command={toggleSymbolPalette}
-                  icon="Ω"
-                  textIcon
-                  className="ol-cm-toolbar-button-math"
-                />
+                <>
+                  <ToolbarButton
+                    id="toolbar-toggle-symbol-palette"
+                    label={t('toolbar_toggle_symbol_palette')}
+                    active={showSymbolPalette}
+                    command={toggleSymbolPalette}
+                    icon="Ω"
+                    textIcon
+                    className="ol-cm-toolbar-button-math"
+                  />
+                  {showSymbolPalette && (
+                    <ToolbarButton
+                      id="toolbar-toggle-symbol-palette-placement"
+                      label={
+                        symbolPalettePlacement === 'editor'
+                          ? t('toolbar_symbol_palette_bottom_editor')
+                          : t('toolbar_symbol_palette_bottom_sidebar')
+                      }
+                      command={() =>
+                        setSymbolPalettePlacement(prev =>
+                          prev === 'editor' ? 'sidebar' : 'editor'
+                        )
+                      }
+                      icon={
+                        symbolPalettePlacement === 'editor'
+                          ? 'view_stream'
+                          : 'view_sidebar'
+                      }
+                      className="ol-cm-toolbar-button-math"
+                    />
+                  )}
+                </>
               )}
             </div>
           )}

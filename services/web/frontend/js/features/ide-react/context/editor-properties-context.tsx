@@ -21,6 +21,8 @@ export type EditorPropertiesContextValue = {
   showSymbolPalette: boolean
   setShowSymbolPalette: Dispatch<SetStateAction<boolean>>
   toggleSymbolPalette: () => void
+  symbolPalettePlacement: 'editor' | 'sidebar'
+  setSymbolPalettePlacement: Dispatch<SetStateAction<'editor' | 'sidebar'>>
   opening: boolean
   setOpening: Dispatch<SetStateAction<boolean>>
   trackChanges: boolean
@@ -66,6 +68,9 @@ export const EditorPropertiesProvider: FC<PropsWithChildren> = ({
   useUnstableStoreSync('editor.showVisual', showVisual)
 
   const [showSymbolPalette, setShowSymbolPalette] = useState(false)
+  const [symbolPalettePlacement, setSymbolPalettePlacement] = useState<
+    'editor' | 'sidebar'
+  >('editor')
 
   const toggleSymbolPalette = useCallback(() => {
     setShowSymbolPalette(show => {
@@ -86,6 +91,8 @@ export const EditorPropertiesProvider: FC<PropsWithChildren> = ({
     showSymbolPalette,
     setShowSymbolPalette,
     toggleSymbolPalette,
+    symbolPalettePlacement,
+    setSymbolPalettePlacement,
     opening,
     setOpening,
     trackChanges,

@@ -19,7 +19,7 @@ COPY services/filestore/package.json /overleaf/services/filestore/
 COPY libraries/ /overleaf/libraries/
 COPY patches/ /overleaf/patches/
 
-RUN cd /overleaf && npm ci --quiet
+RUN cd /overleaf && npm ci --quiet --no-optional || npm ci --quiet --legacy-peer-deps
 
 COPY services/filestore/ /overleaf/services/filestore/
 

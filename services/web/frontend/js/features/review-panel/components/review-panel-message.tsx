@@ -9,7 +9,7 @@ import OLTooltip from '@/shared/components/ol/ol-tooltip'
 import MaterialIcon from '@/shared/components/material-icon'
 import AutoExpandingTextArea from '@/shared/components/auto-expanding-text-area'
 import ReviewPanelCommentOptions from './review-panel-comment-options'
-import { ExpandableContent } from './review-panel-expandable-content'
+import { ReviewPanelCommentWithMath } from './review-panel-comment-with-math'
 import ReviewPanelDeleteCommentModal from './review-panel-delete-comment-modal'
 import { useUserContext } from '@/shared/context/user-context'
 import ReviewPanelEntryUser from './review-panel-entry-user'
@@ -135,7 +135,7 @@ export const ReviewPanelMessage: FC<{
           autoFocus // eslint-disable-line jsx-a11y/no-autofocus
         />
       ) : (
-        <ExpandableContent
+        <ReviewPanelCommentWithMath
           className="review-panel-comment-body"
           contentLimit={100}
           checkNewLines

@@ -400,6 +400,22 @@ del.review-panel-content-highlight {
   display: inline;
   padding-right: var(--spacing-02);
   cursor: default;
+
+  // MathJax content styling
+  mjx-container {
+    display: inline-block;
+    margin: 0 2px;
+  }
+
+  // Ensure links in comments are styled appropriately
+  a {
+    color: var(--blue-50);
+    text-decoration: underline;
+
+    &:hover {
+      color: var(--blue-60);
+    }
+  }
 }
 
 .review-panel-expandable-inline {

@@ -84,5 +84,110 @@ export default function useProjectRanges() {
     }, [otMigrationStage, projectSnapshot])
   )
 
+  useSocketListener(
+    socket,
+    'resolve-thread',
+    useCallback((threadId: string) => {
+      setProjectRanges(prevProjectRanges => {
+        if (!prevProjectRanges) {
+          return prevProjectRanges
+        }
+
+        const updatedProjectRanges = new Map(prevProjectRanges)
+        
+        // Найти и обновить resolved статус комментария
+        for (const [docId, ranges] of updatedProjectRanges.entries()) {
+          const commentIndex = ranges.comments.findIndex(
+            comment => comment.op.t === threadId
+          )
+          
+          if (commentIndex !== -1) {
+            const updatedComments = [...ranges.comments]
+            updatedComments[commentIndex] = {
+              ...updatedComments[commentIndex],
+              resolved: true,
+            }
+            
+            updatedProjectRanges.set(docId, {
+              ...ranges,
+              comments: updatedComments,
+            })
+            break
+          }
+        }
+
+        return updatedProjectRanges
+      })
+    }, [])
+  )
+
+  useSocketListener(
+    socket,
+    'reopen-thread',
+    useCallback((threadId: string) => {
+      setProjectRanges(prevProjectRanges => {
+        if (!prevProjectRanges) {
+          return prevProjectRanges
+        }
+
+        const updatedProjectRanges = new Map(prevProjectRanges)
+        
+        // Найти и обновить resolved статус комментария
+        for (const [docId, ranges] of updatedProjectRanges.entries()) {
+          const commentIndex = ranges.comments.findIndex(
+            comment => comment.op.t === threadId
+          )
+          
+          if (commentIndex !== -1) {
+            const updatedComments = [...ranges.comments]
+            updatedComments[commentIndex] = {
+              ...updatedComments[commentIndex],
+              resolved: false,
+            }
+            
+            updatedProjectRanges.set(docId, {
+              ...ranges,
+              comments: updatedComments,
+            })
+            break
+          }
+        }
+
+        return updatedProjectRanges
+      })
+    }, [])
+  )
+
+  useSocketListener(
+    socket,
+    'delete-thread',
+    useCallback((threadId: string) => {
+      setProjectRanges(prevProjectRanges => {
+        if (!prevProjectRanges) {
+          return prevProjectRanges
+        }
+
+        const updatedProjectRanges = new Map(prevProjectRanges)
+        
+        // Найти и удалить комментарий
+        for (const [docId, ranges] of updatedProjectRanges.entries()) {
+          const updatedComments = ranges.comments.filter(
+            comment => comment.op.t !== threadId
+          )
+          
+          if (updatedComments.length !== ranges.comments.length) {
+            updatedProjectRanges.set(docId, {
+              ...ranges,
+              comments: updatedComments,
+            })
+            break
+          }
+        }
+
+        return updatedProjectRanges
+      })
+    }, [])
+  )
+
   return { projectRanges, error, loading }
 }

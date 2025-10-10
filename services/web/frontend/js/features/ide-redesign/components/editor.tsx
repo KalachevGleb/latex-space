@@ -11,7 +11,7 @@ import SymbolPalettePane from '@/features/ide-react/components/editor/symbol-pal
 import { useEditorPropertiesContext } from '@/features/ide-react/context/editor-properties-context'
 
 export const Editor = () => {
-  const { opening, errorState, showSymbolPalette } =
+  const { opening, errorState, showSymbolPalette, symbolPalettePlacement } =
     useEditorPropertiesContext()
   const { selectedEntityCount, openEntity } = useFileTreeOpenContext()
   const { currentDocumentId, currentDocument } = useEditorOpenDocContext()
@@ -42,7 +42,7 @@ export const Editor = () => {
           <SourceEditor />
           {isLoading && <LoadingPane />}
         </Panel>
-        {showSymbolPalette && (
+        {showSymbolPalette && symbolPalettePlacement === 'editor' && (
           <>
             <VerticalResizeHandle id="ide-redesign-editor-symbol-palette" />
             <Panel

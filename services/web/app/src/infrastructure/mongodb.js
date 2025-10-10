@@ -59,6 +59,7 @@ const db = {
   oauthAuthorizationCodes: internalDb.collection('oauthAuthorizationCodes'),
   projectAuditLogEntries: internalDb.collection('projectAuditLogEntries'),
   projectHistoryChunks: internalDb.collection('projectHistoryChunks'),
+  projectHistoryComments: internalDb.collection('projectHistoryComments'),
   projectHistoryFailures: internalDb.collection('projectHistoryFailures'),
   projectHistoryGlobalBlobs: internalDb.collection('projectHistoryGlobalBlobs'),
   projectHistoryLabels: internalDb.collection('projectHistoryLabels'),
