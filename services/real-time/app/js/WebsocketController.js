@@ -83,13 +83,24 @@ module.exports = WebsocketController = {
           return callback(new NotAuthorizedError())
         }
 
+        // Find user's alias if they are an anonymous reviewer
+        let userAlias = null
+        if (project.members) {
+          const member = project.members.find(
+            m => m._id && m._id.toString() === userId
+          )
+          if (member && member.alias) {
+            userAlias = member.alias
+          }
+        }
+
         client.ol_context = {}
         client.ol_context.privilege_level = privilegeLevel
         client.ol_context.user_id = userId
         client.ol_context.project_id = projectId
         client.ol_context.owner_id = project.owner && project.owner._id
-        client.ol_context.first_name = user.first_name
-        client.ol_context.last_name = user.last_name
+        client.ol_context.first_name = userAlias || user.first_name
+        client.ol_context.last_name = userAlias ? '' : user.last_name
         client.ol_context.email = user.email
         client.ol_context.connected_time = new Date()
         client.ol_context.signup_date = user.signUpDate
@@ -124,7 +135,12 @@ module.exports = WebsocketController = {
         ConnectedUsersManager.updateUserPosition(
           projectId,
           client.publicId,
-          user,
+          {
+            _id: userId,
+            first_name: client.ol_context.first_name,
+            last_name: client.ol_context.last_name,
+            email: client.ol_context.email,
+          },
           null,
           function (err) {
             if (err) {

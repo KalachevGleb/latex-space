@@ -31,6 +31,11 @@ function getArrowStyle(user?: User) {
 function MessageGroup({ messages, user, fromSelf }: MessageGroupProps) {
   const { t } = useTranslation()
 
+  // Display alias if present, otherwise use first_name or email
+  const displayName = user
+    ? (user as any).alias || user.first_name || user.email
+    : t('deleted_user')
+
   return (
     <div
       className={classNames('message-wrapper', {
@@ -39,9 +44,7 @@ function MessageGroup({ messages, user, fromSelf }: MessageGroupProps) {
     >
       {!fromSelf && (
         <div className="name" translate="no">
-          <span>
-            {user ? user.first_name || user.email : t('deleted_user')}
-          </span>
+          <span>{displayName}</span>
         </div>
       )}
       <div className="message" style={getMessageStyle(user)}>

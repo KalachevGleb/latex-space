@@ -6,6 +6,7 @@ const PrivilegeLevels = {
   READ_ONLY: 'readOnly',
   READ_AND_WRITE: 'readAndWrite',
   REVIEW: 'review',
+  ANONYMOUS_REVIEW: 'anonymousReview',
   OWNER: 'owner',
 }
 

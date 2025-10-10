@@ -91,6 +91,7 @@ const inviteToProjectSchema = z.object({
       PrivilegeLevels.READ_ONLY,
       PrivilegeLevels.READ_AND_WRITE,
       PrivilegeLevels.REVIEW,
+      PrivilegeLevels.ANONYMOUS_REVIEW,
     ]),
   }),
 })
@@ -118,6 +119,7 @@ async function inviteToProject(req, res) {
   if (privileges === PrivilegeLevels.READ_ONLY) {
     allowed = true
   } else {
+    // Reviewers (including anonymous reviewers) and editors count as edit collaborators
     allowed = await LimitationsManager.promises.canAddXEditCollaborators(
       projectId,
       1

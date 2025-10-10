@@ -23,6 +23,18 @@ async function sendMessage(req, res) {
 
   const user = await UserInfoManager.promises.getPersonalInfo(message.user_id)
   message.user = UserInfoController.formatPersonalInfo(user)
+  
+  // Get member aliases from the project
+  const ProjectGetter = await import('../Project/ProjectGetter.js')
+  const project = await ProjectGetter.default.promises.getProject(projectId, {
+    memberAliases: 1,
+  })
+  const memberAliases = project?.memberAliases || {}
+  const userIdStr = userId.toString()
+  if (memberAliases[userIdStr]) {
+    message.user.alias = memberAliases[userIdStr]
+  }
+  
   message.clientId = clientId
   EditorRealTimeController.emitToRoom(projectId, 'new-chat-message', message)
 
@@ -44,7 +56,17 @@ async function getMessages(req, res) {
     query.before
   )
 
-  await ChatManager.promises.injectUserInfoIntoThreads({ global: { messages } })
+  // Get member aliases from the project
+  const ProjectGetter = await import('../Project/ProjectGetter.js')
+  const project = await ProjectGetter.default.promises.getProject(projectId, {
+    memberAliases: 1,
+  })
+  const memberAliases = project?.memberAliases || {}
+
+  await ChatManager.promises.injectUserInfoIntoThreads(
+    { global: { messages } },
+    memberAliases
+  )
   res.json(messages)
 }
 

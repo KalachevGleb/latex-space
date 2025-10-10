@@ -196,6 +196,13 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
           ? t('comment_only_upgrade_for_track_changes')
           : null,
       })
+      options.push({
+        key: 'anonymousReview',
+        label: t('anonymous_reviewer'),
+        description: !features.trackChanges
+          ? t('comment_only_upgrade_for_track_changes')
+          : null,
+      })
     }
 
     options.push({

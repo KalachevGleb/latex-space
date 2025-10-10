@@ -39,8 +39,11 @@ class ProjectAccess {
   /** @type {PublicAccessLevel} */
   #publicAccessLevel
 
+  /** @type {Object} */
+  #memberAliases
+
   /**
-   * @param {{ owner_ref: ObjectId; collaberator_refs: ObjectId[]; readOnly_refs: ObjectId[]; tokenAccessReadAndWrite_refs: ObjectId[]; tokenAccessReadOnly_refs: ObjectId[]; publicAccesLevel: PublicAccessLevel; pendingEditor_refs: ObjectId[]; reviewer_refs: ObjectId[]; pendingReviewer_refs: ObjectId[]; }} project
+   * @param {{ owner_ref: ObjectId; collaberator_refs: ObjectId[]; readOnly_refs: ObjectId[]; tokenAccessReadAndWrite_refs: ObjectId[]; tokenAccessReadOnly_refs: ObjectId[]; publicAccesLevel: PublicAccessLevel; pendingEditor_refs: ObjectId[]; reviewer_refs: ObjectId[]; anonymous_reviewer_refs: ObjectId[]; pendingReviewer_refs: ObjectId[]; memberAliases?: Object }} project
    */
   constructor(project) {
     this.#members = _getMemberIdsWithPrivilegeLevelsFromFields(
@@ -52,9 +55,11 @@ class ProjectAccess {
       project.publicAccesLevel,
       project.pendingEditor_refs,
       project.reviewer_refs,
+      project.anonymous_reviewer_refs,
       project.pendingReviewer_refs
     )
     this.#publicAccessLevel = project.publicAccesLevel
+    this.#memberAliases = project.memberAliases || {}
   }
 
   /**
@@ -62,7 +67,8 @@ class ProjectAccess {
    */
   async loadOwnerAndInvitedMembers() {
     const all = await _loadMembers(
-      this.#members.filter(m => m.source !== Sources.TOKEN)
+      this.#members.filter(m => m.source !== Sources.TOKEN),
+      this.#memberAliases
     )
     return {
       ownerMember: all.find(m => m.privilegeLevel === PrivilegeLevels.OWNER),
@@ -79,7 +85,8 @@ class ProjectAccess {
         m =>
           m.source !== Sources.TOKEN &&
           m.privilegeLevel !== PrivilegeLevels.OWNER
-      )
+      ),
+      this.#memberAliases
     )
   }
 
@@ -88,7 +95,8 @@ class ProjectAccess {
    */
   async loadOwner() {
     const [owner] = await _loadMembers(
-      this.#members.filter(m => m.privilegeLevel === PrivilegeLevels.OWNER)
+      this.#members.filter(m => m.privilegeLevel === PrivilegeLevels.OWNER),
+      this.#memberAliases
     )
     return owner
   }
@@ -189,7 +197,8 @@ class ProjectAccess {
       m =>
         m.source === Sources.INVITE &&
         (m.privilegeLevel === PrivilegeLevels.READ_AND_WRITE ||
-          m.privilegeLevel === PrivilegeLevels.REVIEW)
+          m.privilegeLevel === PrivilegeLevels.REVIEW ||
+          m.privilegeLevel === PrivilegeLevels.ANONYMOUS_REVIEW)
     ).length
   }
 
@@ -217,7 +226,9 @@ async function getProjectAccess(projectId) {
     publicAccesLevel: 1,
     pendingEditor_refs: 1,
     reviewer_refs: 1,
+    anonymous_reviewer_refs: 1,
     pendingReviewer_refs: 1,
+    memberAliases: 1,
   })
   if (!project) {
     throw new Errors.NotFoundError(`no project found with id ${projectId}`)
@@ -382,9 +393,21 @@ async function dangerouslyGetAllProjectsUserIsMemberOf(userId, fields) {
 
 async function getAllInvitedMembers(projectId) {
   try {
+    const project = await ProjectGetter.promises.getProject(projectId, {
+      memberAliases: 1,
+    })
     const projectAccess = await getProjectAccess(projectId)
     const invitedMembers = await projectAccess.loadInvitedMembers()
-    return invitedMembers.map(ProjectEditorHandler.buildUserModelView)
+    const memberAliases = project?.memberAliases || {}
+    
+    return invitedMembers.map(member => {
+      const memberView = ProjectEditorHandler.buildUserModelView(member)
+      const userId = member.user._id.toString()
+      if (memberAliases[userId]) {
+        memberView.alias = memberAliases[userId]
+      }
+      return memberView
+    })
   } catch (err) {
     throw OError.tag(err, 'error getting members for project', { projectId })
   }
@@ -445,6 +468,7 @@ function _getMemberIdsWithPrivilegeLevelsFromFields(
   publicAccessLevel,
   pendingEditorIds,
   reviewerIds,
+  anonymousReviewerIds,
   pendingReviewerIds
 ) {
   const members = []
@@ -466,6 +490,14 @@ function _getMemberIdsWithPrivilegeLevelsFromFields(
     members.push({
       id: memberId.toString(),
       privilegeLevel: PrivilegeLevels.REVIEW,
+      source: Sources.INVITE,
+    })
+  }
+
+  for (const memberId of anonymousReviewerIds || []) {
+    members.push({
+      id: memberId.toString(),
+      privilegeLevel: PrivilegeLevels.ANONYMOUS_REVIEW,
       source: Sources.INVITE,
     })
   }
@@ -507,10 +539,11 @@ function _getMemberIdsWithPrivilegeLevelsFromFields(
 
 /**
  * @param {ProjectMember[]} members
+ * @param {Object} memberAliases
  * @return {Promise<LoadedProjectMember[]>}
  * @private
  */
-async function _loadMembers(members) {
+async function _loadMembers(members, memberAliases = {}) {
   if (members.length === 0) return []
   const userIds = Array.from(new Set(members.map(m => m.id)))
   const users = new Map()
@@ -528,6 +561,13 @@ async function _loadMembers(members) {
     .map(member => {
       const user = users.get(member.id)
       if (!user) return null
+      
+      // Add alias to user if present
+      const userId = user._id.toString()
+      if (memberAliases[userId]) {
+        user.alias = memberAliases[userId]
+      }
+      
       const record = {
         user,
         privilegeLevel: member.privilegeLevel,
