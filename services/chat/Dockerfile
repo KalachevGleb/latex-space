@@ -17,7 +17,7 @@ COPY services/chat/package.json /overleaf/services/chat/
 COPY libraries/ /overleaf/libraries/
 COPY patches/ /overleaf/patches/
 
-RUN cd /overleaf && npm ci --quiet
+RUN cd /overleaf && npm ci --quiet --no-optional || npm ci --quiet --legacy-peer-deps
 
 COPY services/chat/ /overleaf/services/chat/
 

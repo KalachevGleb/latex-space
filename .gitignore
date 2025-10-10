@@ -4,3 +4,12 @@
 # user defined files
 .env
 docker-compose.override.yml
+
+# backup files
+*.bak
+
+# development artifacts
+develop/output/
+develop/texlive-build.log
+setup.sh
+check-ready.sh

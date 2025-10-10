@@ -15,7 +15,8 @@ const SymbolPalettePane = lazy(
 )
 
 export const EditorPane: FC = () => {
-  const { showSymbolPalette } = useEditorPropertiesContext()
+  const { showSymbolPalette, symbolPalettePlacement } =
+    useEditorPropertiesContext()
   const { selectedEntityCount, openEntity } = useFileTreeOpenContext()
   const { isLoading } = useEditorManagerContext()
   const { currentDocumentId } = useEditorOpenDocContext()
@@ -40,7 +41,7 @@ export const EditorPane: FC = () => {
           {isLoading && <LoadingPane />}
         </Panel>
 
-        {showSymbolPalette && (
+        {showSymbolPalette && symbolPalettePlacement === 'editor' && (
           <>
             <VerticalResizeHandle id="editor-symbol-palette" />
             <Panel

@@ -35,6 +35,8 @@ import ExportsController from './Features/Exports/ExportsController.mjs'
 import PasswordResetRouter from './Features/PasswordReset/PasswordResetRouter.mjs'
 import StaticPagesRouter from './Features/StaticPages/StaticPagesRouter.mjs'
 import ChatController from './Features/Chat/ChatController.mjs'
+import CommentsController from './Features/Comments/CommentsController.mjs'
+import RangesController from './Features/Comments/RangesController.mjs'
 import Modules from './infrastructure/Modules.js'
 import {
   RateLimiter,
@@ -566,6 +568,81 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     AuthenticationController.requireLogin(),
     AuthorizationMiddleware.ensureUserCanAdminProject,
     ProjectController.updateProjectAdminSettings
+  )
+
+  // Comments/Threads routes for Review Panel
+  webRouter.get(
+    '/project/:Project_id/changes/users',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.getChangesUsers
+  )
+  
+  webRouter.get(
+    '/project/:Project_id/threads',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.getThreads
+  )
+  
+  webRouter.get(
+    '/project/:Project_id/ranges',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    RangesController.getAllRanges
+  )
+  
+  // Routes WITHOUT doc_id (for History OT mode - addComment/addMessage)
+  webRouter.post(
+    '/project/:Project_id/thread/:thread_id/messages',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.createMessage
+  )
+  
+  // Routes WITH doc_id (for legacy mode - resolve/delete/edit)
+  webRouter.post(
+    '/project/:Project_id/doc/:Doc_id/thread/:thread_id/messages',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.createMessage
+  )
+  
+  webRouter.delete(
+    '/project/:Project_id/doc/:Doc_id/thread/:thread_id',
+    AuthorizationMiddleware.ensureUserCanWriteProjectContent,
+    CommentsController.deleteThread
+  )
+  
+  webRouter.post(
+    '/project/:Project_id/doc/:Doc_id/thread/:thread_id/resolve',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.resolveThread
+  )
+  
+  webRouter.post(
+    '/project/:Project_id/doc/:Doc_id/thread/:thread_id/reopen',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.reopenThread
+  )
+  
+  webRouter.post(
+    '/project/:Project_id/thread/:thread_id/messages/:message_id/edit',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.editMessage
+  )
+  
+  webRouter.post(
+    '/project/:Project_id/doc/:Doc_id/thread/:thread_id/messages/:message_id/edit',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.editMessage
+  )
+  
+  webRouter.delete(
+    '/project/:Project_id/thread/:thread_id/messages/:message_id',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.deleteMessage
+  )
+  
+  webRouter.delete(
+    '/project/:Project_id/doc/:Doc_id/thread/:thread_id/messages/:message_id',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.deleteMessage
   )
 
   webRouter.post(

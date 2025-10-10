@@ -3,7 +3,7 @@ const _ = require('lodash')
 const Path = require('path')
 
 module.exports = ProjectEditorHandler = {
-  trackChangesAvailable: false,
+  trackChangesAvailable: true, // Включено для поддержки Review Panel с MathJax
 
   buildProjectModelView(
     project,
@@ -50,7 +50,7 @@ module.exports = ProjectEditorHandler = {
       references: false,
       referencesSearch: false,
       mendeley: false,
-      trackChanges: false,
+      trackChanges: true, // Включено для Review Panel с MathJax
       trackChangesVisible: ProjectEditorHandler.trackChangesAvailable,
       symbolPalette: false,
     })

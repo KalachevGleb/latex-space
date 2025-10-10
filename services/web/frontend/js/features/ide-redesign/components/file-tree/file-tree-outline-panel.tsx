@@ -5,6 +5,8 @@ import { VerticalResizeHandle } from '@/features/ide-react/components/resize/ver
 import { useOutlinePane } from '@/features/ide-react/hooks/use-outline-pane'
 import useCollapsibleFileTree from '../../hooks/use-collapsible-file-tree'
 import classNames from 'classnames'
+import SymbolPalettePane from '@/features/ide-react/components/editor/symbol-palette-pane'
+import { useEditorPropertiesContext } from '@/features/ide-react/context/editor-properties-context'
 
 function FileTreeOutlinePanel() {
   const { canShowOutline, outlinePanelRef, expandOutline, collapseOutline } =
@@ -15,6 +17,8 @@ function FileTreeOutlinePanel() {
     expandFileTree,
     collapseFileTree,
   } = useCollapsibleFileTree()
+  const { showSymbolPalette, symbolPalettePlacement } =
+    useEditorPropertiesContext()
 
   return (
     <PanelGroup
@@ -54,6 +58,22 @@ function FileTreeOutlinePanel() {
       >
         <OutlineContainer />
       </Panel>
+
+      {showSymbolPalette && symbolPalettePlacement === 'sidebar' && (
+        <>
+          <VerticalResizeHandle hitAreaMargins={{ coarse: 0, fine: 0 }} />
+          <Panel
+            className="file-symbol-palette-panel"
+            defaultSize={25}
+            id="ide-redesign-file-symbol-palette"
+            order={3}
+            collapsible
+            minSize={10}
+          >
+            <SymbolPalettePane />
+          </Panel>
+        </>
+      )}
     </PanelGroup>
   )
 }

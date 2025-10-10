@@ -17,7 +17,7 @@ COPY services/document-updater/package.json /overleaf/services/document-updater/
 COPY libraries/ /overleaf/libraries/
 COPY patches/ /overleaf/patches/
 
-RUN cd /overleaf && npm ci --quiet
+RUN cd /overleaf && npm ci --quiet --no-optional || npm ci --quiet --legacy-peer-deps
 
 COPY services/document-updater/ /overleaf/services/document-updater/
 

@@ -1,0 +1,128 @@
+.ol-symbols-panel {
+  padding: 4px 6px;
+  overflow-y: auto;
+  background: #fff;
+  height: 100%;
+  font-size: 13px;
+}
+
+.ol-symbols-group {
+  margin-bottom: 2px;
+  background: #fff;
+}
+
+.ol-symbols-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 8px;
+  background: #f4f4f4;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 12px;
+  color: #333;
+  transition: background-color 0.15s;
+  text-align: left;
+
+  &:hover {
+    background: #e8e8e8;
+  }
+
+  &[aria-expanded='true'] {
+    background: #e0e0e0;
+  }
+}
+
+.ol-symbols-group-title {
+  flex: 1;
+  text-align: left;
+  font-size: 12px;
+}
+
+.ol-symbols-group-toggle {
+  font-size: 10px;
+  color: #666;
+  margin-left: 6px;
+  user-select: none;
+}
+
+.ol-symbols-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  gap: 2px;
+  padding: 4px 2px;
+  margin-top: 2px;
+}
+
+.ol-symbols-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 2px;
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 16px;
+  color: #333;
+  transition: all 0.12s ease;
+
+  &:hover {
+    background: #e7f4ff;
+    border-color: #4c9aff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+
+  &:active {
+    transform: scale(0.95);
+    background: #d3e8ff;
+  }
+}
+
+// Dark theme support
+[data-theme='dark'] {
+  .ol-symbols-panel {
+    background: #1e1e1e;
+  }
+
+  .ol-symbols-group {
+    background: #1e1e1e;
+  }
+
+  .ol-symbols-group-header {
+    background: #2d2d2d;
+    color: #d4d4d4;
+
+    &:hover {
+      background: #373737;
+    }
+
+    &[aria-expanded='true'] {
+      background: #3a3a3a;
+    }
+  }
+
+  .ol-symbols-group-toggle {
+    color: #999;
+  }
+
+  .ol-symbols-item {
+    background: #252525;
+    border-color: #3a3a3a;
+    color: #d4d4d4;
+
+    &:hover {
+      background: #1a3a52;
+      border-color: #4c9aff;
+    }
+
+    &:active {
+      background: #153044;
+    }
+  }
+}
+
