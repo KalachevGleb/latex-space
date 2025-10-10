@@ -6,6 +6,7 @@ import TpdsUpdateSender from '../ThirdPartyDataStore/TpdsUpdateSender.js'
 import TpdsProjectFlusher from '../ThirdPartyDataStore/TpdsProjectFlusher.js'
 import EditorRealTimeController from '../Editor/EditorRealTimeController.js'
 import SystemMessageManager from '../SystemMessages/SystemMessageManager.mjs'
+import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
 
 const AdminController = {
   _sendDisconnectAllUsersMessage: delay => {
@@ -15,7 +16,7 @@ const AdminController = {
       delay
     )
   },
-  index: (req, res, next) => {
+  index: async (req, res, next) => {
     let url
     const openSockets = {}
     for (url in http.globalAgent.sockets) {
@@ -30,16 +31,21 @@ const AdminController = {
       )
     }
 
-    SystemMessageManager.getMessagesFromDB(function (error, systemMessages) {
-      if (error) {
-        return next(error)
-      }
+    try {
+      const systemMessages =
+        await SystemMessageManager.promises.getMessagesFromDB()
+      const registrationEnabled =
+        await SystemSettingsManager.promises.getSetting('registrationEnabled')
+
       res.render('admin/index', {
         title: 'System Admin',
         openSockets,
         systemMessages,
+        registrationEnabled: registrationEnabled || false,
       })
-    })
+    } catch (error) {
+      return next(error)
+    }
   },
 
   disconnectAllUsers: (req, res) => {
@@ -91,6 +97,21 @@ const AdminController = {
       }
       res.redirect('/admin#system-messages')
     })
+  },
+
+  async toggleRegistration(req, res, next) {
+    try {
+      const enabled = req.body.enabled === 'true' || req.body.enabled === true
+      logger.info({ enabled }, 'toggling user registration')
+      await SystemSettingsManager.promises.setSetting(
+        'registrationEnabled',
+        enabled
+      )
+      res.redirect('/admin#registration-settings')
+    } catch (error) {
+      logger.error({ error }, 'error toggling registration')
+      return next(error)
+    }
   },
 }
 

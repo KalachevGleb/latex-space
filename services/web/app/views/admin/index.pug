@@ -14,6 +14,7 @@ block content
 								.nav-tabs-container
 									ul.nav.nav-tabs.align-left(role='tablist')
 										+bookmarkable-tabset-header('system-messages', 'System Messages', true)
+										+bookmarkable-tabset-header('registration-settings', 'Registration Settings')
 										+bookmarkable-tabset-header('open-sockets', 'Open Sockets')
 										+bookmarkable-tabset-header('open-close-editor', 'Open/Close Editor')
 										if hasFeature('saas')
@@ -39,6 +40,31 @@ block content
 										form(method='post' action='/admin/messages/clear')
 											input(name='_csrf' type='hidden' value=csrfToken)
 											button.btn.btn-danger(type='submit') Clear all messages
+
+									.tab-pane(role='tabpanel' id='registration-settings')
+										h3 User Registration Settings
+										p Control whether users can register new accounts without administrator intervention.
+										.row-spaced
+											form#registration-form(method='post' action='/admin/registration/toggle')
+												input(name='_csrf' type='hidden' value=csrfToken)
+												input#enabled-input(type='hidden' name='enabled' value=registrationEnabled ? 'true' : 'false')
+												.form-check
+													input#registration-enabled.form-check-input(
+														type='checkbox'
+														checked=registrationEnabled
+														onchange='document.getElementById("enabled-input").value = this.checked ? "true" : "false"; this.form.submit();'
+													)
+													label.form-check-label(for='registration-enabled')
+														| Allow users to register new accounts
+										.row-spaced
+											if registrationEnabled
+												.alert.alert-info
+													strong Registration is currently enabled.
+													|  Users can create new accounts via the registration page.
+											else
+												.alert.alert-warning
+													strong Registration is currently disabled.
+													|  Only administrators can create new user accounts.
 
 									.tab-pane(role='tabpanel' id='open-sockets')
 										.row-spaced
