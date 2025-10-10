@@ -166,6 +166,7 @@ function _buildLatexCommand(mainFile, opts = {}) {
   command.push(
     'latexmk',
     '-cd',
+    '-g', // Force processing regardless of timestamps
     '-jobname=output',
     '-auxdir=$COMPILE_DIR',
     '-outdir=$COMPILE_DIR',
