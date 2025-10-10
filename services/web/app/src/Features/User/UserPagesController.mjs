@@ -11,6 +11,7 @@ import _ from 'lodash'
 import { expressify } from '@overleaf/promise-utils'
 import Features from '../../infrastructure/Features.js'
 import Modules from '../../infrastructure/Modules.js'
+import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
 
 async function settingsPage(req, res) {
   const userId = SessionManager.getLoggedInUserId(req.session)
@@ -199,7 +200,7 @@ async function reconfirmAccountPage(req, res) {
 const UserPagesController = {
   accountSuspended: expressify(accountSuspended),
 
-  registerPage(req, res) {
+  async registerPage(req, res) {
     const sharedProjectData = req.session.sharedProjectData || {}
 
     const newTemplateData = {}
@@ -207,11 +208,17 @@ const UserPagesController = {
       newTemplateData.templateName = req.session.templateData.templateName
     }
 
+    // Получаем настройку регистрации
+    const registrationEnabled =
+      (await SystemSettingsManager.promises.getSetting('registrationEnabled')) ||
+      false
+
     res.render('user/register', {
       title: 'register',
       sharedProjectData,
       newTemplateData,
       samlBeta: req.session.samlBeta,
+      registrationEnabled,
     })
   },
 

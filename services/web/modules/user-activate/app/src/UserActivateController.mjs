@@ -4,6 +4,8 @@ import UserGetter from '../../../../app/src/Features/User/UserGetter.js'
 import UserRegistrationHandler from '../../../../app/src/Features/User/UserRegistrationHandler.js'
 import ErrorController from '../../../../app/src/Features/Errors/ErrorController.mjs'
 import { expressify } from '@overleaf/promise-utils'
+import Settings from '@overleaf/settings'
+import OError from '@overleaf/o-error'
 
 const __dirname = Path.dirname(fileURLToPath(import.meta.url))
 
@@ -16,14 +18,65 @@ async function register(req, res, next) {
   if (email == null || email === '') {
     return res.sendStatus(422) // Unprocessable Entity
   }
-  const { user, setNewPasswordUrl } =
-    await UserRegistrationHandler.promises.registerNewUserAndSendActivationEmail(
-      email
-    )
-  res.json({
-    email: user.email,
-    setNewPasswordUrl,
-  })
+
+  try {
+    // Сначала проверяем, существует ли уже активированный пользователь
+    const existingUser = await UserGetter.promises.getUserByAnyEmail(email, {
+      _id: 1,
+      loginCount: 1,
+      hashedPassword: 1,
+    })
+
+    if (existingUser && existingUser.loginCount > 0) {
+      // Пользователь уже активирован (входил в систему)
+      return res.status(409).json({
+        message: {
+          type: 'error',
+          text: 'This email is already registered. Please log in instead.',
+        },
+      })
+    }
+
+    const { user, setNewPasswordUrl } =
+      await UserRegistrationHandler.promises.registerNewUserAndSendActivationEmail(
+        email
+      )
+
+    // Проверяем, настроен ли email
+    const emailEnabled =
+      Settings.email &&
+      Settings.email.parameters &&
+      Settings.email.parameters.host
+
+    // Если email не настроен, сразу перенаправляем на форму установки пароля
+    if (!emailEnabled) {
+      const activationUrl = setNewPasswordUrl.replace(
+        Settings.siteUrl || 'http://localhost:3000',
+        ''
+      )
+      return res.json({
+        email: user.email,
+        setNewPasswordUrl,
+        redir: activationUrl, // Frontend перенаправит на эту страницу
+      })
+    }
+
+    res.json({
+      email: user.email,
+      setNewPasswordUrl,
+    })
+  } catch (error) {
+    // Проверяем, существует ли пользователь
+    if (error.message === 'EmailAlreadyRegistered') {
+      return res.status(409).json({
+        message: {
+          type: 'error',
+          text: 'This email is already registered. Please log in instead.',
+        },
+      })
+    }
+    throw error
+  }
 }
 
 async function activateAccountPage(req, res, next) {
