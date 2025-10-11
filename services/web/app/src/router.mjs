@@ -597,6 +597,12 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
   
   // Track Changes routes
   webRouter.post(
+    '/project/:Project_id/track_changes',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    TrackChangesController.setTrackChangesState
+  )
+  
+  webRouter.post(
     '/project/:Project_id/doc/:doc_id/changes/accept',
     AuthorizationMiddleware.ensureUserCanWriteProjectContent,
     TrackChangesController.acceptChanges
