@@ -2,11 +2,18 @@ import logger from '@overleaf/logger'
 import { db, ObjectId } from '../../infrastructure/mongodb.js'
 import UserGetter from '../User/UserGetter.js'
 import EditorRealTimeController from '../Editor/EditorRealTimeController.js'
+import ProjectGetter from '../Project/ProjectGetter.js'
 
 async function getChangesUsers(req, res) {
   const projectId = req.params.Project_id
   
   try {
+    // Получаем псевдонимы из проекта
+    const project = await ProjectGetter.promises.getProject(projectId, {
+      memberAliases: 1,
+    })
+    const memberAliases = project?.memberAliases || {}
+    
     // Получаем всех пользователей, которые делали изменения в проекте
     const threads = await db.projectHistoryComments
       .find({ project_id: new ObjectId(projectId) })
@@ -32,12 +39,17 @@ async function getChangesUsers(req, res) {
           last_name: 1,
         })
         if (user) {
-          users.push({
+          const userObj = {
             id: userId,
             email: user.email,
             first_name: user.first_name,
             last_name: user.last_name,
-          })
+          }
+          // Добавляем псевдоним если он есть
+          if (memberAliases[userId]) {
+            userObj.alias = memberAliases[userId]
+          }
+          users.push(userObj)
         }
       } catch (err) {
         logger.warn({ err, userId }, 'error getting user for changes')
@@ -55,6 +67,12 @@ async function getThreads(req, res) {
   const projectId = req.params.Project_id
   
   try {
+    // Получаем псевдонимы из проекта
+    const project = await ProjectGetter.promises.getProject(projectId, {
+      memberAliases: 1,
+    })
+    const memberAliases = project?.memberAliases || {}
+    
     const threads = await db.projectHistoryComments
       .find({ project_id: new ObjectId(projectId) })
       .toArray()
@@ -69,11 +87,16 @@ async function getThreads(req, res) {
         let user = null
         if (message.user_id) {
           try {
-            user = await UserGetter.promises.getUser(message.user_id.toString(), {
+            const userId = message.user_id.toString()
+            user = await UserGetter.promises.getUser(userId, {
               email: 1,
               first_name: 1,
               last_name: 1,
             })
+            // Добавляем псевдоним если он есть
+            if (user && memberAliases[userId]) {
+              user.alias = memberAliases[userId]
+            }
           } catch (err) {
             logger.warn({ err, userId: message.user_id }, 'error getting user for thread message')
           }
@@ -88,6 +111,7 @@ async function getThreads(req, res) {
             email: user.email,
             first_name: user.first_name,
             last_name: user.last_name,
+            alias: user.alias,
           } : null,
         })
       }
@@ -120,6 +144,12 @@ async function createMessage(req, res) {
   }
   
   try {
+    // Получаем псевдонимы из проекта
+    const project = await ProjectGetter.promises.getProject(projectId, {
+      memberAliases: 1,
+    })
+    const memberAliases = project?.memberAliases || {}
+    
     const messageId = new ObjectId()
     const timestamp = new Date()
     
@@ -131,6 +161,10 @@ async function createMessage(req, res) {
         email: sessionUser.email,
         first_name: sessionUser.first_name,
         last_name: sessionUser.last_name,
+      }
+      // Добавляем псевдоним если он есть
+      if (memberAliases[userId]) {
+        user.alias = memberAliases[userId]
       }
       logger.info({ userId, userName: `${user.first_name} ${user.last_name}` }, 'user from session')
     } else {
@@ -180,6 +214,7 @@ async function createMessage(req, res) {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        alias: user.alias,
       } : null,
     }
     
