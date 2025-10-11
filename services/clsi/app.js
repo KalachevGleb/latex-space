@@ -25,9 +25,15 @@ Metrics.leaked_sockets.monitor(logger)
 const ProjectPersistenceManager = require('./app/js/ProjectPersistenceManager')
 const OutputCacheManager = require('./app/js/OutputCacheManager')
 const ContentCacheManager = require('./app/js/ContentCacheManager')
+const CompilationQueueManager = require('./app/js/CompilationQueueManager')
+const CompilationNotifier = require('./app/js/CompilationNotifier')
 
 ProjectPersistenceManager.init()
 OutputCacheManager.init()
+
+// Initialize compilation queue system
+const compilationNotifier = new CompilationNotifier(CompilationQueueManager)
+logger.info('CompilationQueueManager and CompilationNotifier initialized')
 
 const express = require('express')
 const bodyParser = require('body-parser')
@@ -168,9 +174,10 @@ app.get(
 app.get(
   '/project/:project_id/user/:user_id/build/:build_id/output/*',
   function (req, res, next) {
+    // NOTE: Output is now per-project (not per-user), so ignore user_id
     // for specific build get the path from the OutputCacheManager (e.g. .clsi/buildId)
     req.url =
-      `/${req.params.project_id}-${req.params.user_id}/` +
+      `/${req.params.project_id}/` +
       OutputCacheManager.path(req.params.build_id, `/${req.params[0]}`)
     staticOutputServer(req, res, next)
   }
