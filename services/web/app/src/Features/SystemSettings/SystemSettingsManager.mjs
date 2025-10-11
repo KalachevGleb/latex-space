@@ -3,6 +3,7 @@ import { callbackify } from '@overleaf/promise-utils'
 
 const DEFAULT_SETTINGS = {
   registrationEnabled: false, // По умолчанию регистрация выключена
+  defaultLanguage: 'en', // Язык сайта по умолчанию
 }
 
 async function getSetting(key) {

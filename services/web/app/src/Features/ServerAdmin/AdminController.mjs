@@ -36,12 +36,15 @@ const AdminController = {
         await SystemMessageManager.promises.getMessagesFromDB()
       const registrationEnabled =
         await SystemSettingsManager.promises.getSetting('registrationEnabled')
+      const defaultLanguage =
+        await SystemSettingsManager.promises.getSetting('defaultLanguage')
 
       res.render('admin/index', {
         title: 'System Admin',
         openSockets,
         systemMessages,
         registrationEnabled: registrationEnabled || false,
+        defaultLanguage: defaultLanguage || 'en',
       })
     } catch (error) {
       return next(error)
@@ -110,6 +113,18 @@ const AdminController = {
       res.redirect('/admin#registration-settings')
     } catch (error) {
       logger.error({ error }, 'error toggling registration')
+      return next(error)
+    }
+  },
+
+  async setDefaultLanguage(req, res, next) {
+    try {
+      const language = req.body.language
+      logger.info({ language }, 'setting default site language')
+      await SystemSettingsManager.promises.setSetting('defaultLanguage', language)
+      res.redirect('/admin#site-settings')
+    } catch (error) {
+      logger.error({ error }, 'error setting default language')
       return next(error)
     }
   },

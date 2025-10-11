@@ -149,6 +149,9 @@ async function settingsPage(req, res) {
         enabled: Boolean(user.aiErrorAssistant?.enabled),
       },
     },
+    userSettings: {
+      interfaceLanguage: user.ace?.interfaceLanguage || 'default',
+    },
     labsExperiments: user.labsExperiments ?? [],
     hasPassword: !!user.hashedPassword,
     shouldAllowEditingDetails,

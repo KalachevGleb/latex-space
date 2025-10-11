@@ -407,6 +407,9 @@ async function updateUserSettings(req, res, next) {
   if (body.enableNewEditor != null) {
     user.ace.enableNewEditor = Boolean(body.enableNewEditor)
   }
+  if (body.interfaceLanguage != null) {
+    user.ace.interfaceLanguage = body.interfaceLanguage
+  }
   await user.save()
 
   const newEmail = body.email?.trim().toLowerCase()
