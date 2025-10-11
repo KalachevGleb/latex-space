@@ -61,4 +61,31 @@ module.exports = {
     client.on('disconnect', () => res.sendStatus(204))
     client.disconnect()
   },
+
+  /**
+   * Receive compilation updates from CLSI and broadcast to connected clients
+   */
+  compilationUpdate(req, res) {
+    const { project_id: projectId } = req.params
+    const { userId, type } = req.body
+
+    logger.debug(
+      { projectId, userId, type },
+      'received compilation update from CLSI'
+    )
+
+    try {
+      // Broadcast to all users in the project
+      // Frontend will filter based on userId and configHash
+      WebsocketLoadBalancer.emitToRoom(projectId, 'compilationUpdate', req.body)
+
+      res.sendStatus(200)
+    } catch (error) {
+      logger.error(
+        { err: error, projectId, userId },
+        'failed to broadcast compilation update'
+      )
+      res.sendStatus(500)
+    }
+  },
 }

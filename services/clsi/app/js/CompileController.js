@@ -150,9 +150,7 @@ function compile(req, res, next) {
                 outputFiles: outputFiles.map(file => ({
                   url:
                     `${Settings.apis.clsi.url}/project/${request.project_id}` +
-                    (request.user_id != null
-                      ? `/user/${request.user_id}`
-                      : '') +
+                    // NOTE: No longer include /user/${user_id} - output is per-project now
                     `/build/${file.build}/output/${file.path}`,
                   ...file,
                 })),

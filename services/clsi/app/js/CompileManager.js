@@ -25,6 +25,7 @@ const {
 } = require('./CLSICacheHandler')
 const StatsManager = require('./StatsManager')
 const { callbackifyMultiResult } = require('@overleaf/promise-utils')
+const CompilationQueueManager = require('./CompilationQueueManager')
 
 const COMPILE_TIME_BUCKETS = [
   // NOTE: These buckets are locked in per metric name.
@@ -33,7 +34,10 @@ const COMPILE_TIME_BUCKETS = [
 ].map(seconds => seconds * 1000)
 
 function getCompileName(projectId, userId) {
-  if (userId != null) {
+  // For regular compilation (via queue), use only projectId
+  // Output is shared between all users in the same project
+  // userId is only used for legacy/special cases
+  if (userId != null && Settings.clsi?.perUserCompiles === true) {
     return `${projectId}-${userId}`
   } else {
     return projectId
@@ -52,13 +56,127 @@ async function doCompileWithLock(request, stats, timings) {
   const compileDir = getCompileDir(request.project_id, request.user_id)
   request.isInitialCompile =
     (await fsPromises.mkdir(compileDir, { recursive: true })) === compileDir
-  // prevent simultaneous compiles
+
+  // Calculate MD5 of all project files (simplified - using resources array)
+  const filesMd5 = calculateFilesMd5(request.resources)
+  
+  // Check if files changed and update version
+  CompilationQueueManager.checkAndUpdateVersion(request.project_id, filesMd5)
+
+  // Use CompilationQueueManager for smart queuing
+  const queueResult = await CompilationQueueManager.requestCompilation(
+    request.project_id,
+    request.user_id,
+    {
+      compiler: request.compiler,
+      rootDoc_id: request.rootResourcePath,
+      draft: request.draft,
+      stopOnFirstError: request.stopOnFirstError,
+      imageName: request.imageName,
+      flags: request.flags,
+    },
+    request.editorId // connectionId
+  )
+
+  // If from cache, return immediately
+  if (queueResult.fromCache) {
+    logger.debug(
+      { projectId: request.project_id, userId: request.user_id },
+      'returning cached compilation result'
+    )
+    return queueResult
+  }
+
+  // If joining existing compilation, wait for it
+  if (queueResult.status === 'compile-in-progress' && !queueResult.shouldCompile) {
+    logger.debug(
+      { projectId: request.project_id, userId: request.user_id, configHash: queueResult.configHash },
+      'joining existing compilation, waiting for result'
+    )
+    
+    // Wait for compilation to complete
+    return await waitForCompilationResult(request.project_id, queueResult.configHash)
+  }
+
+  // We should compile (new compilation started by us)
   const lock = LockManager.acquire(compileDir)
   try {
-    return await doCompile(request, stats, timings)
+    const result = await doCompile(request, stats, timings)
+    
+    // Notify queue manager of success
+    await CompilationQueueManager.notifyCompilationComplete(
+      request.project_id,
+      request.user_id,
+      {
+        status: 'success',
+        ...result,
+      }
+    )
+    
+    return result
+  } catch (error) {
+    // Notify queue manager of failure
+    await CompilationQueueManager.notifyCompilationError(
+      request.project_id,
+      request.user_id,
+      error
+    )
+    throw error
   } finally {
     lock.release()
   }
+}
+
+function calculateFilesMd5(resources) {
+  // Create a stable hash of all file paths and contents
+  if (!resources || resources.length === 0) {
+    return 'empty'
+  }
+  
+  const crypto = require('node:crypto')
+  const hash = crypto.createHash('md5')
+  
+  // Sort resources by path for stability
+  const sorted = [...resources].sort((a, b) => a.path.localeCompare(b.path))
+  
+  for (const resource of sorted) {
+    hash.update(resource.path)
+    if (resource.content) {
+      hash.update(resource.content)
+    }
+  }
+  
+  return hash.digest('hex')
+}
+
+async function waitForCompilationResult(projectId, configHash, timeout = 300000) {
+  // Wait up to 5 minutes for compilation to complete
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now()
+    
+    const handler = (event) => {
+      if (event.projectId === projectId && event.configHash === configHash) {
+        CompilationQueueManager.off('compilation-complete', handler)
+        CompilationQueueManager.off('compilation-error', handler)
+        clearTimeout(timer)
+        
+        if (event.result) {
+          resolve(event.result)
+        } else if (event.error) {
+          reject(new Error(event.error))
+        }
+      }
+    }
+    
+    CompilationQueueManager.on('compilation-complete', handler)
+    CompilationQueueManager.on('compilation-error', handler)
+    
+    const timer = setTimeout(() => {
+      CompilationQueueManager.off('compilation-complete', handler)
+      CompilationQueueManager.off('compilation-error', handler)
+      reject(new Error('Compilation timeout'))
+    }, timeout)
+  })
 }
 
 async function doCompile(request, stats, timings) {

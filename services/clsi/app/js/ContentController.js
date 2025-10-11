@@ -8,10 +8,10 @@ const ONE_DAY_MS = ONE_DAY_S * 1000
 
 function getPdfRange(req, res, next) {
   const { projectId, userId, contentId, hash } = req.params
-  const perUserDir = userId ? `${projectId}-${userId}` : projectId
+  // NOTE: Output is now per-project (not per-user), so ignore userId
   const path = Path.join(
     Settings.path.outputDir,
-    perUserDir,
+    projectId,
     OutputCacheManager.CONTENT_SUBDIR,
     contentId,
     hash
