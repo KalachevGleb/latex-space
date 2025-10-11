@@ -234,6 +234,21 @@ const DockerRunner = {
     const year = match ? match[1] : 'rolling'
 
     env.PATH = `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/texlive/${year}/bin/x86_64-linux/`
+    
+    // Security: Configure TeX Live security settings
+    // openout_any=r: restrict output to current dir and standard paths
+    // openin_any=a: allow reading from anywhere (needed for LaTeX packages)
+    // shell_escape=f: disable shell escape (prevent arbitrary command execution)
+    if (!env.openout_any) {
+      env.openout_any = Settings.texliveOpenoutAny || 'r' // restricted output
+    }
+    if (!env.openin_any) {
+      env.openin_any = 'a' // allow reading LaTeX packages
+    }
+    // Explicitly disable shell escape if not already set
+    if (!env.shell_escape && compileGroup !== 'synctex') {
+      env.shell_escape = 'f' // forbidden
+    }
     const options = {
       Cmd: command,
       Image: image,
@@ -275,9 +290,23 @@ const DockerRunner = {
       options.HostConfig.Runtime = Settings.clsi.docker.runtime
     }
 
-    if (Settings.clsi.docker.Readonly) {
+    // Security: Always enable read-only root filesystem for sandboxed compilation
+    // This prevents LaTeX from modifying system files or installing malicious code
+    const enableReadonlyRootfs = 
+      Settings.clsi.docker.Readonly !== false // Allow explicit disable via config
+    
+    if (enableReadonlyRootfs) {
       options.HostConfig.ReadonlyRootfs = true
-      options.HostConfig.Tmpfs = { '/tmp': 'rw,noexec,nosuid,size=65536k' }
+      // Allow writing to /tmp for temporary compilation files (with noexec for security)
+      options.HostConfig.Tmpfs = {
+        '/tmp': 'rw,noexec,nosuid,nodev,size=1048576k', // 1GB for temp files
+        '/home/tex': 'rw,noexec,nosuid,nodev,size=65536k', // 64MB for user home
+      }
+      // Mark these as volumes
+      if (!options.Volumes) {
+        options.Volumes = {}
+      }
+      options.Volumes['/tmp'] = {}
       options.Volumes['/home/tex'] = {}
     }
 

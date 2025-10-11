@@ -55,6 +55,9 @@ export default function EditMember({
   const { projectId, project, updateProject } = useProjectContext()
   const { members, invites } = project || {}
   const user = useUserContext()
+  
+  // Check if this member is the current user
+  const isCurrentUser = user.id && member._id === user.id
 
   // Immediately commit this change if it's lower impact (eg. editor > viewer)
   // but show a confirmation button for removing access
@@ -167,6 +170,7 @@ export default function EditMember({
             />
             <div className="email-warning">
               {member.alias ? `${member.alias} (${member.email})` : member.email}
+              {isCurrentUser && <span> (me)</span>}
               {member.pendingEditor && (
                 <div className="subtitle">{t('view_only_downgraded')}</div>
               )}
