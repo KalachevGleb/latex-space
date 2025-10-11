@@ -727,12 +727,10 @@ export const LocalCompileProvider: FC<React.PropsWithChildren> = ({
     [findEntityByPath, openDocWithId]
   )
 
-  // clear the cache then run a compile, triggered by a menu item
+  // recompile from scratch with force=true, triggered by a menu item
   const recompileFromScratch = useCallback(() => {
-    clearCache().then(() => {
-      compiler.compile()
-    })
-  }, [clearCache, compiler])
+    compiler.compile({ force: true })
+  }, [compiler])
 
   // After a compile, the compiler sets `data.options` to the options that were
   // used for that compile.

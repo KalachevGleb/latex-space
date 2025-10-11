@@ -81,6 +81,7 @@ export type CompileResponseData = {
 export type CompileOptions = {
   draft?: boolean
   stopOnFirstError?: boolean
+  force?: boolean
   isAutoCompileOnLoad?: boolean
   isAutoCompileOnChange?: boolean
   rootResourcePath?: string

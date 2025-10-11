@@ -854,6 +854,13 @@ function _finaliseRequest(projectId, options, project, docs, files) {
     flags = ['-file-line-error']
   }
 
+  // Log options for debugging force recompile
+  logger.info({
+    projectId,
+    forceFromOptions: options.force,
+    forceBoolean: Boolean(options.force)
+  }, 'Building CLSI request with force option')
+  
   return {
     compile: {
       options: {
@@ -864,6 +871,7 @@ function _finaliseRequest(projectId, options, project, docs, files) {
         imageName: project.imageName,
         draft: Boolean(options.draft),
         stopOnFirstError: Boolean(options.stopOnFirstError),
+        force: Boolean(options.force),
         check: options.check,
         syncType: options.syncType,
         syncState: options.syncState,

@@ -144,6 +144,7 @@ export default class DocumentCompiler {
         // if there was previously a server error
         incrementalCompilesEnabled: !this.error,
         stopOnFirstError: options.stopOnFirstError,
+        force: options.force,
         editorId: EDITOR_SESSION_ID,
       }
 

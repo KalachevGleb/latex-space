@@ -63,6 +63,22 @@ async function doCompileWithLock(request, stats, timings) {
   // Check if files changed and update version
   CompilationQueueManager.checkAndUpdateVersion(request.project_id, filesMd5)
 
+  // If force recompile, clear temporary files
+  if (request.force) {
+    logger.info(
+      { projectId: request.project_id, userId: request.user_id },
+      'force recompile requested, clearing temporary files'
+    )
+    try {
+      await clearProject(request.project_id, request.user_id)
+    } catch (err) {
+      logger.warn(
+        { err, projectId: request.project_id },
+        'failed to clear project before force recompile'
+      )
+    }
+  }
+
   // Use CompilationQueueManager for smart queuing
   const queueResult = await CompilationQueueManager.requestCompilation(
     request.project_id,
@@ -74,17 +90,27 @@ async function doCompileWithLock(request, stats, timings) {
       stopOnFirstError: request.stopOnFirstError,
       imageName: request.imageName,
       flags: request.flags,
+      force: request.force || false,
     },
     request.editorId // connectionId
   )
 
-  // If from cache, return immediately
-  if (queueResult.fromCache) {
+  // If from cache and not force, return immediately
+  if (queueResult.fromCache && !request.force) {
     logger.debug(
       { projectId: request.project_id, userId: request.user_id },
       'returning cached compilation result'
     )
     return queueResult
+  }
+  
+  // If force recompile but result from cache, ignore cache
+  if (queueResult.fromCache && request.force) {
+    logger.info(
+      { projectId: request.project_id, userId: request.user_id },
+      'ignoring cache due to force recompile'
+    )
+    // Fall through to check if compilation is running
   }
 
   // If joining existing compilation, wait for it

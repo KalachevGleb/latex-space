@@ -65,9 +65,9 @@ class CompilationQueueManager extends EventEmitter {
       await this._handleProjectVersionChange(state, currentVersion, userId)
     }
 
-    // Check for cached result
+    // Check for cached result (unless force recompile)
     const cached = state.compilations.get(configHash)
-    if (cached && cached.status === 'success') {
+    if (cached && cached.status === 'success' && !config.force) {
       logger.debug(
         { projectId, configHash },
         'returning cached compilation result'
@@ -79,14 +79,24 @@ class CompilationQueueManager extends EventEmitter {
         ...cached,
       }
     }
+    
+    // If force recompile and cached result exists, clear it
+    if (config.force && cached) {
+      logger.info(
+        { projectId, configHash },
+        'force recompile: clearing cached result'
+      )
+      state.compilations.delete(configHash)
+    }
 
     // Check if compilation is already running with same config
     if (
       state.runningCompilation &&
       state.runningCompilation.configHash === configHash
     ) {
+      // Even if force=true, join existing compilation (don't start duplicate)
       logger.debug(
-        { projectId, configHash, userId },
+        { projectId, configHash, userId, force: config.force || false },
         'joining existing compilation'
       )
       
@@ -142,7 +152,8 @@ class CompilationQueueManager extends EventEmitter {
     }
 
     // Start new compilation
-    logger.info({ projectId, userId, configHash }, 'starting new compilation')
+    const logMsg = config.force ? 'starting force recompile (from scratch)' : 'starting new compilation'
+    logger.info({ projectId, userId, configHash, force: config.force || false }, logMsg)
     return await this._startCompilation(state, config, configHash, userId, connectionId)
   }
 
@@ -368,6 +379,8 @@ class CompilationQueueManager extends EventEmitter {
   _hashConfig(config) {
     // Create canonical representation of config
     // NOTE: Do NOT include buildId - version tracking is separate!
+    // NOTE: Do NOT include force - it's a trigger, not part of config
+    //       (force compilations should use same cache key and join running compilations)
     const canonical = {
       compiler: config.compiler,
       rootDocId: config.rootDoc_id,

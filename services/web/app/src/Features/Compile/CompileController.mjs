@@ -191,6 +191,9 @@ const _CompileController = {
     if (req.body.draft) {
       options.draft = req.body.draft
     }
+    if (req.body.force) {
+      options.force = req.body.force
+    }
     if (['validate', 'error', 'silent'].includes(req.body.check)) {
       options.check = req.body.check
     }

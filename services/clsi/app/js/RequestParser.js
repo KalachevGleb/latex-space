@@ -90,6 +90,14 @@ function parse(body, callback) {
         type: 'boolean',
       }
     )
+    response.force = _parseAttribute(
+      'force',
+      compile.options.force,
+      {
+        default: false,
+        type: 'boolean',
+      }
+    )
     response.check = _parseAttribute('check', compile.options.check, {
       type: 'string',
     })

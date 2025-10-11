@@ -55,7 +55,11 @@ function PdfCompileButton() {
 
   const { detachRole } = useLayoutContext()
 
-  const fromScratchWithEvent = () => {
+  const fromScratchWithEvent = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     eventTracking.sendMB('recompile-setting-changed', {
       setting: 'from-scratch',
     })
