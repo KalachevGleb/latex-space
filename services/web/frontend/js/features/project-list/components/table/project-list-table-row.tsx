@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import InlineTags from './cells/inline-tags'
 import OwnerCell from './cells/owner-cell'
+import AccessLevelCell from './cells/access-level-cell'
 import LastUpdatedCell from './cells/last-updated-cell'
 import ActionsCell from './cells/actions-cell'
 import ActionsDropdown from '../dropdown/actions-dropdown'
@@ -26,6 +27,9 @@ function ProjectListTableRow({ project, selected }: ProjectListTableRowProps) {
           {project.name}
         </a>{' '}
         <InlineTags className="d-none d-md-inline" projectId={project.id} />
+      </td>
+      <td className="dash-cell-access-level d-none d-md-table-cell">
+        <AccessLevelCell project={project} />
       </td>
       <td className="dash-cell-date-owner pb-0 d-md-none">
         <LastUpdatedCell project={project} />

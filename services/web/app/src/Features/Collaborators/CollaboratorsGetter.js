@@ -344,31 +344,47 @@ async function getPublicShareTokens(userId, projectId) {
 async function getProjectsUserIsMemberOf(userId, fields) {
   // @ts-ignore
   const limit = pLimit(2)
-  const [readAndWrite, review, readOnly, tokenReadAndWrite, tokenReadOnly] =
-    await Promise.all([
-      limit(() => Project.find({ collaberator_refs: userId }, fields).exec()),
-      limit(() => Project.find({ reviewer_refs: userId }, fields).exec()),
-      limit(() => Project.find({ readOnly_refs: userId }, fields).exec()),
-      limit(() =>
-        Project.find(
-          {
-            tokenAccessReadAndWrite_refs: userId,
-            publicAccesLevel: PublicAccessLevels.TOKEN_BASED,
-          },
-          fields
-        ).exec()
-      ),
-      limit(() =>
-        Project.find(
-          {
-            tokenAccessReadOnly_refs: userId,
-            publicAccesLevel: PublicAccessLevels.TOKEN_BASED,
-          },
-          fields
-        ).exec()
-      ),
-    ])
-  return { readAndWrite, review, readOnly, tokenReadAndWrite, tokenReadOnly }
+  const [
+    readAndWrite,
+    review,
+    anonymousReview,
+    readOnly,
+    tokenReadAndWrite,
+    tokenReadOnly,
+  ] = await Promise.all([
+    limit(() => Project.find({ collaberator_refs: userId }, fields).exec()),
+    limit(() => Project.find({ reviewer_refs: userId }, fields).exec()),
+    limit(() =>
+      Project.find({ anonymous_reviewer_refs: userId }, fields).exec()
+    ),
+    limit(() => Project.find({ readOnly_refs: userId }, fields).exec()),
+    limit(() =>
+      Project.find(
+        {
+          tokenAccessReadAndWrite_refs: userId,
+          publicAccesLevel: PublicAccessLevels.TOKEN_BASED,
+        },
+        fields
+      ).exec()
+    ),
+    limit(() =>
+      Project.find(
+        {
+          tokenAccessReadOnly_refs: userId,
+          publicAccesLevel: PublicAccessLevels.TOKEN_BASED,
+        },
+        fields
+      ).exec()
+    ),
+  ])
+  return {
+    readAndWrite,
+    review,
+    anonymousReview,
+    readOnly,
+    tokenReadAndWrite,
+    tokenReadOnly,
+  }
 }
 
 // This function returns all the projects that a user is a member of, regardless of

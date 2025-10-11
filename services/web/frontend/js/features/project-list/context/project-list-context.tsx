@@ -39,7 +39,7 @@ import { debugConsole } from '@/utils/debugging'
 
 const MAX_PROJECT_PER_PAGE = 20
 
-export type Filter = 'all' | 'owned' | 'shared' | 'archived' | 'trashed'
+export type Filter = 'all' | 'owned' | 'shared' | 'review' | 'archived' | 'trashed'
 type FilterMap = {
   [key in Filter]: Partial<Project> | ((project: Project) => boolean) // eslint-disable-line no-unused-vars
 }
@@ -55,7 +55,19 @@ const filters: FilterMap = {
   },
   shared: project => {
     return (
-      project.accessLevel !== 'owner' && !project.archived && !project.trashed
+      project.accessLevel !== 'owner' &&
+      project.accessLevel !== 'review' &&
+      project.accessLevel !== 'anonymousReview' &&
+      !project.archived &&
+      !project.trashed
+    )
+  },
+  review: project => {
+    return (
+      (project.accessLevel === 'review' ||
+        project.accessLevel === 'anonymousReview') &&
+      !project.archived &&
+      !project.trashed
     )
   },
   archived: {

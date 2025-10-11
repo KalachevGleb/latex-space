@@ -472,5 +472,10 @@
   "your_subscription_has_expired": "Срок Вашей подписки истёк.",
   "zh-CN": "Китайский",
   "reviewer": "Рецензент",
-  "anonymous_reviewer": "Анонимный рецензент"
+  "anonymous_reviewer": "Анонимный рецензент",
+  "for_review": "На рецензию",
+  "access": "Доступ",
+  "read_only": "Только чтение",
+  "editor": "Редактор",
+  "owner": "Владелец"
 }

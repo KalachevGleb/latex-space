@@ -34,6 +34,9 @@ function ProjectListTitle({
       case 'shared':
         message = t('shared_with_you')
         break
+      case 'review':
+        message = t('for_review')
+        break
       case 'archived':
         message = t('archived_projects')
         break
