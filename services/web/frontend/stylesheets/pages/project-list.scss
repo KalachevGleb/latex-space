@@ -381,14 +381,20 @@ ul.project-list-filters {
     word-break: break-word;
   }
 
+  .dash-cell-access-level {
+    width: 12%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .dash-cell-owner {
-    width: 20%;
+    width: 15%;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .dash-cell-date {
-    width: 25%;
+    width: 18%;
   }
 
   .dash-cell-actions {
@@ -424,11 +430,15 @@ ul.project-list-filters {
     }
 
     .dash-cell-name {
-      width: 50%;
+      width: 40%;
+    }
+
+    .dash-cell-access-level {
+      width: 12%;
     }
 
     .dash-cell-owner {
-      width: 21%;
+      width: 19%;
     }
 
     .dash-cell-date {
@@ -446,15 +456,19 @@ ul.project-list-filters {
     }
 
     .dash-cell-name {
-      width: 44%;
+      width: 32%;
+    }
+
+    .dash-cell-access-level {
+      width: 12%;
     }
 
     .dash-cell-owner {
-      width: 16%;
+      width: 12%;
     }
 
     .dash-cell-date {
-      width: 21%;
+      width: 25%;
     }
 
     .dash-cell-actions {
@@ -473,15 +487,19 @@ ul.project-list-filters {
     }
 
     .dash-cell-name {
-      width: 46%;
+      width: 36%;
+    }
+
+    .dash-cell-access-level {
+      width: 11%;
     }
 
     .dash-cell-owner {
-      width: 13%;
+      width: 10%;
     }
 
     .dash-cell-date {
-      width: 16%;
+      width: 18%;
     }
 
     .dash-cell-actions {
@@ -501,15 +519,19 @@ ul.project-list-filters {
     }
 
     .dash-cell-name {
-      width: 46%;
+      width: 36%;
+    }
+
+    .dash-cell-access-level {
+      width: 11%;
     }
 
     .dash-cell-owner {
-      width: 15%;
+      width: 11%;
     }
 
     .dash-cell-date {
-      width: 19%;
+      width: 22%;
     }
 
     .dash-cell-actions {
@@ -523,15 +545,19 @@ ul.project-list-filters {
     }
 
     .dash-cell-name {
-      width: 49%;
+      width: 39%;
+    }
+
+    .dash-cell-access-level {
+      width: 11%;
     }
 
     .dash-cell-owner {
-      width: 16%;
+      width: 12%;
     }
 
     .dash-cell-date {
-      width: 19%;
+      width: 22%;
     }
 
     .dash-cell-actions {

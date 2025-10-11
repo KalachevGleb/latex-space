@@ -604,6 +604,7 @@ function _formatProjects(projects, userId) {
   const {
     owned,
     review,
+    anonymousReview,
     readAndWrite,
     readOnly,
     tokenReadAndWrite,
@@ -625,6 +626,11 @@ function _formatProjects(projects, userId) {
   for (const project of review) {
     formattedProjects.push(
       _formatProjectInfo(project, 'review', Sources.INVITE, userId)
+    )
+  }
+  for (const project of anonymousReview || []) {
+    formattedProjects.push(
+      _formatProjectInfo(project, 'anonymousReview', Sources.INVITE, userId)
     )
   }
   for (const project of readOnly) {

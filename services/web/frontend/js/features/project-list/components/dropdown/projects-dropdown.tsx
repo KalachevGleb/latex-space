@@ -53,6 +53,7 @@ function ProjectsDropdown() {
     all: t('all_projects'),
     owned: t('your_projects'),
     shared: t('shared_with_you'),
+    review: t('for_review'),
     archived: t('archived_projects'),
     trashed: t('trashed_projects'),
   })
@@ -94,6 +95,9 @@ function ProjectsDropdown() {
         </li>
         <li role="none">
           <Item filter="shared" text={t('shared_with_you')} />
+        </li>
+        <li role="none">
+          <Item filter="review" text={t('for_review')} />
         </li>
         <li role="none">
           <Item filter="archived" text={t('archived_projects')} />

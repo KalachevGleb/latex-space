@@ -35,6 +35,7 @@ export default function SidebarFilters() {
       <SidebarFilter filter="all" text={t('all_projects')} />
       <SidebarFilter filter="owned" text={t('your_projects')} />
       <SidebarFilter filter="shared" text={t('shared_with_you')} />
+      <SidebarFilter filter="review" text={t('for_review')} />
       <SidebarFilter filter="archived" text={t('archived_projects')} />
       <SidebarFilter filter="trashed" text={t('trashed_projects')} />
       <li aria-hidden="true">

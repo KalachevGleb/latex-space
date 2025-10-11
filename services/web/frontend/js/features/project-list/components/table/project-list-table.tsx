@@ -89,6 +89,12 @@ function ProjectListTable() {
             />
           </th>
           <th
+            className="dash-cell-access-level d-none d-md-table-cell"
+            aria-label={t('access')}
+          >
+            {t('access')}
+          </th>
+          <th
             className="dash-cell-date-owner d-md-none"
             aria-label={t('date_and_owner')}
           >
@@ -149,7 +155,7 @@ function ProjectListTable() {
           ))
         ) : (
           <tr className="no-projects">
-            <td className="text-center" colSpan={5}>
+            <td className="text-center" colSpan={6}>
               {t('no_projects')}
             </td>
           </tr>

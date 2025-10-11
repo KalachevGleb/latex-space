@@ -106,6 +106,7 @@ const ProjectGetter = {
       tokenReadAndWrite: projects.tokenReadAndWrite || [],
       tokenReadOnly: projects.tokenReadOnly || [],
       review: projects.review || [],
+      anonymousReview: projects.anonymousReview || [],
     }
 
     // Remove duplicate projects. The order of result values is determined by the order they occur.
