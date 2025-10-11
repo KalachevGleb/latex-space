@@ -64,7 +64,7 @@ export const ReviewPanelCommentWithMath = memo<{
         })
         .catch(debugConsole.error)
     }
-  }, [content, isExpanded, mounted])
+  }, [displayContent, mounted])
 
   const handleShowMore = useCallback(() => {
     setIsExpanded(true)
@@ -83,6 +83,7 @@ export const ReviewPanelCommentWithMath = memo<{
   return (
     <>
       <div
+        key={displayContent}
         ref={contentRef}
         className={classNames('review-panel-expandable-content', className)}
         translate={translate}
