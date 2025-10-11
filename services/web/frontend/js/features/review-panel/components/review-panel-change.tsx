@@ -14,6 +14,7 @@ import { ReviewPanelChangeUser } from './review-panel-change-user'
 import { ReviewPanelEntry } from './review-panel-entry'
 import { useModalsContext } from '@/features/ide-react/context/modals-context'
 import { ExpandableContent } from './review-panel-expandable-content'
+import { ReviewPanelCommentWithMath } from './review-panel-comment-with-math'
 import { useUserContext } from '@/shared/context/user-context'
 import { ChangeAction } from '@/features/review-panel/components/review-panel-change-action'
 import {
@@ -172,14 +173,14 @@ export const ReviewPanelChange = memo<{
                   <span>
                     {translations.aggregate_changed}:{' '}
                     <del className="review-panel-content-highlight">
-                      <ExpandableContent
+                      <ReviewPanelCommentWithMath
                         inline
                         content={aggregate.op.d}
                         checkNewLines={false}
                       />
                     </del>{' '}
                     {translations.aggregate_to}{' '}
-                    <ExpandableContent
+                    <ReviewPanelCommentWithMath
                       inline
                       content={change.op.i}
                       checkNewLines={false}
@@ -189,7 +190,7 @@ export const ReviewPanelChange = memo<{
                   <span>
                     {translations.tracked_change_added}:&nbsp;
                     <ins className="review-panel-content-highlight">
-                      <ExpandableContent
+                      <ReviewPanelCommentWithMath
                         content={change.op.i}
                         checkNewLines={false}
                       />
@@ -205,7 +206,7 @@ export const ReviewPanelChange = memo<{
                 <span>
                   {translations.tracked_change_deleted}:&nbsp;
                   <del className="review-panel-content-highlight">
-                    <ExpandableContent
+                    <ReviewPanelCommentWithMath
                       content={change.op.d}
                       checkNewLines={false}
                     />

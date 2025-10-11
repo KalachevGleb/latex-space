@@ -37,6 +37,7 @@ import StaticPagesRouter from './Features/StaticPages/StaticPagesRouter.mjs'
 import ChatController from './Features/Chat/ChatController.mjs'
 import CommentsController from './Features/Comments/CommentsController.mjs'
 import RangesController from './Features/Comments/RangesController.mjs'
+import TrackChangesController from './Features/Comments/TrackChangesController.mjs'
 import Modules from './infrastructure/Modules.js'
 import {
   RateLimiter,
@@ -592,6 +593,13 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     '/project/:Project_id/ranges',
     AuthorizationMiddleware.ensureUserCanReadProject,
     RangesController.getAllRanges
+  )
+  
+  // Track Changes routes
+  webRouter.post(
+    '/project/:Project_id/doc/:doc_id/changes/accept',
+    AuthorizationMiddleware.ensureUserCanWriteProjectContent,
+    TrackChangesController.acceptChanges
   )
   
   // Routes WITHOUT doc_id (for History OT mode - addComment/addMessage)
