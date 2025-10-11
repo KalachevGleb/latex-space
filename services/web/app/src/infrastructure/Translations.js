@@ -9,13 +9,20 @@ const logger = require('@overleaf/logger')
 const SafeHTMLSubstitution = require('../Features/Helpers/SafeHTMLSubstitution')
 
 const fallbackLanguageCode = Settings.i18n.defaultLng || 'en'
-const availableLanguageCodes = []
+// List of all available interface languages (matching locales/*.json files)
+const additionalLanguageCodes = [
+  'cs', 'da', 'de', 'en', 'es', 'fi', 'fr', 'it', 'ja', 
+  'ko', 'nl', 'no', 'pl', 'pt', 'ru', 'sv', 'tr', 'zh-CN'
+]
+const availableLanguageCodes = [...additionalLanguageCodes]
 const availableHosts = new Map()
 const subdomainConfigs = new Map()
 const I18N_HTML_INJECTIONS = new Set()
 
 Object.values(Settings.i18n.subdomainLang || {}).forEach(function (spec) {
-  availableLanguageCodes.push(spec.lngCode)
+  if (!availableLanguageCodes.includes(spec.lngCode)) {
+    availableLanguageCodes.push(spec.lngCode)
+  }
   // prebuild a host->lngCode mapping for the usage at runtime in the
   //  middleware
   availableHosts.set(new URL(spec.url).host, spec.lngCode)
@@ -86,9 +93,9 @@ const headerLangDetector = new middleware.LanguageDetector(i18n.services, {
 })
 
 function setLangBasedOnDomainMiddleware(req, res, next) {
-  // Determine language from subdomain
+  // Determine language from subdomain, but only if user language wasn't already set
   const lang = availableHosts.get(req.headers.host)
-  if (lang) {
+  if (lang && !req.userLanguageSet) {
     req.i18n.changeLanguage(lang)
   }
 

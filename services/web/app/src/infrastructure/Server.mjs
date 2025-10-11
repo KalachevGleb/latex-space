@@ -38,6 +38,7 @@ import os from 'node:os'
 import http from 'node:http'
 import { fileURLToPath } from 'node:url'
 import serveStaticWrapper from './ServeStaticWrapper.mjs'
+import setUserLanguageMiddleware from './UserLanguageMiddleware.mjs'
 
 const sessionsRedisClient = UserSessionsRedis.client()
 
@@ -234,6 +235,7 @@ await Modules.applyNonCsrfRouter(webRouter, privateApiRouter, publicApiRouter)
 webRouter.csrf = new Csrf()
 webRouter.use(webRouter.csrf.middleware)
 webRouter.use(translations.i18nMiddleware)
+webRouter.use(setUserLanguageMiddleware)
 webRouter.use(translations.setLangBasedOnDomainMiddleware)
 
 if (Settings.cookieRollingSession) {

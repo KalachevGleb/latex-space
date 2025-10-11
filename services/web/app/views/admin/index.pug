@@ -14,6 +14,7 @@ block content
 								.nav-tabs-container
 									ul.nav.nav-tabs.align-left(role='tablist')
 										+bookmarkable-tabset-header('system-messages', 'System Messages', true)
+										+bookmarkable-tabset-header('site-settings', 'Settings')
 										+bookmarkable-tabset-header('registration-settings', 'Registration Settings')
 										+bookmarkable-tabset-header('open-sockets', 'Open Sockets')
 										+bookmarkable-tabset-header('open-close-editor', 'Open/Close Editor')
@@ -40,6 +41,32 @@ block content
 										form(method='post' action='/admin/messages/clear')
 											input(name='_csrf' type='hidden' value=csrfToken)
 											button.btn.btn-danger(type='submit') Clear all messages
+
+									.tab-pane(role='tabpanel' id='site-settings')
+										h3 Site Settings
+										p Configure global site settings.
+										.row-spaced
+											form(method='post' action='/admin/settings/defaultLanguage')
+												input(name='_csrf' type='hidden' value=csrfToken)
+												.form-group
+													label.form-label(for='default-language') Default Interface Language
+													select#default-language.form-control(name='language')
+														option(value='en' selected=(defaultLanguage === 'en')) English
+														option(value='ru' selected=(defaultLanguage === 'ru')) Русский
+														option(value='es' selected=(defaultLanguage === 'es')) Español
+														option(value='de' selected=(defaultLanguage === 'de')) Deutsch
+														option(value='fr' selected=(defaultLanguage === 'fr')) Français
+														option(value='pt' selected=(defaultLanguage === 'pt')) Português
+														option(value='it' selected=(defaultLanguage === 'it')) Italiano
+														option(value='zh-CN' selected=(defaultLanguage === 'zh-CN')) 中文 (简体)
+														option(value='ja' selected=(defaultLanguage === 'ja')) 日本語
+														option(value='ko' selected=(defaultLanguage === 'ko')) 한국어
+													p.small This language will be used as the default for all users who haven't set their own preference.
+												button.btn.btn-primary(type='submit') Save Settings
+										.row-spaced
+											.alert.alert-info
+												strong Current default language: 
+												= defaultLanguage
 
 									.tab-pane(role='tabpanel' id='registration-settings')
 										h3 User Registration Settings

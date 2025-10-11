@@ -1172,6 +1172,11 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     AuthorizationMiddleware.ensureUserIsSiteAdmin,
     AdminController.toggleRegistration
   )
+  webRouter.post(
+    '/admin/settings/defaultLanguage',
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    AdminController.setDefaultLanguage
+  )
 
   privateApiRouter.get('/perfTest', (req, res) => {
     plainTextResponse(res, 'hello')

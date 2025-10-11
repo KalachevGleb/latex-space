@@ -12,6 +12,7 @@ import LabsProgramSection from './labs-program-section'
 import SessionsSection from './sessions-section'
 import NewsletterSection from './newsletter-section'
 import LeaveSection from './leave-section'
+import InterfaceLanguageSection from './interface-language-section'
 import * as eventTracking from '../../../infrastructure/event-tracking'
 import { UserProvider } from '../../../shared/context/user-context'
 import { SSOProvider } from '../context/sso-context'
@@ -64,6 +65,8 @@ function SettingsPageContent() {
               <PasswordSection />
             </OLCol>
           </OLRow>
+          <hr />
+          <InterfaceLanguageSection />
           <hr />
           <SecuritySection />
           <SplitTestProvider>

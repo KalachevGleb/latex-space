@@ -101,6 +101,7 @@ const UserSchema = new Schema(
       breadcrumbs: { type: Boolean, default: true },
       referencesSearchMode: { type: String, default: 'advanced' }, // 'advanced' or 'simple'
       enableNewEditor: { type: Boolean },
+      interfaceLanguage: { type: String, default: 'default' }, // 'default' means use site default, or specific language code like 'en', 'ru', etc.
     },
     features: {
       collaborators: {

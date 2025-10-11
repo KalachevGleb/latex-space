@@ -826,6 +826,7 @@ const _ProjectController = {
           breadcrumbs: user.ace.breadcrumbs,
           referencesSearchMode: user.ace.referencesSearchMode,
           enableNewEditor: user.ace.enableNewEditor ?? true,
+          interfaceLanguage: user.ace.interfaceLanguage || 'default',
         },
         labsExperiments: user.labsExperiments ?? [],
         privilegeLevel,
