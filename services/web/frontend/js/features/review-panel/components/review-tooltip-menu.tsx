@@ -105,6 +105,7 @@ const ReviewTooltipMenuContent: FC<{ onAddComment: () => void }> = ({
   const { acceptChanges, rejectChanges } = useRangesActionsContext()
   const { showGenericConfirmModal } = useModalsContext()
   const { wantTrackChanges } = useEditorPropertiesContext()
+  const permissions = usePermissionsContext()
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | undefined>()
   const [visible, setVisible] = useState(false)
 
@@ -162,7 +163,8 @@ const ReviewTooltipMenuContent: FC<{ onAddComment: () => void }> = ({
     changesInSelection,
   ])
 
-  const showChangesButtons = changesInSelection.length > 0
+  // Показываем кнопки Accept/Reject только если есть изменения И у пользователя есть права write
+  const showChangesButtons = changesInSelection.length > 0 && permissions.write
 
   useEffect(() => {
     view.requestMeasure({
