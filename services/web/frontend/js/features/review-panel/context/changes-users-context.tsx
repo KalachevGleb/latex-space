@@ -18,6 +18,7 @@ export type ChangesUser = {
   email: string
   first_name?: string
   last_name?: string
+  alias?: string
 }
 
 export type ChangesUsers = Map<UserId, ChangesUser>
