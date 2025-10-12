@@ -91,18 +91,18 @@ const inviteToProjectSchema = z.object({
       PrivilegeLevels.READ_ONLY,
       PrivilegeLevels.READ_AND_WRITE,
       PrivilegeLevels.REVIEW,
-      PrivilegeLevels.ANONYMOUS_REVIEW,
     ]),
+    isAnonymous: z.boolean().optional(),
   }),
 })
 
 async function inviteToProject(req, res) {
   const { params, body } = validateReq(req, inviteToProjectSchema)
   const projectId = params.Project_id
-  let { email, privileges } = body
+  let { email, privileges, isAnonymous } = body
   const sendingUser = SessionManager.getSessionUser(req.session)
   const sendingUserId = sendingUser._id
-  req.logger.addFields({ email, sendingUserId })
+  req.logger.addFields({ email, sendingUserId, isAnonymous })
 
   if (email === sendingUser.email) {
     logger.debug(
@@ -163,7 +163,8 @@ async function inviteToProject(req, res) {
     projectId,
     sendingUser,
     email,
-    privileges
+    privileges,
+    isAnonymous
   )
 
   ProjectAuditLogHandler.addEntryInBackground(
@@ -174,6 +175,7 @@ async function inviteToProject(req, res) {
     {
       inviteId: invite._id,
       privileges,
+      isAnonymous,
     }
   )
 

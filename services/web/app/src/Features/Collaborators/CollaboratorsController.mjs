@@ -86,7 +86,6 @@ const setCollaboratorInfoSchema = z.object({
       PrivilegeLevels.READ_ONLY,
       PrivilegeLevels.READ_AND_WRITE,
       PrivilegeLevels.REVIEW,
-      PrivilegeLevels.ANONYMOUS_REVIEW,
     ]),
   }),
 })

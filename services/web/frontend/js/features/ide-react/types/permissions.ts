@@ -13,5 +13,4 @@ export type PermissionsLevel =
   | 'owner'
   | 'readAndWrite'
   | 'review'
-  | 'anonymousReview'
   | 'readOnly'

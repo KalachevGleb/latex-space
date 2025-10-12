@@ -20,7 +20,7 @@ export default function OwnerInfo() {
           <MaterialIcon type="person" />
           <div className="email-warning">
             {project?.owner.email}
-            {isCurrentUser && <span> (me)</span>}
+            {isCurrentUser && <span> ({t('you')})</span>}
           </div>
         </div>
       </OLCol>

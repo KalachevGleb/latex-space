@@ -57,15 +57,13 @@ const filters: FilterMap = {
     return (
       project.accessLevel !== 'owner' &&
       project.accessLevel !== 'review' &&
-      project.accessLevel !== 'anonymousReview' &&
       !project.archived &&
       !project.trashed
     )
   },
   review: project => {
     return (
-      (project.accessLevel === 'review' ||
-        project.accessLevel === 'anonymousReview') &&
+      project.accessLevel === 'review' &&
       !project.archived &&
       !project.trashed
     )

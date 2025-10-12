@@ -12,7 +12,8 @@ import { PermissionsLevel } from '@/features/ide-react/types/permissions'
 export function sendInvite(
   projectId: string,
   email: string,
-  privileges: PermissionsLevel
+  privileges: PermissionsLevel,
+  isAnonymous?: boolean
 ) {
   return executeV2Captcha(
     getMeta('ol-ExposedSettings').recaptchaDisabled?.invite
@@ -21,6 +22,7 @@ export function sendInvite(
       body: {
         email, // TODO: normalisedEmail?
         privileges,
+        isAnonymous,
         'g-recaptcha-response': grecaptchaResponse,
       },
     })

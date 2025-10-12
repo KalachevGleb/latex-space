@@ -270,7 +270,6 @@ async function canUserReadProject(userId, projectId, token) {
       PrivilegeLevels.READ_AND_WRITE,
       PrivilegeLevels.READ_ONLY,
       PrivilegeLevels.REVIEW,
-      PrivilegeLevels.ANONYMOUS_REVIEW,
     ].includes(privilegeLevel) ||
     (await hasAdminProjectCapability(userId, 'view-project-content'))
   )
@@ -301,7 +300,6 @@ async function canUserWriteOrReviewProjectContent(userId, projectId, token) {
     privilegeLevel === PrivilegeLevels.OWNER ||
     privilegeLevel === PrivilegeLevels.READ_AND_WRITE ||
     privilegeLevel === PrivilegeLevels.REVIEW ||
-    privilegeLevel === PrivilegeLevels.ANONYMOUS_REVIEW ||
     (await hasAdminProjectCapability(userId, 'modify-project-content'))
   )
 }

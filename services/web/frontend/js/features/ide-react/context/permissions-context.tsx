@@ -35,16 +35,6 @@ const permissionsMap: DeepReadonly<Record<PermissionsLevel, Permissions>> = {
     admin: false,
     labelVersion: true,
   },
-  anonymousReview: {
-    read: true,
-    comment: true,
-    resolveOwnComments: true,
-    resolveAllComments: false,
-    trackedWrite: true,
-    write: false,
-    admin: false,
-    labelVersion: true,
-  },
   readAndWrite: {
     read: true,
     comment: true,
@@ -71,7 +61,6 @@ const anonymousPermissionsMap: typeof permissionsMap = {
   readOnly: { ...permissionsMap.readOnly, comment: false },
   readAndWrite: { ...permissionsMap.readAndWrite, comment: false },
   review: { ...permissionsMap.review, comment: false },
-  anonymousReview: { ...permissionsMap.anonymousReview, comment: false },
   owner: { ...permissionsMap.owner, comment: false },
 }
 
@@ -79,7 +68,6 @@ const linkSharingWarningPermissionsMap: typeof permissionsMap = {
   readOnly: { ...permissionsMap.readOnly, comment: false },
   readAndWrite: permissionsMap.readAndWrite,
   review: permissionsMap.review,
-  anonymousReview: permissionsMap.anonymousReview,
   owner: permissionsMap.owner,
 }
 
@@ -87,7 +75,6 @@ const noTrackChangesPermissionsMap: typeof permissionsMap = {
   readOnly: permissionsMap.readOnly,
   readAndWrite: permissionsMap.readAndWrite,
   review: { ...permissionsMap.review, trackedWrite: false },
-  anonymousReview: { ...permissionsMap.anonymousReview, trackedWrite: false },
   owner: permissionsMap.owner,
 }
 

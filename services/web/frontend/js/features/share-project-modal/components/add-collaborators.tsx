@@ -18,6 +18,7 @@ import OLFormText from '@/shared/components/ol/ol-form-text'
 
 export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
   const [privileges, setPrivileges] = useState<PermissionsLevel>('readAndWrite')
+  const [isAnonymous, setIsAnonymous] = useState(false)
 
   const isMounted = useIsMounted()
 
@@ -56,6 +57,10 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
     if (readOnly && privileges !== 'readOnly') {
       setPrivileges('readOnly')
     }
+    // Reset anonymous checkbox if role is not reviewer or viewer
+    if (privileges !== 'review' && privileges !== 'readOnly') {
+      setIsAnonymous(false)
+    }
   }, [privileges, readOnly])
 
   const handleSubmit = useCallback(async () => {
@@ -90,7 +95,7 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
         if (invite) {
           data = await resendInvite(projectId, invite)
         } else {
-          data = await sendInvite(projectId, email, privileges)
+          data = await sendInvite(projectId, email, privileges, isAnonymous)
         }
 
         const role = data?.invite?.privileges
@@ -196,13 +201,6 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
           ? t('comment_only_upgrade_for_track_changes')
           : null,
       })
-      options.push({
-        key: 'anonymousReview',
-        label: t('anonymous_reviewer'),
-        description: !features.trackChanges
-          ? t('comment_only_upgrade_for_track_changes')
-          : null,
-      })
     }
 
     options.push({
@@ -227,6 +225,16 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
       </OLFormGroup>
       <OLFormGroup>
         <div className="float-end add-collaborator-controls">
+          {(privileges === 'review' || privileges === 'readOnly') && (
+            <label className="anonymous-reviewer-checkbox" style={{ marginRight: '10px' }}>
+              <input
+                type="checkbox"
+                checked={isAnonymous}
+                onChange={e => setIsAnonymous(e.target.checked)}
+              />
+              {' '}{t('anonymous')}
+            </label>
+          )}
           <Select
             dataTestId="add-collaborator-select"
             items={privilegeOptions}
