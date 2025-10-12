@@ -60,7 +60,7 @@ function WelcomeMessageCreateNewProjectDropdown({
   const { t } = useTranslation()
   const portalTemplates = getMeta('ol-portalTemplates') || []
 
-  const { isOverleaf } = getMeta('ol-ExposedSettings')
+  const { isOverleaf, peerReviewMode } = getMeta('ol-ExposedSettings')
 
   const handleDropdownItemClick = useCallback(
     (
@@ -94,6 +94,7 @@ function WelcomeMessageCreateNewProjectDropdown({
     []
   )
 
+  if (peerReviewMode) return null
   return (
     <Dropdown>
       <DropdownToggle

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { memo, useCallback, useState } from 'react'
+import getMeta from '@/utils/meta'
 import { Project } from '../../../../../../../../types/project/dashboard/api'
 import TrashProjectModal from '../../../modals/trash-project-modal'
 import useIsMounted from '../../../../../../shared/hooks/use-is-mounted'
@@ -14,6 +15,8 @@ type TrashProjectButtonProps = {
 }
 
 function TrashProjectButton({ project, children }: TrashProjectButtonProps) {
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  if (peerReviewMode) return null
   const { toggleSelectedProject, updateProjectViewData } =
     useProjectListContext()
   const { t } = useTranslation()

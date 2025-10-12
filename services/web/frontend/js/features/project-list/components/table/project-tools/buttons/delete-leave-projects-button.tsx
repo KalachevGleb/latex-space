@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import getMeta from '@/utils/meta'
 import OLButton from '@/shared/components/ol/ol-button'
 import { useTranslation } from 'react-i18next'
 import DeleteLeaveProjectModal from '../../../modals/delete-leave-project-modal'
@@ -8,6 +9,8 @@ import { deleteProject, leaveProject } from '../../../../util/api'
 import { Project } from '../../../../../../../../types/project/dashboard/api'
 
 function DeleteLeaveProjectsButton() {
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  if (peerReviewMode) return null
   const { t } = useTranslation()
   const {
     selectedProjects,

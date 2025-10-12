@@ -89,7 +89,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     })
   }
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.session = req.session
     next()
   })
@@ -107,7 +107,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
   privateApiRouter.use(addSetContentDisposition)
   publicApiRouter.use(addSetContentDisposition)
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     req.externalAuthenticationSystemUsed =
       Features.externalAuthenticationSystemUsed
     res.locals.externalAuthenticationSystemUsed =
@@ -116,7 +116,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     let staticFilesBase
 
     const cdnAvailable =
@@ -202,7 +202,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.translate = req.i18n.translate
 
     const addTranslatedTextDeep = obj => {
@@ -244,7 +244,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.getUserEmail = function () {
       const user = SessionManager.getSessionUser(req.session)
       const email = (user != null ? user.email : undefined) || ''
@@ -253,23 +253,23 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.StringHelper = require('../Features/Helpers/StringHelper')
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.csrfToken = req != null ? req.csrfToken() : undefined
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.getReqQueryParam = field =>
       req.query != null ? req.query[field] : undefined
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     const currentUser = SessionManager.getSessionUser(req.session)
     if (currentUser != null) {
       res.locals.user = sanitizeSessionUserForFrontEnd(currentUser)
@@ -277,7 +277,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.getLoggedInUserId = () =>
       SessionManager.getLoggedInUserId(req.session)
     res.locals.getSessionUser = () => SessionManager.getSessionUser(req.session)
@@ -292,7 +292,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
 
   webRouter.use(useHasAdminCapability)
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     // Clone the nav settings so they can be modified for each request
     res.locals.nav = {}
     for (const key in Settings.nav) {
@@ -302,7 +302,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     if (Settings.reloadModuleViewsOnEachRequest) {
       Modules.loadViewIncludes(req.app)
     }
@@ -311,7 +311,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     // TODO
     if (Settings.overleaf != null) {
       res.locals.overallThemes = [
@@ -332,7 +332,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
     res.locals.settings = Settings
     next()
   })
@@ -347,7 +347,21 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
     next()
   })
 
-  webRouter.use(function (req, res, next) {
+  webRouter.use(async function (req, res, next) {
+    // Expose selected system settings to frontend
+    let peerReviewMode = false
+    try {
+      // Lazy import to avoid circular deps at module load time
+      const SystemSettingsManager = (
+        await import('../Features/SystemSettings/SystemSettingsManager.mjs')
+      ).default
+      peerReviewMode =
+        (await SystemSettingsManager.promises.getSetting('peerReviewMode')) ||
+        false
+    } catch (e) {
+      peerReviewMode = false
+    }
+
     res.locals.ExposedSettings = {
       isOverleaf: Settings.overleaf != null,
       appName: Settings.appName,
@@ -400,6 +414,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
         Settings.overleaf != null || Settings.templates?.user_id != null,
       cioWriteKey: Settings.analytics?.cio?.writeKey,
       cioSiteId: Settings.analytics?.cio?.siteId,
+      peerReviewMode,
     }
     next()
   })

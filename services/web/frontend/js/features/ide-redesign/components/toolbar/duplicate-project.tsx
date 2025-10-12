@@ -11,6 +11,7 @@ export const DuplicateProject = () => {
   const { t } = useTranslation()
   const [showModal, setShowModal] = useState(false)
   const anonymous = getMeta('ol-anonymous')
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
   const openProject = useOpenProject()
 
   const handleShowModal = useCallback(() => {
@@ -18,7 +19,7 @@ export const DuplicateProject = () => {
     setShowModal(true)
   }, [sendEvent])
 
-  if (anonymous) {
+  if (anonymous || peerReviewMode) {
     return null
   }
 

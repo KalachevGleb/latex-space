@@ -38,6 +38,18 @@ const AdminController = {
         await SystemSettingsManager.promises.getSetting('registrationEnabled')
       const defaultLanguage =
         await SystemSettingsManager.promises.getSetting('defaultLanguage')
+      const peerReviewMode =
+        await SystemSettingsManager.promises.getSetting('peerReviewMode')
+      const disableChat =
+        await SystemSettingsManager.promises.getSetting('disableChat')
+      const disableLinkSharing =
+        await SystemSettingsManager.promises.getSetting('disableLinkSharing')
+      const adminEmail =
+        await SystemSettingsManager.promises.getSetting('adminEmail')
+      const maxDocLength =
+        await SystemSettingsManager.promises.getSetting('maxDocLength')
+      const maxUploadSize =
+        await SystemSettingsManager.promises.getSetting('maxUploadSize')
 
       res.render('admin/index', {
         title: 'System Admin',
@@ -45,6 +57,12 @@ const AdminController = {
         systemMessages,
         registrationEnabled: registrationEnabled || false,
         defaultLanguage: defaultLanguage || 'en',
+        peerReviewMode: Boolean(peerReviewMode),
+        disableChat: Boolean(disableChat),
+        disableLinkSharing: Boolean(disableLinkSharing),
+        adminEmail: adminEmail || 'placeholder@example.com',
+        maxDocLength: Number(maxDocLength) || 2,
+        maxUploadSize: Number(maxUploadSize) || 50,
       })
     } catch (error) {
       return next(error)
@@ -125,6 +143,102 @@ const AdminController = {
       res.redirect('/admin#site-settings')
     } catch (error) {
       logger.error({ error }, 'error setting default language')
+      return next(error)
+    }
+  },
+
+  async togglePeerReviewMode(req, res, next) {
+    try {
+      const enabled = req.body.enabled === 'true' || req.body.enabled === true
+      await SystemSettingsManager.promises.setSetting('peerReviewMode', enabled)
+      res.redirect('/admin#site-settings')
+    } catch (error) {
+      return next(error)
+    }
+  },
+
+  async updateSiteSettings(req, res, next) {
+    try {
+      if (req.body.defaultLanguage) {
+        await SystemSettingsManager.promises.setSetting(
+          'defaultLanguage',
+          req.body.defaultLanguage
+        )
+      }
+      const peerReviewMode = req.body.peerReviewMode === 'on'
+      await SystemSettingsManager.promises.setSetting(
+        'peerReviewMode',
+        peerReviewMode
+      )
+      // If peer-review mode is enabled, disable registration
+      const registrationEnabled = peerReviewMode
+        ? false
+        : req.body.registrationEnabled === 'on'
+      await SystemSettingsManager.promises.setSetting(
+        'registrationEnabled',
+        registrationEnabled
+      )
+      
+      const disableChat = req.body.disableChat === 'on'
+      await SystemSettingsManager.promises.setSetting('disableChat', disableChat)
+      // Apply to runtime Settings
+      Settings.disableChat = disableChat
+      
+      const disableLinkSharing = req.body.disableLinkSharing === 'on'
+      await SystemSettingsManager.promises.setSetting(
+        'disableLinkSharing',
+        disableLinkSharing
+      )
+      // Apply to runtime Settings
+      Settings.disableLinkSharing = disableLinkSharing
+      
+      if (req.body.adminEmail) {
+        await SystemSettingsManager.promises.setSetting(
+          'adminEmail',
+          req.body.adminEmail
+        )
+        // Apply to runtime Settings
+        Settings.adminEmail = req.body.adminEmail
+      }
+      
+      if (req.body.maxDocLength) {
+        const maxDocLength = parseInt(req.body.maxDocLength, 10)
+        if (maxDocLength > 0) {
+          await SystemSettingsManager.promises.setSetting(
+            'maxDocLength',
+            maxDocLength
+          )
+          // Apply to runtime Settings (convert MB to bytes)
+          Settings.max_doc_length = maxDocLength * 1024 * 1024
+        }
+      }
+      
+      if (req.body.maxUploadSize) {
+        const maxUploadSize = parseInt(req.body.maxUploadSize, 10)
+        if (maxUploadSize > 0) {
+          await SystemSettingsManager.promises.setSetting(
+            'maxUploadSize',
+            maxUploadSize
+          )
+          // Apply to runtime Settings (convert MB to bytes)
+          Settings.maxUploadSize = maxUploadSize * 1024 * 1024
+        }
+      }
+      
+      logger.info(
+        {
+          disableChat: Settings.disableChat,
+          disableLinkSharing: Settings.disableLinkSharing,
+          adminEmail: Settings.adminEmail,
+          maxDocLength: Settings.max_doc_length,
+          maxUploadSize: Settings.maxUploadSize,
+        },
+        'updated runtime settings'
+      )
+      
+      res.redirect('/admin#site-settings')
+    } catch (error) {
+      logger.error({ error }, 'error updating site settings')
       return next(error)
     }
   },

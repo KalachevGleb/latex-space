@@ -1,4 +1,5 @@
 import { memo, useCallback, useState } from 'react'
+import getMeta from '@/utils/meta'
 import { useTranslation } from 'react-i18next'
 import OLDropdownMenuItem from '@/shared/components/ol/ol-dropdown-menu-item'
 import CloneProjectModal from '../../../../../clone-project-modal/components/clone-project-modal'
@@ -10,6 +11,8 @@ import { useProjectTags } from '@/features/project-list/hooks/use-project-tags'
 import { isSmallDevice } from '../../../../../../infrastructure/event-tracking'
 
 function CopyProjectMenuItem() {
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  if (peerReviewMode) return null
   const {
     addClonedProjectToViewData,
     addProjectToTagInView,

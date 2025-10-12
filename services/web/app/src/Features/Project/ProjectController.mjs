@@ -160,6 +160,18 @@ const _ProjectController = {
   },
 
   async deleteProject(req, res) {
+    // Disallow deletes from UI in peer-review mode
+    try {
+      const SystemSettingsManager = (
+        await import('../SystemSettings/SystemSettingsManager.mjs')
+      ).default
+      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
+        'peerReviewMode'
+      )
+      if (peerReviewMode) {
+        return res.sendStatus(403)
+      }
+    } catch {}
     const projectId = req.params.Project_id
     const user = SessionManager.getSessionUser(req.session)
     await ProjectDeleter.promises.deleteProject(projectId, {
@@ -185,6 +197,18 @@ const _ProjectController = {
   },
 
   async trashProject(req, res) {
+    // Disallow trash in peer-review mode
+    try {
+      const SystemSettingsManager = (
+        await import('../SystemSettings/SystemSettingsManager.mjs')
+      ).default
+      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
+        'peerReviewMode'
+      )
+      if (peerReviewMode) {
+        return res.sendStatus(403)
+      }
+    } catch {}
     const projectId = req.params.project_id
     const userId = SessionManager.getLoggedInUserId(req.session)
     await ProjectDeleter.promises.trashProject(projectId, userId)
@@ -216,6 +240,18 @@ const _ProjectController = {
   },
 
   async cloneProject(req, res, next) {
+    // Disallow clone in peer-review mode
+    try {
+      const SystemSettingsManager = (
+        await import('../SystemSettings/SystemSettingsManager.mjs')
+      ).default
+      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
+        'peerReviewMode'
+      )
+      if (peerReviewMode) {
+        return res.sendStatus(403)
+      }
+    } catch {}
     res.setTimeout(5 * 60 * 1000) // allow extra time for the copy to complete
     metrics.inc('cloned-project')
     const projectId = req.params.Project_id
@@ -255,6 +291,18 @@ const _ProjectController = {
   },
 
   async newProject(req, res) {
+    // Disallow project creation from UI in peer-review mode
+    try {
+      const SystemSettingsManager = (
+        await import('../SystemSettings/SystemSettingsManager.mjs')
+      ).default
+      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
+        'peerReviewMode'
+      )
+      if (peerReviewMode) {
+        return res.sendStatus(403)
+      }
+    } catch {}
     const currentUser = SessionManager.getSessionUser(req.session)
     const {
       first_name: firstName,

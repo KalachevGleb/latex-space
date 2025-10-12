@@ -1,4 +1,5 @@
 import { memo, useCallback, useState } from 'react'
+import getMeta from '@/utils/meta'
 import { useTranslation } from 'react-i18next'
 import CloneProjectModal from '../../../../../clone-project-modal/components/clone-project-modal'
 import useIsMounted from '../../../../../../shared/hooks/use-is-mounted'
@@ -25,6 +26,8 @@ type CopyButtonProps = {
 }
 
 function CopyProjectButton({ project, children }: CopyButtonProps) {
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  if (peerReviewMode) return null
   const {
     addClonedProjectToViewData,
     addProjectToTagInView,
