@@ -170,7 +170,7 @@ export default function EditMember({
             />
             <div className="email-warning">
               {member.alias ? `${member.alias} (${member.email})` : member.email}
-              {isCurrentUser && <span> (me)</span>}
+              {isCurrentUser && <span> ({t('you')}) </span>}
               {member.pendingEditor && (
                 <div className="subtitle">{t('view_only_downgraded')}</div>
               )}

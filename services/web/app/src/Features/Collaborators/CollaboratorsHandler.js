@@ -314,7 +314,6 @@ async function setCollaboratorPrivilegeLevel(
           pendingReviewer_refs: userId,
         },
         $addToSet: { collaberator_refs: userId },
-        $unset: { [`memberAliases.${userId}`]: '' },
       }
       break
     }
@@ -328,7 +327,6 @@ async function setCollaboratorPrivilegeLevel(
           pendingReviewer_refs: userId,
         },
         $addToSet: { reviewer_refs: userId },
-        $unset: { [`memberAliases.${userId}`]: '' },
       }
 
       const project = await ProjectGetter.promises.getProject(projectId, {
@@ -399,7 +397,6 @@ async function setCollaboratorPrivilegeLevel(
           anonymous_reviewer_refs: userId,
         },
         $addToSet: { readOnly_refs: userId },
-        $unset: { [`memberAliases.${userId}`]: '' },
       }
 
       if (pendingEditor) {
