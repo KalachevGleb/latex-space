@@ -105,7 +105,9 @@ if ((process.env.DOCKER_RUNNER || process.env.SANDBOXED_COMPILES) === 'true') {
         process.env.TEX_LIVE_DOCKER_IMAGE ||
         'quay.io/sharelatex/texlive-full:2017.1',
       env: {
-        HOME: '/tmp',
+        // HOME: '/home/tex' - let Docker use default home for 'tex' user
+        // This allows TeXLive to cache fonts and other data in /home/tex/.texlive{year}/
+        HOME: '/home/tex',
         CLSI: 1,
       },
       socketPath: '/var/run/docker.sock',
@@ -196,4 +198,8 @@ if ((process.env.DOCKER_RUNNER || process.env.SANDBOXED_COMPILES) === 'true') {
     //   'SANDBOXED_COMPILES enabled, but SANDBOXED_COMPILES_HOST_DIR_OUTPUT not set'
     // )
   }
+
+  module.exports.path.sandboxedCompilesHostDirTexliveCache =
+    process.env.SANDBOXED_COMPILES_HOST_DIR_TEXLIVE_CACHE
+  // TexLive cache is optional but highly recommended for performance
 }

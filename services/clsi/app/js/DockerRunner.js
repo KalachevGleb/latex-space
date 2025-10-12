@@ -74,6 +74,22 @@ const DockerRunner = {
       volumes[directory] += ':ro'
     }
 
+    // Mount TexLive cache for fonts and other TeX data
+    // This significantly speeds up repeated compilations (especially with babel, fonts, etc.)
+    // TexLive writes caches to $HOME/.texlive{year}/texmf-var/
+    // Since container runs as 'tex' user, this is /home/tex
+    if (Settings.path.sandboxedCompilesHostDirTexliveCache) {
+      const texliveCacheDir = Path.join(
+        Settings.path.sandboxedCompilesHostDirTexliveCache,
+        Path.basename(directory) // Use same naming as compile dir (projectId or projectId-userId)
+      )
+      volumes[texliveCacheDir] = '/home/tex'
+      logger.debug(
+        { projectId, texliveCacheDir },
+        'mounting texlive cache directory'
+      )
+    }
+
     const options = DockerRunner._getContainerOptions(
       command,
       image,
@@ -300,14 +316,23 @@ const DockerRunner = {
       // Allow writing to /tmp for temporary compilation files (with noexec for security)
       options.HostConfig.Tmpfs = {
         '/tmp': 'rw,noexec,nosuid,nodev,size=1048576k', // 1GB for temp files
-        '/home/tex': 'rw,noexec,nosuid,nodev,size=65536k', // 64MB for user home
       }
-      // Mark these as volumes
+      // Mark as volume
       if (!options.Volumes) {
         options.Volumes = {}
       }
       options.Volumes['/tmp'] = {}
-      options.Volumes['/home/tex'] = {}
+      
+      // /home/tex handling:
+      // - If texlive cache is configured: will be bind-mounted from host (persistent cache)
+      // - If not configured: use tmpfs (temporary, lost between compilations)
+      const hasTexliveCacheMount = Object.keys(volumes).some(hostPath => 
+        volumes[hostPath].includes('/home/tex')
+      )
+      if (!hasTexliveCacheMount) {
+        options.HostConfig.Tmpfs['/home/tex'] = 'rw,noexec,nosuid,nodev,size=65536k'
+        options.Volumes['/home/tex'] = {}
+      }
     }
 
     // Allow per-compile group overriding of individual settings

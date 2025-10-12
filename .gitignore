@@ -11,6 +11,9 @@ docker-compose.override.yml
 # development artifacts
 develop/output/
 develop/texlive-build.log
+compiles/
+output/
+texlive-cache/
 setup.sh
 check-ready.sh
 cookies.txt

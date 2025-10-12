@@ -29,10 +29,12 @@ services:
       - SANDBOXED_COMPILES=true
       - SANDBOXED_COMPILES_HOST_DIR_COMPILES=${PWD}/compiles
       - SANDBOXED_COMPILES_HOST_DIR_OUTPUT=${PWD}/output
+      - SANDBOXED_COMPILES_HOST_DIR_TEXLIVE_CACHE=${PWD}/texlive-cache
     user: root
     volumes:
       - ${PWD}/compiles:/overleaf/services/clsi/compiles
       - ${PWD}/output:/overleaf/services/clsi/output
+      - ${PWD}/texlive-cache:/overleaf/services/clsi/texlive-cache
       - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
       - clsi-cache:/overleaf/services/clsi/cache
 
