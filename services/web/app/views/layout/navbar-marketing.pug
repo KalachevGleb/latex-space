@@ -59,20 +59,19 @@ nav.navbar.navbar-default.navbar-main.navbar-expand-lg(
 								event-tracking-trigger='click'
 								event-segmentation={item: 'admin', location: 'top-menu'}
 							)
-								| Admin
+								| #{translate("admin_panel")}
 							+dropdown-menu.dropdown-menu-end
 								if canDisplayAdminMenu
-									+dropdown-menu-link-item(href='/admin') Manage Site
-									+dropdown-menu-link-item(href='/admin/user') Manage Users
-									+dropdown-menu-link-item(href='/admin/project') Project URL Lookup
+									+dropdown-menu-link-item(href='/admin') #{translate("manage_site")}
+									+dropdown-menu-link-item(href='/admin/user') #{translate("manage_users")}
 								if canDisplayAdminRedirect
-									+dropdown-menu-link-item(href=settings.adminUrl) Switch to Admin
+									+dropdown-menu-link-item(href=settings.adminUrl) #{translate("switch_to_admin")}
 								if canDisplaySplitTestMenu
-									+dropdown-menu-link-item(href='/admin/split-test') Manage Feature Flags
+									+dropdown-menu-link-item(href='/admin/split-test') #{translate("manage_feature_flags")}
 								if canDisplaySurveyMenu
-									+dropdown-menu-link-item(href='/admin/survey') Manage Surveys
+									+dropdown-menu-link-item(href='/admin/survey') #{translate("manage_surveys")}
 								if canDisplayScriptLogMenu
-									+dropdown-menu-link-item(href='/admin/script-logs') View Script Logs
+									+dropdown-menu-link-item(href='/admin/script-logs') #{translate("view_script_logs")}
 
 					// loop over header_extras
 					each item in nav.header_extras

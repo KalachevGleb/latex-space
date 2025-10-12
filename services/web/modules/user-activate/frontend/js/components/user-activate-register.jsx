@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import PropTypes from 'prop-types'
+import { useTranslation } from 'react-i18next'
 import RegisterForm from './register-form'
 import OLRow from '@/shared/components/ol/ol-row'
 import OLCol from '@/shared/components/ol/ol-col'
@@ -7,6 +8,7 @@ import OLCard from '@/shared/components/ol/ol-card'
 import Notification from '@/shared/components/notification'
 
 function UserActivateRegister() {
+  const { t } = useTranslation()
   const [emails, setEmails] = useState([])
   const [failedEmails, setFailedEmails] = useState([])
   const [registerError, setRegisterError] = useState(false)
@@ -17,7 +19,7 @@ function UserActivateRegister() {
       <OLCol>
         <OLCard>
           <div className="page-header">
-            <h1>Register new users</h1>
+            <h1>{t('register_new_users')}</h1>
           </div>
           <RegisterForm
             setRegistrationSuccess={setRegistrationSuccess}
@@ -42,11 +44,12 @@ function UserActivateRegister() {
 }
 
 function UserActivateError({ failedEmails }) {
+  const { t } = useTranslation()
   return (
     <div className="row-spaced">
       <Notification
         type="error"
-        content="Sorry, an error occured, failed to register these email:"
+        content={t('failed_to_register_these_emails')}
         className="mb-3"
       />
       <ul>
@@ -59,28 +62,28 @@ function UserActivateError({ failedEmails }) {
 }
 
 function SuccessfulRegistrationMessage() {
+  const { t } = useTranslation()
   return (
     <div className="row-spaced text-success">
-      <p>We've sent out welcome emails to the registered users.</p>
+      <p>{t('welcome_emails_sent_to_registered_users')}</p>
       <p>
-        You can also manually send them URLs below to allow them to reset their
-        password and log in for the first time.
+        {t('manually_send_password_reset_urls')}
       </p>
       <p>
-        (Password reset tokens will expire after one week and the user will need
-        registering again).
+        {t('password_reset_tokens_expire_after_one_week')}
       </p>
     </div>
   )
 }
 
 function DisplayEmailsList({ emails }) {
+  const { t } = useTranslation()
   return (
     <table className="table table-striped ">
       <tbody>
         <tr>
-          <th>Email</th>
-          <th>Set Password Url</th>
+          <th>{t('email')}</th>
+          <th>{t('set_password_url')}</th>
         </tr>
         {emails.map(user => (
           <tr key={user.email}>

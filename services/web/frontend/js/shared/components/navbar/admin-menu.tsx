@@ -2,6 +2,7 @@ import type { DefaultNavbarMetadata } from '@/shared/components/types/default-na
 import NavDropdownMenu from '@/shared/components/navbar/nav-dropdown-menu'
 import NavDropdownLinkItem from '@/shared/components/navbar/nav-dropdown-link-item'
 import { useSendProjectListMB } from '@/features/project-list/components/project-list-events'
+import { useTranslation } from 'react-i18next'
 
 export default function AdminMenu({
   canDisplayAdminMenu,
@@ -19,10 +20,11 @@ export default function AdminMenu({
   | 'canDisplayScriptLogMenu'
   | 'adminUrl'
 >) {
+  const { t } = useTranslation()
   const sendProjectListMB = useSendProjectListMB()
   return (
     <NavDropdownMenu
-      title="Admin"
+      title={t('admin_panel')}
       className="subdued"
       onToggle={nextShow => {
         if (nextShow) {
@@ -35,33 +37,30 @@ export default function AdminMenu({
     >
       {canDisplayAdminMenu ? (
         <>
-          <NavDropdownLinkItem href="/admin">Manage Site</NavDropdownLinkItem>
+          <NavDropdownLinkItem href="/admin">{t('manage_site')}</NavDropdownLinkItem>
           <NavDropdownLinkItem href="/admin/user">
-            Manage Users
-          </NavDropdownLinkItem>
-          <NavDropdownLinkItem href="/admin/project">
-            Project URL lookup
+            {t('manage_users')}
           </NavDropdownLinkItem>
         </>
       ) : null}
       {canDisplayAdminRedirect && adminUrl ? (
         <NavDropdownLinkItem href={adminUrl}>
-          Switch to Admin
+          {t('switch_to_admin')}
         </NavDropdownLinkItem>
       ) : null}
       {canDisplaySplitTestMenu ? (
         <NavDropdownLinkItem href="/admin/split-test">
-          Manage Feature Flags
+          {t('manage_feature_flags')}
         </NavDropdownLinkItem>
       ) : null}
       {canDisplaySurveyMenu ? (
         <NavDropdownLinkItem href="/admin/survey">
-          Manage Surveys
+          {t('manage_surveys')}
         </NavDropdownLinkItem>
       ) : null}
       {canDisplayScriptLogMenu ? (
         <NavDropdownLinkItem href="/admin/script-logs">
-          View Script Logs
+          {t('view_script_logs')}
         </NavDropdownLinkItem>
       ) : null}
     </NavDropdownMenu>

@@ -1,4 +1,10 @@
 import moment from 'moment'
+import 'moment/locale/ru'
+import getMeta from '@/utils/meta'
+
+// Set moment locale based on the current language
+const LANG = getMeta('ol-i18n', { currentLangCode: 'en' }).currentLangCode
+moment.locale(LANG)
 
 export function formatDate(date: moment.MomentInput, format?: string) {
   if (!date) return 'N/A'
