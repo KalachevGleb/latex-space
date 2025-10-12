@@ -43,7 +43,7 @@ class ProjectAccess {
   #memberAliases
 
   /**
-   * @param {{ owner_ref: ObjectId; collaberator_refs: ObjectId[]; readOnly_refs: ObjectId[]; tokenAccessReadAndWrite_refs: ObjectId[]; tokenAccessReadOnly_refs: ObjectId[]; publicAccesLevel: PublicAccessLevel; pendingEditor_refs: ObjectId[]; reviewer_refs: ObjectId[]; anonymous_reviewer_refs: ObjectId[]; pendingReviewer_refs: ObjectId[]; memberAliases?: Object }} project
+   * @param {{ owner_ref: ObjectId; collaberator_refs: ObjectId[]; readOnly_refs: ObjectId[]; tokenAccessReadAndWrite_refs: ObjectId[]; tokenAccessReadOnly_refs: ObjectId[]; publicAccesLevel: PublicAccessLevel; pendingEditor_refs: ObjectId[]; reviewer_refs: ObjectId[]; pendingReviewer_refs: ObjectId[]; memberAliases?: Object }} project
    */
   constructor(project) {
     this.#members = _getMemberIdsWithPrivilegeLevelsFromFields(
@@ -55,7 +55,6 @@ class ProjectAccess {
       project.publicAccesLevel,
       project.pendingEditor_refs,
       project.reviewer_refs,
-      project.anonymous_reviewer_refs,
       project.pendingReviewer_refs
     )
     this.#publicAccessLevel = project.publicAccesLevel
@@ -197,8 +196,7 @@ class ProjectAccess {
       m =>
         m.source === Sources.INVITE &&
         (m.privilegeLevel === PrivilegeLevels.READ_AND_WRITE ||
-          m.privilegeLevel === PrivilegeLevels.REVIEW ||
-          m.privilegeLevel === PrivilegeLevels.ANONYMOUS_REVIEW)
+          m.privilegeLevel === PrivilegeLevels.REVIEW)
     ).length
   }
 
@@ -226,7 +224,6 @@ async function getProjectAccess(projectId) {
     publicAccesLevel: 1,
     pendingEditor_refs: 1,
     reviewer_refs: 1,
-    anonymous_reviewer_refs: 1,
     pendingReviewer_refs: 1,
     memberAliases: 1,
   })
@@ -263,7 +260,7 @@ async function getInvitedMembersWithPrivilegeLevelsFromFields(
     'private',
     [],
     reviewerIds,
-    []
+    [] // pendingReviewerIds
   )
   return _loadMembers(members)
 }
@@ -347,16 +344,12 @@ async function getProjectsUserIsMemberOf(userId, fields) {
   const [
     readAndWrite,
     review,
-    anonymousReview,
     readOnly,
     tokenReadAndWrite,
     tokenReadOnly,
   ] = await Promise.all([
     limit(() => Project.find({ collaberator_refs: userId }, fields).exec()),
     limit(() => Project.find({ reviewer_refs: userId }, fields).exec()),
-    limit(() =>
-      Project.find({ anonymous_reviewer_refs: userId }, fields).exec()
-    ),
     limit(() => Project.find({ readOnly_refs: userId }, fields).exec()),
     limit(() =>
       Project.find(
@@ -380,7 +373,6 @@ async function getProjectsUserIsMemberOf(userId, fields) {
   return {
     readAndWrite,
     review,
-    anonymousReview,
     readOnly,
     tokenReadAndWrite,
     tokenReadOnly,
@@ -484,7 +476,6 @@ function _getMemberIdsWithPrivilegeLevelsFromFields(
   publicAccessLevel,
   pendingEditorIds,
   reviewerIds,
-  anonymousReviewerIds,
   pendingReviewerIds
 ) {
   const members = []
@@ -506,14 +497,6 @@ function _getMemberIdsWithPrivilegeLevelsFromFields(
     members.push({
       id: memberId.toString(),
       privilegeLevel: PrivilegeLevels.REVIEW,
-      source: Sources.INVITE,
-    })
-  }
-
-  for (const memberId of anonymousReviewerIds || []) {
-    members.push({
-      id: memberId.toString(),
-      privilegeLevel: PrivilegeLevels.ANONYMOUS_REVIEW,
       source: Sources.INVITE,
     })
   }

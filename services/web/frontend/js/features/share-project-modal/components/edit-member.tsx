@@ -79,7 +79,7 @@ export default function EditMember({
   function shouldWarnMember() {
     return (
       hasExceededCollaboratorLimit &&
-      ['readAndWrite', 'review', 'anonymousReview'].includes(privileges)
+      ['readAndWrite', 'review'].includes(privileges)
     )
   }
 
@@ -257,7 +257,6 @@ function SelectPrivilege({
             { key: 'owner', label: t('make_owner') },
             { key: 'readAndWrite', label: t('editor') },
             { key: 'review', label: t('reviewer') },
-            { key: 'anonymousReview', label: t('anonymous_reviewer') },
             { key: 'readOnly', label: t('viewer') },
             { key: 'removeAccess', label: t('remove_access') },
           ]
@@ -276,14 +275,14 @@ function SelectPrivilege({
   }
 
   function getPrivilegeSubtitle(privilege: PermissionsOption) {
-    if (!['readAndWrite', 'review', 'anonymousReview'].includes(privilege)) {
+    if (!['readAndWrite', 'review'].includes(privilege)) {
       return ''
     }
 
     if (
       hasBeenDowngraded ||
       (!canAddCollaborators &&
-        !['readAndWrite', 'review', 'anonymousReview'].includes(value))
+        !['readAndWrite', 'review'].includes(value))
     ) {
       return t('limited_to_n_collaborators_per_project', {
         count: features.collaborators,
@@ -296,9 +295,9 @@ function SelectPrivilege({
   function isPrivilegeDisabled(privilege: PermissionsOption) {
     return (
       !canAddCollaborators &&
-      ['readAndWrite', 'review', 'anonymousReview'].includes(privilege) &&
+      ['readAndWrite', 'review'].includes(privilege) &&
       (hasBeenDowngraded ||
-        !['readAndWrite', 'review', 'anonymousReview'].includes(value))
+        !['readAndWrite', 'review'].includes(value))
     )
   }
 

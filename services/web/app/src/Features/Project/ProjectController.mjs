@@ -1004,7 +1004,6 @@ const _ProjectController = {
     const {
       owned,
       review,
-      anonymousReview,
       readAndWrite,
       readOnly,
       tokenReadAndWrite,
@@ -1037,16 +1036,6 @@ const _ProjectController = {
         ProjectController._buildProjectViewModel(
           project,
           'review',
-          Sources.INVITE,
-          userId
-        )
-      )
-    }
-    for (project of anonymousReview || []) {
-      projects.push(
-        ProjectController._buildProjectViewModel(
-          project,
-          'anonymousReview',
           Sources.INVITE,
           userId
         )

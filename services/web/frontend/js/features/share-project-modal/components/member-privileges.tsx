@@ -18,9 +18,6 @@ export default function MemberPrivileges({
     case 'review':
       return t('reviewer')
 
-    case 'anonymousReview':
-      return t('anonymous_reviewer')
-
     default:
       return null
   }

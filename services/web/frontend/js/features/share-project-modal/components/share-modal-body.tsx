@@ -43,7 +43,7 @@ export default function ShareModalBody() {
   const somePendingEditorsResolved = useMemo(() => {
     return Boolean(
       members?.some(member =>
-        ['readAndWrite', 'review', 'anonymousReview'].includes(
+        ['readAndWrite', 'review'].includes(
           member.privileges
         )
       ) &&
@@ -88,13 +88,12 @@ export default function ShareModalBody() {
       ...members.filter(member => member.privileges === 'readAndWrite'),
       ...members.filter(member => member.pendingEditor),
       ...members.filter(member => member.privileges === 'review'),
-      ...members.filter(member => member.privileges === 'anonymousReview'),
       ...members.filter(member => member.pendingReviewer),
       ...members.filter(
         member =>
           !member.pendingEditor &&
           !member.pendingReviewer &&
-          !['readAndWrite', 'review', 'anonymousReview'].includes(
+          !['readAndWrite', 'review'].includes(
             member.privileges
           )
       ),
@@ -128,8 +127,7 @@ export default function ShareModalBody() {
             )}
             canAddCollaborators={canAddCollaborators}
             isReviewerOnFreeProject={
-              (member.privileges === 'review' ||
-                member.privileges === 'anonymousReview') &&
+              member.privileges === 'review' &&
               !features.trackChanges
             }
           />

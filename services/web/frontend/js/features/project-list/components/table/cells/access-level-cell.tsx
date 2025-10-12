@@ -19,8 +19,6 @@ function AccessLevelCell({ project }: AccessLevelCellProps) {
         return t('read_only')
       case 'review':
         return t('reviewer')
-      case 'anonymousReview':
-        return t('anonymous_reviewer')
       default:
         return accessLevel
     }

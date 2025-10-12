@@ -4,8 +4,10 @@ import OLCol from '@/shared/components/ol/ol-col'
 import MaterialIcon from '@/shared/components/material-icon'
 import { ProjectMember } from '@/shared/context/types/project-metadata'
 import { useUserContext } from '@/shared/context/user-context'
+import { useTranslation } from 'react-i18next'
 
 export default function ViewMember({ member }: { member: ProjectMember }) {
+  const { t } = useTranslation()
   const user = useUserContext()
   
   // Display alias if present (for anonymous reviewers), otherwise email
@@ -21,7 +23,7 @@ export default function ViewMember({ member }: { member: ProjectMember }) {
           <MaterialIcon type="person" />
           <div className="email-warning">
             {displayName}
-            {isCurrentUser && <span> (me)</span>}
+            {isCurrentUser && <span> ({t('you')})</span>}
           </div>
         </div>
       </OLCol>

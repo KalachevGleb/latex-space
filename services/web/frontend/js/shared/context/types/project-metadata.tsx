@@ -5,7 +5,7 @@ import { Folder } from '../../../../../types/folder'
 
 export type ProjectMember = {
   _id: UserId
-  privileges: 'readOnly' | 'readAndWrite' | 'review' | 'anonymousReview'
+  privileges: 'readOnly' | 'readAndWrite' | 'review'
   email: string
   first_name: string
   last_name: string
