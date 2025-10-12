@@ -1177,6 +1177,16 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     AuthorizationMiddleware.ensureUserIsSiteAdmin,
     AdminController.setDefaultLanguage
   )
+  webRouter.post(
+    '/admin/settings/peerReviewMode',
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    AdminController.togglePeerReviewMode
+  )
+  webRouter.post(
+    '/admin/settings',
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    AdminController.updateSiteSettings
+  )
 
   privateApiRouter.get('/perfTest', (req, res) => {
     plainTextResponse(res, 'hello')

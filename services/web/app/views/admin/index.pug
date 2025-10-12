@@ -15,7 +15,6 @@ block content
 									ul.nav.nav-tabs.align-left(role='tablist')
 										+bookmarkable-tabset-header('system-messages', translate("system_messages"), true)
 										+bookmarkable-tabset-header('site-settings', translate("settings"))
-										+bookmarkable-tabset-header('registration-settings', translate("registration_settings"))
 										+bookmarkable-tabset-header('open-sockets', translate("open_sockets"))
 										+bookmarkable-tabset-header('open-close-editor', translate("open_close_editor"))
 										if hasFeature('saas')
@@ -43,14 +42,12 @@ block content
 											button.btn.btn-danger(type='submit') #{translate("clear_all_messages")}
 
 									.tab-pane(role='tabpanel' id='site-settings')
-										h3 #{translate("settings")}
-										p #{translate("configure_global_site_settings")}
 										.row-spaced
-											form(method='post' action='/admin/settings/defaultLanguage')
+											form#site-settings-form(method='post' action='/admin/settings')
 												input(name='_csrf' type='hidden' value=csrfToken)
 												.form-group
 													label.form-label(for='default-language') #{translate("default_interface_language")}
-													select#default-language.form-control(name='language')
+													select#default-language.form-control(name='defaultLanguage' onchange='markFormDirty()')
 														option(value='en' selected=(defaultLanguage === 'en')) English
 														option(value='ru' selected=(defaultLanguage === 'ru')) Русский
 														option(value='es' selected=(defaultLanguage === 'es')) Español
@@ -62,36 +59,104 @@ block content
 														option(value='ja' selected=(defaultLanguage === 'ja')) 日本語
 														option(value='ko' selected=(defaultLanguage === 'ko')) 한국어
 													p.small #{translate("this_language_will_be_used_as_the_default")}
-												button.btn.btn-primary(type='submit') #{translate("save_settings")}
-										.row-spaced
-											.alert.alert-info
-												strong #{translate("current_default_language")}
-												= defaultLanguage
-
-									.tab-pane(role='tabpanel' id='registration-settings')
-										h3 #{translate("user_registration_settings")}
-										p #{translate("control_whether_users_can_register")}
-										.row-spaced
-											form#registration-form(method='post' action='/admin/registration/toggle')
-												input(name='_csrf' type='hidden' value=csrfToken)
-												input#enabled-input(type='hidden' name='enabled' value=registrationEnabled ? 'true' : 'false')
-												.form-check
-													input#registration-enabled.form-check-input(
-														type='checkbox'
-														checked=registrationEnabled
-														onchange='document.getElementById("enabled-input").value = this.checked ? "true" : "false"; this.form.submit();'
+												.form-group
+													.form-check
+														input#peer-review-mode-checkbox.form-check-input(
+															type='checkbox'
+															name='peerReviewMode'
+															checked=peerReviewMode
+															onchange='handlePeerReviewModeChange(this.checked); markFormDirty();'
+														)
+														label.form-check-label(for='peer-review-mode-checkbox')
+															| #{translate("peer_review_mode")}
+													p.small #{translate("peer_review_mode_description")}
+												.form-group
+													.form-check
+														input#registration-enabled-checkbox.form-check-input(
+															type='checkbox'
+															name='registrationEnabled'
+															checked=registrationEnabled
+															disabled=peerReviewMode
+															onchange='markFormDirty()'
+														)
+														label.form-check-label(for='registration-enabled-checkbox')
+															| #{translate("allow_users_to_register_new_accounts")}
+													p.small #{translate("control_whether_users_can_register")}
+												.form-group
+													.form-check
+														input#disable-chat-checkbox.form-check-input(
+															type='checkbox'
+															name='disableChat'
+															checked=disableChat
+															onchange='markFormDirty()'
+														)
+														label.form-check-label(for='disable-chat-checkbox')
+															| #{translate("disable_chat")}
+													p.small #{translate("disable_chat_description")}
+												.form-group
+													.form-check
+														input#disable-link-sharing-checkbox.form-check-input(
+															type='checkbox'
+															name='disableLinkSharing'
+															checked=disableLinkSharing
+															onchange='markFormDirty()'
+														)
+														label.form-check-label(for='disable-link-sharing-checkbox')
+															| #{translate("disable_link_sharing")}
+													p.small #{translate("disable_link_sharing_description")}
+												.form-group
+													label.form-label(for='admin-email') #{translate("admin_email")}
+													input#admin-email.form-control(
+														type='email'
+														name='adminEmail'
+														value=adminEmail
+														onchange='markFormDirty()'
 													)
-													label.form-check-label(for='registration-enabled')
-														| #{translate("allow_users_to_register_new_accounts")}
-										.row-spaced
-											if registrationEnabled
-												.alert.alert-info
-													strong #{translate("registration_is_currently_enabled")}
-													|  #{translate("users_can_create_new_accounts_via_the_registration_page")}
-											else
-												.alert.alert-warning
-													strong #{translate("registration_is_currently_disabled")}
-													|  #{translate("only_administrators_can_create_new_user_accounts")}
+													p.small #{translate("admin_email_description")}
+												.form-group
+													label.form-label(for='max-doc-length') #{translate("max_doc_length")}
+													input#max-doc-length.form-control(
+														type='number'
+														name='maxDocLength'
+														value=maxDocLength
+														min='1'
+														step='1'
+														onchange='markFormDirty()'
+													)
+													p.small #{translate("max_doc_length_description")}
+												.form-group
+													label.form-label(for='max-upload-size') #{translate("max_upload_size")}
+													input#max-upload-size.form-control(
+														type='number'
+														name='maxUploadSize'
+														value=maxUploadSize
+														min='1'
+														step='1'
+														onchange='markFormDirty()'
+													)
+													p.small #{translate("max_upload_size_description")}
+												button.btn.btn-primary(type='submit') #{translate("save_settings")}
+										script.
+											var formDirty = false;
+											function markFormDirty() {
+												formDirty = true;
+											}
+											function handlePeerReviewModeChange(isEnabled) {
+												var regCheckbox = document.getElementById('registration-enabled-checkbox');
+												regCheckbox.disabled = isEnabled;
+												if (isEnabled) {
+													regCheckbox.checked = false;
+												}
+											}
+											window.addEventListener('beforeunload', function(e) {
+												if (formDirty) {
+													e.preventDefault();
+													e.returnValue = '';
+												}
+											});
+											document.getElementById('site-settings-form').addEventListener('submit', function() {
+												formDirty = false;
+											});
 
 									.tab-pane(role='tabpanel' id='open-sockets')
 										.row-spaced

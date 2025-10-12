@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import getMeta from '@/utils/meta'
 import { useTranslation } from 'react-i18next'
 import EditorCloneProjectModalWrapper from '../../clone-project-modal/components/editor-clone-project-modal-wrapper'
 import LeftMenuButton from './left-menu-button'
@@ -6,6 +7,8 @@ import * as eventTracking from '../../../infrastructure/event-tracking'
 import useOpenProject from '@/shared/hooks/use-open-project'
 
 export default function ActionsCopyProject() {
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  if (peerReviewMode) return null
   const [showModal, setShowModal] = useState(false)
   const { t } = useTranslation()
   const openProject = useOpenProject()

@@ -22,7 +22,17 @@ export default {
       '/project/new/upload',
       AuthenticationController.requireLogin(),
       RateLimiterMiddleware.rateLimit(rateLimiters.projectUpload),
-      ProjectUploadController.multerMiddleware,
+      async (req, res, next) => {
+        try {
+          const SystemSettingsManager = (
+            await import('../SystemSettings/SystemSettingsManager.mjs')
+          ).default
+          const peerReviewMode =
+            await SystemSettingsManager.promises.getSetting('peerReviewMode')
+          if (peerReviewMode) return res.sendStatus(403)
+        } catch {}
+        return ProjectUploadController.multerMiddleware(req, res, next)
+      },
       ProjectUploadController.uploadProject
     )
 

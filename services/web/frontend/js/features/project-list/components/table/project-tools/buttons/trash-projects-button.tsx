@@ -1,5 +1,6 @@
 import { memo, useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import getMeta from '@/utils/meta'
 import OLTooltip from '@/shared/components/ol/ol-tooltip'
 import OLIconButton from '@/shared/components/ol/ol-icon-button'
 import TrashProjectModal from '../../../modals/trash-project-modal'
@@ -9,6 +10,8 @@ import { trashProject } from '../../../../util/api'
 import { Project } from '../../../../../../../../types/project/dashboard/api'
 
 function TrashProjectsButton() {
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  if (peerReviewMode) return null
   const { selectedProjects, toggleSelectedProject, updateProjectViewData } =
     useProjectListContext()
   const { t } = useTranslation()

@@ -47,6 +47,7 @@ export const ToolbarMenuBar = () => {
   const showEditorSwitchMenuOption = canUseNewEditorViaPrimaryFeatureFlag()
 
   const anonymous = getMeta('ol-anonymous')
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
 
   useCommandProvider(
     () => [
@@ -70,7 +71,7 @@ export const ToolbarMenuBar = () => {
       {
         type: 'command',
         label: t('make_a_copy'),
-        disabled: anonymous,
+        disabled: anonymous || peerReviewMode,
         handler: () => {
           setShowCloneProjectModal(true)
         },

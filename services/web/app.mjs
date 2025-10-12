@@ -8,6 +8,7 @@ import logger from '@overleaf/logger'
 import PlansLocator from './app/src/Features/Subscription/PlansLocator.js'
 import HistoryManager from './app/src/Features/History/HistoryManager.js'
 import SiteAdminHandler from './app/src/infrastructure/SiteAdminHandler.js'
+import SystemSettingsManager from './app/src/Features/SystemSettings/SystemSettingsManager.mjs'
 import http from 'node:http'
 import https from 'node:https'
 import * as Serializers from './app/src/infrastructure/LoggerSerializers.js'
@@ -77,6 +78,42 @@ metrics.gauge(
   1,
   { path: 'waitForMongoAndGlobalBlobs' }
 )
+
+// Load dynamic settings from database after MongoDB is connected
+try {
+  const disableChat = await SystemSettingsManager.promises.getSetting('disableChat')
+  const disableLinkSharing = await SystemSettingsManager.promises.getSetting('disableLinkSharing')
+  const adminEmail = await SystemSettingsManager.promises.getSetting('adminEmail')
+  const maxDocLength = await SystemSettingsManager.promises.getSetting('maxDocLength')
+  const maxUploadSize = await SystemSettingsManager.promises.getSetting('maxUploadSize')
+  
+  if (disableChat !== undefined && disableChat !== null) {
+    Settings.disableChat = Boolean(disableChat)
+  }
+  if (disableLinkSharing !== undefined && disableLinkSharing !== null) {
+    Settings.disableLinkSharing = Boolean(disableLinkSharing)
+  }
+  if (adminEmail) {
+    Settings.adminEmail = adminEmail
+  }
+  if (maxDocLength) {
+    Settings.max_doc_length = parseInt(maxDocLength, 10) * 1024 * 1024
+  }
+  if (maxUploadSize) {
+    Settings.maxUploadSize = parseInt(maxUploadSize, 10) * 1024 * 1024
+  }
+  
+  logger.info(
+    { 
+      disableChat: Settings.disableChat, 
+      disableLinkSharing: Settings.disableLinkSharing,
+      adminEmail: Settings.adminEmail,
+    }, 
+    'loaded dynamic settings from database'
+  )
+} catch (error) {
+  logger.warn({ error }, 'could not load dynamic settings from database, using defaults')
+}
 
 const port = Settings.port || Settings.internal.web.port || 3000
 const host = Settings.internal.web.host || '127.0.0.1'

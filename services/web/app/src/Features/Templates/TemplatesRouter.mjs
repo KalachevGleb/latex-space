@@ -30,7 +30,17 @@ export default {
       '/project/new/template',
       AuthenticationController.requireLogin(),
       RateLimiterMiddleware.rateLimit(rateLimiter),
-      TemplatesController.createProjectFromV1Template
+      async (req, res, next) => {
+        try {
+          const SystemSettingsManager = (
+            await import('../SystemSettings/SystemSettingsManager.mjs')
+          ).default
+          const peerReviewMode =
+            await SystemSettingsManager.promises.getSetting('peerReviewMode')
+          if (peerReviewMode) return res.sendStatus(403)
+        } catch {}
+        return TemplatesController.createProjectFromV1Template(req, res, next)
+      }
     )
   },
 }

@@ -1,11 +1,11 @@
 import { memo, useCallback, useMemo, useState } from 'react'
+import getMeta from '@/utils/meta'
 import { useTranslation } from 'react-i18next'
 import { Project } from '../../../../../../../../types/project/dashboard/api'
 import DeleteProjectModal from '../../../modals/delete-project-modal'
 import useIsMounted from '../../../../../../shared/hooks/use-is-mounted'
 import { deleteProject } from '../../../../util/api'
 import { useProjectListContext } from '../../../../context/project-list-context'
-import getMeta from '@/utils/meta'
 import OLTooltip from '@/shared/components/ol/ol-tooltip'
 import OLIconButton from '@/shared/components/ol/ol-icon-button'
 
@@ -15,6 +15,8 @@ type DeleteProjectButtonProps = {
 }
 
 function DeleteProjectButton({ project, children }: DeleteProjectButtonProps) {
+  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  if (peerReviewMode) return null
   const { removeProjectFromView } = useProjectListContext()
   const { t } = useTranslation()
   const text = t('delete')

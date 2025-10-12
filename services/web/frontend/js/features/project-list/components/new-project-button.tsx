@@ -51,7 +51,7 @@ function NewProjectButton({
   showAddAffiliationWidget,
 }: NewProjectButtonProps) {
   const { t } = useTranslation()
-  const { templateLinks } = getMeta('ol-ExposedSettings')
+  const { templateLinks, peerReviewMode } = getMeta('ol-ExposedSettings')
   const [modal, setModal] =
     useState<Nullable<NewProjectButtonModalVariant>>(null)
   const portalTemplates = getMeta('ol-portalTemplates') || []
@@ -155,6 +155,7 @@ function NewProjectButton({
     onClick: (e: React.MouseEvent) => void
   }> = importProjectFromGithubMenu?.import.default
 
+  if (peerReviewMode) return null
   return (
     <>
       <Dropdown

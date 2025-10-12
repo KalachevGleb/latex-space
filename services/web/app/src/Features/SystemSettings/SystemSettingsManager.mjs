@@ -4,6 +4,12 @@ import { callbackify } from '@overleaf/promise-utils'
 const DEFAULT_SETTINGS = {
   registrationEnabled: false, // По умолчанию регистрация выключена
   defaultLanguage: 'en', // Язык сайта по умолчанию
+  peerReviewMode: false, // Режим рецензирования выключен по умолчанию
+  disableChat: false, // Чат включен по умолчанию
+  disableLinkSharing: false, // Общий доступ по ссылке включен по умолчанию
+  adminEmail: 'placeholder@example.com', // Email администратора
+  maxDocLength: 2, // Максимальный размер документа в МБ
+  maxUploadSize: 50, // Максимальный размер загружаемого файла в МБ
 }
 
 async function getSetting(key) {

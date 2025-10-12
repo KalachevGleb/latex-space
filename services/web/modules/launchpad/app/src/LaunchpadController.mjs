@@ -12,6 +12,7 @@ import AuthenticationManager from '../../../../app/src/Features/Authentication/A
 import AuthenticationController from '../../../../app/src/Features/Authentication/AuthenticationController.js'
 import SessionManager from '../../../../app/src/Features/Authentication/SessionManager.js'
 import { hasAdminAccess } from '../../../../app/src/Features/Helpers/AdminAuthorizationHelper.js'
+import SystemSettingsManager from '../../../../app/src/Features/SystemSettings/SystemSettingsManager.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
@@ -169,6 +170,14 @@ function registerExternalAuthAdmin(authMethod) {
       { email, userId: user._id, authMethod },
       'created first admin account'
     )
+    
+    // Set the admin email in system settings
+    try {
+      await SystemSettingsManager.promises.setSetting('adminEmail', email)
+      logger.debug({ email }, 'set adminEmail in system settings')
+    } catch (err) {
+      logger.error({ err, email }, 'error setting adminEmail')
+    }
 
     res.json({ redir: '/launchpad', email })
   })
@@ -241,6 +250,15 @@ async function registerAdmin(req, res) {
   }
 
   logger.debug({ email, userId: user._id }, 'created first admin account')
+  
+  // Set the admin email in system settings
+  try {
+    await SystemSettingsManager.promises.setSetting('adminEmail', email)
+    logger.debug({ email }, 'set adminEmail in system settings')
+  } catch (err) {
+    logger.error({ err, email }, 'error setting adminEmail')
+  }
+  
   res.json({ redir: '/launchpad' })
 }
 
