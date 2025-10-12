@@ -9,17 +9,17 @@ block content
 					.card
 						.card-body
 							.page-header
-								h1 Admin Panel
+								h1 #{translate("admin_panel")}
 							.ol-tabs(data-ol-bookmarkable-tabset)
 								.nav-tabs-container
 									ul.nav.nav-tabs.align-left(role='tablist')
-										+bookmarkable-tabset-header('system-messages', 'System Messages', true)
-										+bookmarkable-tabset-header('site-settings', 'Settings')
-										+bookmarkable-tabset-header('registration-settings', 'Registration Settings')
-										+bookmarkable-tabset-header('open-sockets', 'Open Sockets')
-										+bookmarkable-tabset-header('open-close-editor', 'Open/Close Editor')
+										+bookmarkable-tabset-header('system-messages', translate("system_messages"), true)
+										+bookmarkable-tabset-header('site-settings', translate("settings"))
+										+bookmarkable-tabset-header('registration-settings', translate("registration_settings"))
+										+bookmarkable-tabset-header('open-sockets', translate("open_sockets"))
+										+bookmarkable-tabset-header('open-close-editor', translate("open_close_editor"))
 										if hasFeature('saas')
-											+bookmarkable-tabset-header('tpds', 'TPDS/Dropbox Management')
+											+bookmarkable-tabset-header('tpds', translate("tpds_dropbox_management"))
 
 								.tab-content
 									.tab-pane.active(role='tabpanel' id='system-messages')
@@ -30,26 +30,26 @@ block content
 										form(method='post' action='/admin/messages')
 											input(name='_csrf' type='hidden' value=csrfToken)
 											.form-group
-												label.form-label(for='system-message') Message
+												label.form-label(for='system-message') #{translate("message")}
 												input#system-message.form-control(
 													name='content'
 													type='text'
 													required
 												)
-											button.btn.btn-primary(type='submit') Post Message
+											button.btn.btn-primary(type='submit') #{translate("post_message")}
 										hr
 										form(method='post' action='/admin/messages/clear')
 											input(name='_csrf' type='hidden' value=csrfToken)
-											button.btn.btn-danger(type='submit') Clear all messages
+											button.btn.btn-danger(type='submit') #{translate("clear_all_messages")}
 
 									.tab-pane(role='tabpanel' id='site-settings')
-										h3 Site Settings
-										p Configure global site settings.
+										h3 #{translate("settings")}
+										p #{translate("configure_global_site_settings")}
 										.row-spaced
 											form(method='post' action='/admin/settings/defaultLanguage')
 												input(name='_csrf' type='hidden' value=csrfToken)
 												.form-group
-													label.form-label(for='default-language') Default Interface Language
+													label.form-label(for='default-language') #{translate("default_interface_language")}
 													select#default-language.form-control(name='language')
 														option(value='en' selected=(defaultLanguage === 'en')) English
 														option(value='ru' selected=(defaultLanguage === 'ru')) Русский
@@ -61,16 +61,16 @@ block content
 														option(value='zh-CN' selected=(defaultLanguage === 'zh-CN')) 中文 (简体)
 														option(value='ja' selected=(defaultLanguage === 'ja')) 日本語
 														option(value='ko' selected=(defaultLanguage === 'ko')) 한국어
-													p.small This language will be used as the default for all users who haven't set their own preference.
-												button.btn.btn-primary(type='submit') Save Settings
+													p.small #{translate("this_language_will_be_used_as_the_default")}
+												button.btn.btn-primary(type='submit') #{translate("save_settings")}
 										.row-spaced
 											.alert.alert-info
-												strong Current default language: 
+												strong #{translate("current_default_language")}
 												= defaultLanguage
 
 									.tab-pane(role='tabpanel' id='registration-settings')
-										h3 User Registration Settings
-										p Control whether users can register new accounts without administrator intervention.
+										h3 #{translate("user_registration_settings")}
+										p #{translate("control_whether_users_can_register")}
 										.row-spaced
 											form#registration-form(method='post' action='/admin/registration/toggle')
 												input(name='_csrf' type='hidden' value=csrfToken)
@@ -82,16 +82,16 @@ block content
 														onchange='document.getElementById("enabled-input").value = this.checked ? "true" : "false"; this.form.submit();'
 													)
 													label.form-check-label(for='registration-enabled')
-														| Allow users to register new accounts
+														| #{translate("allow_users_to_register_new_accounts")}
 										.row-spaced
 											if registrationEnabled
 												.alert.alert-info
-													strong Registration is currently enabled.
-													|  Users can create new accounts via the registration page.
+													strong #{translate("registration_is_currently_enabled")}
+													|  #{translate("users_can_create_new_accounts_via_the_registration_page")}
 											else
 												.alert.alert-warning
-													strong Registration is currently disabled.
-													|  Only administrators can create new user accounts.
+													strong #{translate("registration_is_currently_disabled")}
+													|  #{translate("only_administrators_can_create_new_user_accounts")}
 
 									.tab-pane(role='tabpanel' id='open-sockets')
 										.row-spaced
@@ -104,34 +104,34 @@ block content
 
 									.tab-pane(role='tabpanel' id='open-close-editor')
 										if hasFeature('saas')
-											| The "Open/Close Editor" feature is not available in SAAS.
+											| #{translate("the_open_close_editor_feature_is_not_available")}
 										else
 											.row-spaced
 												form(method='post' action='/admin/closeEditor')
 													input(name='_csrf' type='hidden' value=csrfToken)
-													button.btn.btn-danger(type='submit') Close Editor
-												p.small Will stop anyone opening the editor. Will NOT disconnect already connected users.
+													button.btn.btn-danger(type='submit') #{translate("close_editor")}
+												p.small #{translate("will_stop_anyone_opening_the_editor")}
 
 											.row-spaced
 												form(method='post' action='/admin/disconnectAllUsers')
 													input(name='_csrf' type='hidden' value=csrfToken)
-													button.btn.btn-danger(type='submit') Disconnect all users
-												p.small Will force disconnect all users with the editor open. Make sure to close the editor first to avoid them reconnecting.
+													button.btn.btn-danger(type='submit') #{translate("disconnect_all_users")}
+												p.small #{translate("will_force_disconnect_all_users")}
 
 											.row-spaced
 												form(method='post' action='/admin/openEditor')
 													input(name='_csrf' type='hidden' value=csrfToken)
-													button.btn.btn-danger(type='submit') Reopen Editor
-												p.small Will reopen the editor after closing.
+													button.btn.btn-danger(type='submit') #{translate("reopen_editor")}
+												p.small #{translate("will_reopen_the_editor_after_closing")}
 
 									if hasFeature('saas')
 										.tab-pane(role='tabpanel' id='tpds')
-											h3 Flush project to TPDS
+											h3 #{translate("flush_project_to_tpds")}
 											.row
 												form.col-xs-6(method='post' action='/admin/flushProjectToTpds')
 													input(name='_csrf' type='hidden' value=csrfToken)
 													.form-group
-														label.form-label(for='project-id') project_id
+														label.form-label(for='project-id') #{translate("project_id")}
 														input.form-control(
 															name='project_id'
 															id='project-id'
@@ -139,14 +139,14 @@ block content
 															required
 														)
 													.form-group
-														button.btn-primary.btn(type='submit') Flush
+														button.btn-primary.btn(type='submit') #{translate("flush")}
 											hr
-											h3 Poll Dropbox for user
+											h3 #{translate("poll_dropbox_for_user")}
 											.row
 												form.col-xs-6(method='post' action='/admin/pollDropboxForUser')
 													input(name='_csrf' type='hidden' value=csrfToken)
 													.form-group
-														label.form-label(for='user-id') user_id
+														label.form-label(for='user-id') #{translate("user_id")}
 														input.form-control(name='user_id' id='user-id' type='text' required)
 													.form-group
-														button.btn-primary.btn(type='submit') Poll
+														button.btn-primary.btn(type='submit') #{translate("poll")}

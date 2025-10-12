@@ -62,7 +62,7 @@ function RegisterForm({
       <OLRow>
         <OLCol lg={8}>
           <OLFormLabel htmlFor="register-new-user-email">
-            Emails to register new users
+            {t('emails_to_register_new_users')}
           </OLFormLabel>
           <OLFormControl
             id="register-new-user-email"
@@ -83,7 +83,7 @@ function RegisterForm({
             isLoading={isLoading}
             loadingLabel={t('registering')}
           >
-            Register
+            {t('register')}
           </OLButton>
         </OLCol>
       </OLRow>

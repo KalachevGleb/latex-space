@@ -1,10 +1,27 @@
 import moment from 'moment'
+import 'moment/locale/ru'
+import getMeta from '@/utils/meta'
+
+// Set moment locale based on the current language
+const LANG = getMeta('ol-i18n', { currentLangCode: 'en' }).currentLangCode
+moment.locale(LANG)
 
 moment.updateLocale('en', {
   calendar: {
     lastDay: '[Yesterday]',
     sameDay: '[Today]',
     nextDay: '[Tomorrow]',
+    lastWeek: 'ddd, Do MMM YY',
+    nextWeek: 'ddd, Do MMM YY',
+    sameElse: 'ddd, Do MMM YY',
+  },
+})
+
+moment.updateLocale('ru', {
+  calendar: {
+    lastDay: '[Вчера]',
+    sameDay: '[Сегодня]',
+    nextDay: '[Завтра]',
     lastWeek: 'ddd, Do MMM YY',
     nextWeek: 'ddd, Do MMM YY',
     sameElse: 'ddd, Do MMM YY',
