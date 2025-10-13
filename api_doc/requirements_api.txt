@@ -1,0 +1,4 @@
+# Requirements для Overleaf API Python клиента
+
+requests>=2.31.0
+
