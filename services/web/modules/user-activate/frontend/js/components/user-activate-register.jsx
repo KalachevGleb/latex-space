@@ -2,6 +2,7 @@ import { useState } from 'react'
 import PropTypes from 'prop-types'
 import { useTranslation } from 'react-i18next'
 import RegisterForm from './register-form'
+import UsersList from './users-list'
 import OLRow from '@/shared/components/ol/ol-row'
 import OLCol from '@/shared/components/ol/ol-col'
 import OLCard from '@/shared/components/ol/ol-card'
@@ -15,31 +16,39 @@ function UserActivateRegister() {
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
 
   return (
-    <OLRow>
-      <OLCol>
-        <OLCard>
-          <div className="page-header">
-            <h1>{t('register_new_users')}</h1>
-          </div>
-          <RegisterForm
-            setRegistrationSuccess={setRegistrationSuccess}
-            setEmails={setEmails}
-            setRegisterError={setRegisterError}
-            setFailedEmails={setFailedEmails}
-          />
-          {registerError ? (
-            <UserActivateError failedEmails={failedEmails} />
-          ) : null}
-          {registrationSuccess ? (
-            <>
-              <SuccessfulRegistrationMessage />
-              <hr />
-              <DisplayEmailsList emails={emails} />
-            </>
-          ) : null}
-        </OLCard>
-      </OLCol>
-    </OLRow>
+    <>
+      <OLRow className="mb-4">
+        <OLCol>
+          <OLCard>
+            <div className="mb-3">
+              <h1 className="h3 mb-0">{t('register_new_users')}</h1>
+            </div>
+            <RegisterForm
+              setRegistrationSuccess={setRegistrationSuccess}
+              setEmails={setEmails}
+              setRegisterError={setRegisterError}
+              setFailedEmails={setFailedEmails}
+            />
+            {registerError ? (
+              <UserActivateError failedEmails={failedEmails} />
+            ) : null}
+            {registrationSuccess ? (
+              <>
+                <SuccessfulRegistrationMessage />
+                <hr />
+                <DisplayEmailsList emails={emails} />
+              </>
+            ) : null}
+          </OLCard>
+        </OLCol>
+      </OLRow>
+      
+      <OLRow>
+        <OLCol>
+          <UsersList />
+        </OLCol>
+      </OLRow>
+    </>
   )
 }
 

@@ -36,11 +36,11 @@ block content
 
 					input(name='_csrf' type='hidden' value=csrfToken)
 					input(name='passwordResetToken' type='hidden' value=token)
+					input(name='email' type='hidden' value=email)
 
 					.form-group
 						label(for='emailField') #{translate("email")}
 						input#emailField.form-control(
-							name='email'
 							aria-label='email'
 							type='email'
 							placeholder='email@example.com'
