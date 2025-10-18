@@ -27,5 +27,11 @@ export default {
       SystemSettingsMiddleware.ensureRegistrationEnabled,
       UserActivateController.register
     )
+    
+    webRouter.get(
+      '/admin/users/list',
+      AuthorizationMiddleware.ensureUserIsSiteAdmin,
+      UserActivateController.getUsersList
+    )
   },
 }

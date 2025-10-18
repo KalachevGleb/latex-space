@@ -6,6 +6,7 @@ import ErrorController from '../../../../app/src/Features/Errors/ErrorController
 import { expressify } from '@overleaf/promise-utils'
 import Settings from '@overleaf/settings'
 import OError from '@overleaf/o-error'
+import { ObjectId, db } from '../../../../app/src/infrastructure/mongodb.js'
 
 const __dirname = Path.dirname(fileURLToPath(import.meta.url))
 
@@ -115,8 +116,109 @@ async function activateAccountPage(req, res, next) {
   })
 }
 
+async function getUsersList(req, res) {
+  const { search = '', page = 1, limit = 20 } = req.query
+  const skip = (parseInt(page) - 1) * parseInt(limit)
+  
+  // Построение фильтра поиска
+  const searchFilter = search
+    ? {
+        $or: [
+          { email: { $regex: search, $options: 'i' } },
+          { first_name: { $regex: search, $options: 'i' } },
+          { last_name: { $regex: search, $options: 'i' } },
+        ],
+      }
+    : {}
+
+  // Получаем пользователей
+  const users = await db.users
+    .find(searchFilter)
+    .project({
+      email: 1,
+      first_name: 1,
+      last_name: 1,
+      isAdmin: 1,
+      loginCount: 1,
+      lastLoggedIn: 1,
+      createdAt: 1,
+      signUpDate: 1,
+    })
+    .sort({ _id: -1 })
+    .limit(parseInt(limit))
+    .skip(skip)
+    .toArray()
+
+  // Получаем количество проектов для каждого пользователя
+  const userIds = users.map(u => u._id)
+  const projectCounts = await db.projects
+    .aggregate([
+      {
+        $match: {
+          $or: [
+            { owner_ref: { $in: userIds } },
+            { collaberator_refs: { $in: userIds } },
+            { readOnly_refs: { $in: userIds } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          users: {
+            $push: {
+              owner: '$owner_ref',
+              collaborators: '$collaberator_refs',
+              readOnly: '$readOnly_refs',
+            },
+          },
+        },
+      },
+    ])
+    .toArray()
+
+  // Подсчитываем проекты для каждого пользователя
+  const userProjectCounts = {}
+  if (projectCounts.length > 0) {
+    for (const userId of userIds) {
+      const userIdStr = userId.toString()
+      const count = await db.projects.countDocuments({
+        $or: [
+          { owner_ref: userId },
+          { collaberator_refs: userId },
+          { readOnly_refs: userId },
+        ],
+      })
+      userProjectCounts[userIdStr] = count
+    }
+  }
+
+  // Формируем результат
+  const usersWithStats = users.map(user => ({
+    _id: user._id,
+    email: user.email,
+    name: [user.first_name, user.last_name].filter(Boolean).join(' ') || '-',
+    isAdmin: user.isAdmin || false,
+    loginCount: user.loginCount || 0,
+    lastLoggedIn: user.lastLoggedIn || null,
+    createdAt: user.signUpDate || user.createdAt || null,
+    projectCount: userProjectCounts[user._id.toString()] || 0,
+  }))
+
+  const total = await db.users.countDocuments(searchFilter)
+
+  res.json({
+    users: usersWithStats,
+    total,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    totalPages: Math.ceil(total / parseInt(limit)),
+  })
+}
+
 export default {
   registerNewUser,
   register: expressify(register),
   activateAccountPage: expressify(activateAccountPage),
+  getUsersList: expressify(getUsersList),
 }

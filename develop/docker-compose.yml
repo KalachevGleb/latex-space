@@ -142,13 +142,18 @@ services:
     environment:
       - APP_NAME=Overleaf Community Edition
       - ENABLED_LINKED_FILE_TYPES=project_file,project_output_file
-      - EMAIL_CONFIRMATION_DISABLED=true
+      - EMAIL_CONFIRMATION_DISABLED=false
       - NODE_ENV=development
       - OVERLEAF_ALLOW_PUBLIC_ACCESS=true
+      - OVERLEAF_EMAIL_FROM_ADDRESS=noreply@overleaf.local
+      - OVERLEAF_EMAIL_SMTP_HOST=mailpit
+      - OVERLEAF_EMAIL_SMTP_PORT=1025
+      - OVERLEAF_EMAIL_SMTP_IGNORE_TLS=true
     command: ["node", "app.mjs"]
     volumes:
       - sharelatex-data:/var/lib/overleaf
       - web-data:/overleaf/services/web/data
+      - ../services/web/config/settings.web.js:/overleaf/services/web/config/settings.web.js
     depends_on:
       - mongo
       - redis
@@ -162,6 +167,7 @@ services:
       - notifications
       - project-history
       - real-time
+      - mailpit
 
   webpack:
     build:
@@ -173,3 +179,12 @@ services:
       - "127.0.0.1:80:3808"
     volumes:
       - ./webpack.config.dev-env.js:/overleaf/services/web/webpack.config.dev-env.js
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:8025:8025"  # веб-интерфейс
+      - "127.0.0.1:1025:1025"  # SMTP сервер
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
