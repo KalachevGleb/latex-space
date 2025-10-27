@@ -39,45 +39,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       /etc/nginx/nginx.conf \
       /etc/nginx/sites-enabled/default
 
-# Install TexLive
-# ---------------
-# CTAN mirrors occasionally fail, in that case install TexLive using a
-# different server, for example https://ctan.crest.fr
+# TexLive Installation Removed
+# -----------------------------
+# TexLive is no longer installed in the base image when using sandboxed compiles.
+# Instead, a dedicated TexLive Docker image (texlive-full) is used for compilation.
+# This eliminates duplication and ensures all users have access to the full TexLive distribution.
 #
-# # docker build \
-#     --build-arg TEXLIVE_MIRROR=https://ctan.crest.fr/tex-archive/systems/texlive/tlnet \
-#     -f Dockerfile-base -t sharelatex/sharelatex-base .
-ARG TEXLIVE_MIRROR=https://mirror.ox.ac.uk/sites/ctan.org/systems/texlive/tlnet
-
-RUN mkdir /install-tl-unx \
-&&  wget --quiet https://tug.org/texlive/files/texlive.asc \
-&&  gpg --import texlive.asc \
-&&  rm texlive.asc \
-&&  wget --quiet ${TEXLIVE_MIRROR}/install-tl-unx.tar.gz \
-&&  wget --quiet ${TEXLIVE_MIRROR}/install-tl-unx.tar.gz.sha512 \
-&&  wget --quiet ${TEXLIVE_MIRROR}/install-tl-unx.tar.gz.sha512.asc \
-&&  gpg --verify install-tl-unx.tar.gz.sha512.asc \
-&&  sha512sum -c install-tl-unx.tar.gz.sha512 \
-&&  tar -xz -C /install-tl-unx --strip-components=1 -f install-tl-unx.tar.gz \
-&&  rm install-tl-unx.tar.gz* \
-&&  echo "tlpdbopt_autobackup 0" >> /install-tl-unx/texlive.profile \
-&&  echo "tlpdbopt_install_docfiles 0" >> /install-tl-unx/texlive.profile \
-&&  echo "tlpdbopt_install_srcfiles 0" >> /install-tl-unx/texlive.profile \
-&&  echo "selected_scheme scheme-basic" >> /install-tl-unx/texlive.profile \
-    \
-&&  /install-tl-unx/install-tl \
-      -profile /install-tl-unx/texlive.profile \
-      -repository ${TEXLIVE_MIRROR} \
-    \
-&&  $(find /usr/local/texlive -name tlmgr) path add \
-&&  tlmgr install --repository ${TEXLIVE_MIRROR} \
-      latexmk \
-      texcount \
-      synctex \
-      etoolbox \
-      xetex \
-&&  tlmgr path add \
-&&  rm -rf /install-tl-unx
+# To build the TexLive image for sandboxed compiles:
+#   cd develop
+#   docker build texlive -t texlive-full
+#
+# The texlive-full image will be automatically pulled/used when SANDBOXED_COMPILES=true
+# is set in your docker-compose.yml or environment configuration.
 
 
 # Set up overleaf user and home directory

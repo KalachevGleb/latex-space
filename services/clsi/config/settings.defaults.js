@@ -103,7 +103,7 @@ if ((process.env.DOCKER_RUNNER || process.env.SANDBOXED_COMPILES) === 'true') {
       image:
         process.env.TEXLIVE_IMAGE ||
         process.env.TEX_LIVE_DOCKER_IMAGE ||
-        'quay.io/sharelatex/texlive-full:2017.1',
+        'texlive-full',
       env: {
         // HOME: '/home/tex' - let Docker use default home for 'tex' user
         // This allows TeXLive to cache fonts and other data in /home/tex/.texlive{year}/
