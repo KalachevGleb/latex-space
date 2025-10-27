@@ -38,6 +38,7 @@
 |----------|--------|----------|
 | `/project/:Project_id/members` | GET | Список участников |
 | `/project/:Project_id/invite` | POST | Пригласить участника |
+| `/project/:Project_id/add` | POST | Добавить участника напрямую (без приглашения) |
 | `/project/:Project_id/invites` | GET | Список приглашений |
 | `/project/:Project_id/invite/:invite_id` | DELETE | Отозвать приглашение |
 | `/project/:Project_id/users/:user_id` | PUT | Изменить роль |
