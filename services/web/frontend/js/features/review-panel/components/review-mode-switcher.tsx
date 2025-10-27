@@ -20,6 +20,11 @@ import { useIdeReactContext } from '@/features/ide-react/context/ide-react-conte
 import { useProjectContext } from '@/shared/context/project-context'
 import UpgradeTrackChangesModal from './upgrade-track-changes-modal'
 import { useCodeMirrorViewContext } from '@/features/source-editor/components/codemirror-context'
+import { useEditorOpenDocContext } from '@/features/ide-react/context/editor-open-doc-context'
+import { useFileTreeData } from '@/shared/context/file-tree-data-context'
+import { pathInFolder } from '@/features/file-tree/util/path'
+import { useMemo } from 'react'
+import OLTooltip from '@/shared/components/ol/ol-tooltip'
 
 type Mode = 'view' | 'review' | 'edit'
 
@@ -51,10 +56,42 @@ function ReviewModeSwitcher() {
   const mode = useCurrentMode()
   const { permissionsLevel } = useIdeReactContext()
   const { write, trackedWrite } = usePermissionsContext()
-  const { features } = useProjectContext()
+  const { features, project } = useProjectContext()
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const showViewOption = permissionsLevel === 'readOnly'
   const view = useCodeMirrorViewContext()
+  const { currentDocument } = useEditorOpenDocContext()
+  const { fileTreeData } = useFileTreeData()
+
+  // Check if current document is protected
+  const isCurrentDocProtected = useMemo(() => {
+    if (!currentDocument || !project?.protectedFiles || !fileTreeData) {
+      return false
+    }
+    const protectedFiles = project.protectedFiles
+    if (protectedFiles.length === 0) {
+      return false
+    }
+    const path = pathInFolder(fileTreeData, currentDocument.doc_id)
+    return path ? protectedFiles.includes(`/${path}`) : false
+  }, [currentDocument, project, fileTreeData])
+
+  // Show lock icon for protected files instead of mode switcher
+  if (isCurrentDocProtected) {
+    return (
+      <div className="review-mode-switcher-container">
+        <OLTooltip
+          id="protected-file-indicator"
+          description={t('protected_file_read_only')}
+          overlayProps={{ placement: 'bottom' }}
+        >
+          <div className="protected-file-indicator">
+            <MaterialIcon type="lock" className="protected-file-lock-icon" />
+          </div>
+        </OLTooltip>
+      </div>
+    )
+  }
 
   return (
     <div className="review-mode-switcher-container">

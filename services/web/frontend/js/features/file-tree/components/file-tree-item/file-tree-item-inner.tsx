@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from 'react'
+import { ReactNode, useEffect, useRef, useMemo } from 'react'
 import classNames from 'classnames'
 import scrollIntoViewIfNeeded from 'scroll-into-view-if-needed'
 
@@ -12,6 +12,11 @@ import { useFileTreeSelectable } from '../../contexts/file-tree-selectable'
 import { useFileTreeActionable } from '../../contexts/file-tree-actionable'
 import { useDragDropManager } from 'react-dnd'
 import { useIsNewEditorEnabled } from '@/features/ide-redesign/utils/new-editor-utils'
+import { useProjectContext } from '@/shared/context/project-context'
+import { pathInFolder } from '../../util/path'
+import MaterialIcon from '@/shared/components/material-icon'
+import OLTooltip from '@/shared/components/ol/ol-tooltip'
+import { useTranslation } from 'react-i18next'
 
 function FileTreeItemInner({
   id,
@@ -28,14 +33,29 @@ function FileTreeItemInner({
   icons?: ReactNode
   onClick?: () => void
 }) {
-  const { fileTreeReadOnly } = useFileTreeData()
+  const { fileTreeReadOnly, fileTreeData } = useFileTreeData()
   const { setContextMenuCoords } = useFileTreeMainContext()
   const { isRenaming } = useFileTreeActionable()
+  const { project } = useProjectContext()
+  const { t } = useTranslation()
 
   const { selectedEntityIds } = useFileTreeSelectable()
 
+  // Check if this entity is protected
+  const isProtected = useMemo(() => {
+    if (!project?.protectedFiles || !fileTreeData) {
+      return false
+    }
+    const protectedFiles = project.protectedFiles
+    if (protectedFiles.length === 0) {
+      return false
+    }
+    const path = pathInFolder(fileTreeData, id)
+    return path ? protectedFiles.includes(`/${path}`) : false
+  }, [id, project, fileTreeData])
+
   const hasMenu =
-    !fileTreeReadOnly && isSelected && selectedEntityIds.size === 1
+    !fileTreeReadOnly && isSelected && selectedEntityIds.size === 1 && !isProtected
 
   const { dragRef, setIsDraggable } = useDraggable(id)
 
@@ -95,6 +115,21 @@ function FileTreeItemInner({
           setIsDraggable={setIsDraggable}
         />
         {hasMenu ? <FileTreeItemMenu id={id} name={name} /> : null}
+        {isProtected && isSelected ? (
+          <OLTooltip
+            id={`protected-file-${id}`}
+            description={t('protected_file')}
+            overlayProps={{ placement: 'bottom' }}
+          >
+            <div className="file-tree-item-protected-icon">
+              <MaterialIcon
+                type="lock"
+                className="file-tree-item-lock-icon"
+                accessibilityLabel={t('protected_file')}
+              />
+            </div>
+          </OLTooltip>
+        ) : null}
       </div>
     </div>
   )

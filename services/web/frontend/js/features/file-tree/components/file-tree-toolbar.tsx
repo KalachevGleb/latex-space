@@ -7,6 +7,8 @@ import MaterialIcon from '@/shared/components/material-icon'
 import OLButtonToolbar from '@/shared/components/ol/ol-button-toolbar'
 import importOverleafModules from '../../../../macros/import-overleaf-module.macro'
 import React, { ElementType } from 'react'
+import { useProjectContext } from '@/shared/context/project-context'
+import usePersistedState from '@/shared/hooks/use-persisted-state'
 
 const fileTreeToolbarComponents = importOverleafModules(
   'fileTreeToolbarComponents'
@@ -87,6 +89,15 @@ function FileTreeToolbarRight() {
   const { t } = useTranslation()
   const { canRename, canDelete, startRenaming, startDeleting } =
     useFileTreeActionable()
+  const { project } = useProjectContext()
+  const [hideProtectedFiles, setHideProtectedFiles] = usePersistedState(
+    'hide-protected-files',
+    false
+  )
+
+  // Show toggle button only if there are protected files
+  const hasProtectedFiles =
+    project?.protectedFiles && project.protectedFiles.length > 0
 
   return (
     <div className="toolbar-right">
@@ -95,6 +106,37 @@ function FileTreeToolbarRight() {
           <Component key={path} />
         )
       )}
+
+      {hasProtectedFiles ? (
+        <OLTooltip
+          id="toggle-protected-files"
+          description={
+            hideProtectedFiles
+              ? t('show_protected_files')
+              : t('hide_protected_files')
+          }
+          overlayProps={{ placement: 'bottom' }}
+        >
+          <button
+            className="btn"
+            onClick={() => {
+              setHideProtectedFiles(!hideProtectedFiles)
+              // Dispatch custom event to notify other components
+              window.dispatchEvent(new Event('hide-protected-files-changed'))
+            }}
+            tabIndex={-1}
+          >
+            <MaterialIcon
+              type={hideProtectedFiles ? 'visibility_off' : 'visibility'}
+              accessibilityLabel={
+                hideProtectedFiles
+                  ? t('show_protected_files')
+                  : t('hide_protected_files')
+              }
+            />
+          </button>
+        </OLTooltip>
+      ) : null}
 
       {canRename ? (
         <OLTooltip
