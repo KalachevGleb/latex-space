@@ -152,13 +152,19 @@ async function addFolder(projectId, parentFolderId, folderName, userId) {
 async function replaceFileWithNew(projectId, fileId, newFileRef, userId) {
   const project = await ProjectGetter.promises.getProjectWithoutLock(
     projectId,
-    { rootFolder: true, name: true, overleaf: true }
+    { rootFolder: true, name: true, overleaf: true, protectedFiles: true }
   )
   const { element: fileRef, path } = await ProjectLocator.promises.findElement({
     project,
     element_id: fileId,
     type: 'file',
   })
+
+  // Check if file is protected
+  const protectedFiles = project.protectedFiles || []
+  if (protectedFiles.includes(path.fileSystem)) {
+    throw new Errors.InvalidNameError('cannot modify protected file')
+  }
   const newProject = await Project.findOneAndUpdate(
     { _id: project._id, [path.mongo]: { $exists: true } },
     {
@@ -387,7 +393,7 @@ async function moveEntity(
 async function deleteEntity(projectId, entityId, entityType, userId) {
   const project = await ProjectGetter.promises.getProjectWithoutLock(
     projectId,
-    { name: true, rootFolder: true, overleaf: true, rootDoc_id: true }
+    { name: true, rootFolder: true, overleaf: true, rootDoc_id: true, protectedFiles: true }
   )
   if (
     entityType === 'folder' &&
@@ -407,6 +413,14 @@ async function deleteEntity(projectId, entityId, entityType, userId) {
     element_id: entityId,
     type: entityType,
   })
+
+  // Check if file is protected
+  if (entityType === 'doc' || entityType === 'file') {
+    const protectedFiles = project.protectedFiles || []
+    if (protectedFiles.includes(path.fileSystem)) {
+      throw new Errors.NonDeletableEntityError('cannot delete protected file')
+    }
+  }
   const newProject = await _removeElementFromMongoArray(
     projectId,
     path.mongo,
@@ -420,7 +434,7 @@ async function deleteEntity(projectId, entityId, entityType, userId) {
 async function renameEntity(projectId, entityId, entityType, newName, userId) {
   const project = await ProjectGetter.promises.getProjectWithoutLock(
     projectId,
-    { rootFolder: true, name: true, overleaf: true }
+    { rootFolder: true, name: true, overleaf: true, protectedFiles: true }
   )
   const {
     element: entity,
@@ -433,6 +447,14 @@ async function renameEntity(projectId, entityId, entityType, newName, userId) {
   })
   const startPath = entPath.fileSystem
   const endPath = path.join(path.dirname(entPath.fileSystem), newName)
+
+  // Check if file is protected
+  if (entityType === 'doc' || entityType === 'file') {
+    const protectedFiles = project.protectedFiles || []
+    if (protectedFiles.includes(startPath)) {
+      throw new Errors.InvalidNameError('cannot rename protected file')
+    }
+  }
 
   // Prevent top-level docs/files with reserved names (to match v1 behaviour)
   if (_blockedFilename({ fileSystem: endPath }, entityType)) {

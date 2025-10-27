@@ -47,7 +47,7 @@ export const ToolbarMenuBar = () => {
   const showEditorSwitchMenuOption = canUseNewEditorViaPrimaryFeatureFlag()
 
   const anonymous = getMeta('ol-anonymous')
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
 
   useCommandProvider(
     () => [
@@ -71,14 +71,14 @@ export const ToolbarMenuBar = () => {
       {
         type: 'command',
         label: t('make_a_copy'),
-        disabled: anonymous || peerReviewMode,
+        disabled: anonymous || userHasFullPermissions === false,
         handler: () => {
           setShowCloneProjectModal(true)
         },
         id: 'copy_project',
       },
     ],
-    [t, setView, view, wordCountEnabled, anonymous]
+    [t, setView, view, wordCountEnabled, anonymous, userHasFullPermissions]
   )
   const fileMenuStructure: MenuStructure = useMemo(
     () => [

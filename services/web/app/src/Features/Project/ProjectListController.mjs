@@ -572,7 +572,7 @@ async function _getProjects(
   const results = await Promise.all([
     ProjectGetter.promises.findAllUsersProjects(
       userId,
-      'name lastUpdated lastUpdatedBy publicAccesLevel archived trashed owner_ref tokens'
+      'name lastUpdated lastUpdatedBy publicAccesLevel archived trashed owner_ref tokens isProtected'
     ),
     TagsHandler.promises.getAllTags(userId),
   ])
@@ -716,6 +716,7 @@ function _formatProjectInfo(project, accessLevel, source, userId) {
     source,
     archived,
     trashed,
+    isProtected: project.isProtected || false,
   }
 }
 
@@ -759,6 +760,7 @@ async function _injectProjectUsers(projects) {
     trashed: project.trashed,
     accessLevel: project.accessLevel,
     source: project.source,
+    isProtected: project.isProtected,
     lastUpdated: project.lastUpdated.toISOString(),
     lastUpdatedBy:
       project.lastUpdatedBy == null

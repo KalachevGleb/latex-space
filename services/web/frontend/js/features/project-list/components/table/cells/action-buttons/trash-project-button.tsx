@@ -15,8 +15,8 @@ type TrashProjectButtonProps = {
 }
 
 function TrashProjectButton({ project, children }: TrashProjectButtonProps) {
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
-  if (peerReviewMode) return null
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
+  if (!userHasFullPermissions) return null
   const { toggleSelectedProject, updateProjectViewData } =
     useProjectListContext()
   const { t } = useTranslation()
@@ -43,6 +43,9 @@ function TrashProjectButton({ project, children }: TrashProjectButtonProps) {
       archived: false,
     })
   }, [project, toggleSelectedProject, updateProjectViewData])
+
+  // Don't show trash button for protected projects
+  if (project.isProtected) return null
 
   if (project.trashed) return null
 

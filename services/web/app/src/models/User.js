@@ -59,6 +59,7 @@ const UserSchema = new Schema(
     },
     isAdmin: { type: Boolean, default: false },
     adminRoles: { type: Array },
+    permissions: { type: String, enum: ['basic', 'full'], default: 'full' },
     staffAccess: {
       publisherMetrics: { type: Boolean, default: false },
       publisherManagement: { type: Boolean, default: false },

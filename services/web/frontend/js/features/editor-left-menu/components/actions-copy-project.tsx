@@ -7,8 +7,8 @@ import * as eventTracking from '../../../infrastructure/event-tracking'
 import useOpenProject from '@/shared/hooks/use-open-project'
 
 export default function ActionsCopyProject() {
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
-  if (peerReviewMode) return null
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
+  if (userHasFullPermissions === false) return null
   const [showModal, setShowModal] = useState(false)
   const { t } = useTranslation()
   const openProject = useOpenProject()

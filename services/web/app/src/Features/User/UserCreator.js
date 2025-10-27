@@ -90,6 +90,18 @@ async function createNewUser(attributes, options = {}) {
   }
   user.emails = [emailData]
 
+  // Set user permissions based on peer-review mode
+  try {
+    const SystemSettingsManager = require('../SystemSettings/SystemSettingsManager')
+    const peerReviewMode = await SystemSettingsManager.promises.getSetting(
+      'peerReviewMode'
+    )
+    user.permissions = peerReviewMode ? 'basic' : 'full'
+  } catch (error) {
+    logger.warn({ err: error }, 'Failed to check peer-review mode, defaulting to full permissions')
+    user.permissions = 'full'
+  }
+
   user = await user.save()
 
   if (Features.hasFeature('affiliations')) {

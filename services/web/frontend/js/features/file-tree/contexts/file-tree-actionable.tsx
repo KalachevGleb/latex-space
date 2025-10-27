@@ -23,6 +23,7 @@ import {
 import { findInTree, findInTreeOrThrow } from '../util/find-in-tree'
 import { isNameUniqueInFolder } from '../util/is-name-unique-in-folder'
 import { isBlockedFilename, isCleanFilename } from '../util/safe-path'
+import { pathInFolder } from '../util/path'
 
 import { useProjectContext } from '../../../shared/context/project-context'
 import { useFileTreeData } from '../../../shared/context/file-tree-data-context'
@@ -230,7 +231,7 @@ function fileTreeActionableReducer(state: State, action: Action) {
 export const FileTreeActionableProvider: FC<React.PropsWithChildren> = ({
   children,
 }) => {
-  const { projectId } = useProjectContext()
+  const { projectId, project } = useProjectContext()
   const { fileTreeReadOnly } = useFileTreeData()
   const { indexAllReferences } = useReferencesContext()
   const { write } = usePermissionsContext()
@@ -522,12 +523,28 @@ export const FileTreeActionableProvider: FC<React.PropsWithChildren> = ({
     }
   }, [fileTreeData, projectId, selectedEntityIds])
 
+  // Check if any selected entity is protected
+  const hasProtectedEntity = useMemo(() => {
+    const protectedFiles = project?.protectedFiles || []
+    if (protectedFiles.length === 0 || selectedEntityIds.size === 0) {
+      return false
+    }
+
+    for (const selectedEntityId of selectedEntityIds) {
+      const path = pathInFolder(fileTreeData, selectedEntityId)
+      if (path && protectedFiles.includes(`/${path}`)) {
+        return true
+      }
+    }
+    return false
+  }, [fileTreeData, project, selectedEntityIds])
+
   const value = useMemo(
     () => ({
-      canDelete: write && selectedEntityIds.size > 0 && !isRootFolderSelected,
+      canDelete: write && selectedEntityIds.size > 0 && !isRootFolderSelected && !hasProtectedEntity,
       canBulkDelete:
-        write && selectedEntityIds.size > 1 && !isRootFolderSelected,
-      canRename: write && selectedEntityIds.size === 1 && !isRootFolderSelected,
+        write && selectedEntityIds.size > 1 && !isRootFolderSelected && !hasProtectedEntity,
+      canRename: write && selectedEntityIds.size === 1 && !isRootFolderSelected && !hasProtectedEntity,
       canCreate: write && selectedEntityIds.size < 2,
       ...state,
       parentFolderId,
@@ -560,6 +577,7 @@ export const FileTreeActionableProvider: FC<React.PropsWithChildren> = ({
       finishDeleting,
       finishMoving,
       finishRenaming,
+      hasProtectedEntity,
       isDuplicate,
       isRootFolderSelected,
       parentFolderId,

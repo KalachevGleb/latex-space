@@ -11,8 +11,8 @@ import { useProjectTags } from '@/features/project-list/hooks/use-project-tags'
 import { isSmallDevice } from '../../../../../../infrastructure/event-tracking'
 
 function CopyProjectMenuItem() {
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
-  if (peerReviewMode) return null
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
+  if (userHasFullPermissions === false) return null
   const {
     addClonedProjectToViewData,
     addProjectToTagInView,

@@ -160,19 +160,42 @@ const _ProjectController = {
   },
 
   async deleteProject(req, res) {
-    // Disallow deletes from UI in peer-review mode
+    // Check if user has full permissions
+    const userId = SessionManager.getLoggedInUserId(req.session)
     try {
-      const SystemSettingsManager = (
-        await import('../SystemSettings/SystemSettingsManager.mjs')
+      const UserPermissionsHandler = (
+        await import('../User/UserPermissionsHandler.mjs')
       ).default
-      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
-        'peerReviewMode'
+      const hasFullPermissions = await UserPermissionsHandler.promises.hasFullPermissions(
+        userId
       )
-      if (peerReviewMode) {
-        return res.sendStatus(403)
+      if (!hasFullPermissions) {
+        return res.status(403).json({
+          error: 'You do not have permission to delete projects'
+        })
       }
-    } catch {}
+    } catch (error) {
+      logger.warn({ err: error, userId }, 'Error checking user permissions')
+    }
+
+    // Check if project is protected
     const projectId = req.params.Project_id
+    try {
+      const ProjectProtectionHandler = (
+        await import('./ProjectProtectionHandler.mjs')
+      ).default
+      const isProtected = await ProjectProtectionHandler.promises.isProjectProtected(
+        projectId
+      )
+      if (isProtected) {
+        return res.status(403).json({
+          error: 'This project is protected and cannot be deleted'
+        })
+      }
+    } catch (error) {
+      logger.warn({ err: error, projectId }, 'Error checking project protection')
+    }
+
     const user = SessionManager.getSessionUser(req.session)
     await ProjectDeleter.promises.deleteProject(projectId, {
       deleterUser: user,
@@ -197,20 +220,43 @@ const _ProjectController = {
   },
 
   async trashProject(req, res) {
-    // Disallow trash in peer-review mode
-    try {
-      const SystemSettingsManager = (
-        await import('../SystemSettings/SystemSettingsManager.mjs')
-      ).default
-      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
-        'peerReviewMode'
-      )
-      if (peerReviewMode) {
-        return res.sendStatus(403)
-      }
-    } catch {}
-    const projectId = req.params.project_id
     const userId = SessionManager.getLoggedInUserId(req.session)
+
+    // Check if user has full permissions
+    try {
+      const UserPermissionsHandler = (
+        await import('../User/UserPermissionsHandler.mjs')
+      ).default
+      const hasFullPermissions = await UserPermissionsHandler.promises.hasFullPermissions(
+        userId
+      )
+      if (!hasFullPermissions) {
+        return res.status(403).json({
+          error: 'You do not have permission to trash projects'
+        })
+      }
+    } catch (error) {
+      logger.warn({ err: error, userId }, 'Error checking user permissions')
+    }
+
+    // Check if project is protected
+    const projectId = req.params.project_id
+    try {
+      const ProjectProtectionHandler = (
+        await import('./ProjectProtectionHandler.mjs')
+      ).default
+      const isProtected = await ProjectProtectionHandler.promises.isProjectProtected(
+        projectId
+      )
+      if (isProtected) {
+        return res.status(403).json({
+          error: 'This project is protected and cannot be trashed'
+        })
+      }
+    } catch (error) {
+      logger.warn({ err: error, projectId }, 'Error checking project protection')
+    }
+
     await ProjectDeleter.promises.trashProject(projectId, userId)
     res.sendStatus(200)
   },
@@ -240,18 +286,6 @@ const _ProjectController = {
   },
 
   async cloneProject(req, res, next) {
-    // Disallow clone in peer-review mode
-    try {
-      const SystemSettingsManager = (
-        await import('../SystemSettings/SystemSettingsManager.mjs')
-      ).default
-      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
-        'peerReviewMode'
-      )
-      if (peerReviewMode) {
-        return res.sendStatus(403)
-      }
-    } catch {}
     res.setTimeout(5 * 60 * 1000) // allow extra time for the copy to complete
     metrics.inc('cloned-project')
     const projectId = req.params.Project_id
@@ -261,6 +295,23 @@ const _ProjectController = {
       return res.json({ redir: '/register' })
     }
     const currentUser = SessionManager.getSessionUser(req.session)
+
+    // Check if user has permissions to clone projects
+    try {
+      const UserPermissionsHandler = (
+        await import('../User/UserPermissionsHandler.mjs')
+      ).default
+      const hasFullPermissions = await UserPermissionsHandler.promises.hasFullPermissions(
+        currentUser._id
+      )
+      if (!hasFullPermissions) {
+        return res.status(403).json({
+          error: 'You do not have permission to clone projects'
+        })
+      }
+    } catch (error) {
+      logger.warn({ err: error, userId: currentUser._id }, 'Error checking user permissions')
+    }
     const { first_name: firstName, last_name: lastName, email } = currentUser
     try {
       const project = await ProjectDuplicator.promises.duplicate(
@@ -291,19 +342,24 @@ const _ProjectController = {
   },
 
   async newProject(req, res) {
-    // Disallow project creation from UI in peer-review mode
-    try {
-      const SystemSettingsManager = (
-        await import('../SystemSettings/SystemSettingsManager.mjs')
-      ).default
-      const peerReviewMode = await SystemSettingsManager.promises.getSetting(
-        'peerReviewMode'
-      )
-      if (peerReviewMode) {
-        return res.sendStatus(403)
-      }
-    } catch {}
     const currentUser = SessionManager.getSessionUser(req.session)
+
+    // Check if user has permissions to create projects
+    try {
+      const UserPermissionsHandler = (
+        await import('../User/UserPermissionsHandler.mjs')
+      ).default
+      const hasFullPermissions = await UserPermissionsHandler.promises.hasFullPermissions(
+        currentUser._id
+      )
+      if (!hasFullPermissions) {
+        return res.status(403).json({
+          error: 'You do not have permission to create projects'
+        })
+      }
+    } catch (error) {
+      logger.warn({ err: error, userId: currentUser._id }, 'Error checking user permissions')
+    }
     const {
       first_name: firstName,
       last_name: lastName,

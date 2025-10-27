@@ -43,6 +43,7 @@ export interface ProjectMetadata extends ProjectSettings {
   }
   rootFolder?: Folder[]
   trackChangesState: boolean | Record<UserId | '__guests__', boolean>
+  protectedFiles?: string[]
 }
 
 export type ProjectUpdate = Partial<ProjectMetadata>

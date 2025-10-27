@@ -15,8 +15,8 @@ type DeleteProjectButtonProps = {
 }
 
 function DeleteProjectButton({ project, children }: DeleteProjectButtonProps) {
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
-  if (peerReviewMode) return null
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
+  if (!userHasFullPermissions) return null
   const { removeProjectFromView } = useProjectListContext()
   const { t } = useTranslation()
   const text = t('delete')
@@ -43,6 +43,9 @@ function DeleteProjectButton({ project, children }: DeleteProjectButtonProps) {
     // update view
     removeProjectFromView(project)
   }, [project, removeProjectFromView])
+
+  // Don't show delete button for protected projects
+  if (project.isProtected) return null
 
   if (!project.trashed || !isOwner) return null
 
