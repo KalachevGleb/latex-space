@@ -82,6 +82,21 @@ export default {
       CollaboratorsInviteController.inviteToProject
     )
 
+    // direct add (bypasses invitation)
+    webRouter.post(
+      '/project/:Project_id/add',
+      RateLimiterMiddleware.rateLimit(rateLimiters.inviteToProjectByProjectId, {
+        params: ['Project_id'],
+      }),
+      RateLimiterMiddleware.rateLimit(rateLimiters.inviteToProjectByIp, {
+        ipOnly: true,
+      }),
+      CaptchaMiddleware.validateCaptcha('invite'),
+      AuthenticationController.requireLogin(),
+      AuthorizationMiddleware.ensureUserCanAdminProject,
+      CollaboratorsController.addUserDirectly
+    )
+
     webRouter.get(
       '/project/:Project_id/invites',
       AuthenticationController.requireLogin(),

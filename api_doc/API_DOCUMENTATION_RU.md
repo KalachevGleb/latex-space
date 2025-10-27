@@ -352,6 +352,47 @@ Content-Type: application/json
 }
 ```
 
+**Примечание:** Этот метод создаёт приглашение, которое пользователь должен принять. Для прямого добавления пользователя без приглашения используйте `/project/:Project_id/add`.
+
+### Добавить участника напрямую (без приглашения)
+```http
+POST /project/:Project_id/add
+Content-Type: application/json
+
+{
+  "email": "existinguser@example.com",
+  "privileges": "readAndWrite"
+}
+```
+
+**Параметры:**
+- `email` - email существующего пользователя (должен быть зарегистрирован в системе)
+- `privileges` - `"readAndWrite"`, `"readOnly"` или `"review"`
+- `isAnonymous` - `true/false` (необязательно, для анонимных рецензентов)
+
+**Ответ при успехе (200):**
+```json
+{
+  "success": true,
+  "user": {
+    "_id": "507f1f77bcf86cd799439022",
+    "email": "existinguser@example.com",
+    "privileges": "readAndWrite"
+  }
+}
+```
+
+**Возможные ошибки:**
+- `400` - `{"error": "cannot_add_self"}` - попытка добавить себя
+- `400` - `{"error": "invalid_email"}` - некорректный email
+- `400` - `{"error": "user_already_member"}` - пользователь уже участник проекта
+- `403` - `{"error": "collaborator_limit_reached"}` - достигнут лимит участников
+- `404` - `{"error": "user_not_found"}` - пользователь с таким email не найден
+
+**Отличия от `/invite`:**
+- `/invite` - создаёт приглашение, отправляет email, пользователь должен принять
+- `/add` - сразу добавляет пользователя в проект, требует чтобы пользователь был зарегистрирован
+
 ### Получить список приглашений
 ```http
 GET /project/:Project_id/invites
@@ -580,7 +621,7 @@ PROJECT_RESPONSE=$(curl -s -b cookies.txt \
 PROJECT_ID=$(echo $PROJECT_RESPONSE | jq -r '.project_id')
 echo "Created project: $PROJECT_ID"
 
-# Пригласить участника
+# Пригласить участника (отправляет приглашение)
 curl -s -b cookies.txt \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF_TOKEN" \
@@ -588,6 +629,15 @@ curl -s -b cookies.txt \
   http://localhost:3000/project/$PROJECT_ID/invite
 
 echo "Invited collaborator"
+
+# ИЛИ добавить участника напрямую (без приглашения, для существующих пользователей)
+curl -s -b cookies.txt \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $CSRF_TOKEN" \
+  -d '{"email":"existinguser@example.com","privileges":"readAndWrite"}' \
+  http://localhost:3000/project/$PROJECT_ID/add
+
+echo "Added collaborator directly"
 ```
 
 ### Пример 2: Компиляция проекта

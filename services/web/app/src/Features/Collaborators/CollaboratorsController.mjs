@@ -17,6 +17,8 @@ import LimitationsManager from '../Subscription/LimitationsManager.js'
 import PrivilegeLevels from '../Authorization/PrivilegeLevels.js'
 import { z, zz, validateReq } from '../../infrastructure/Validation.js'
 import Features from '../../infrastructure/Features.js'
+import UserGetter from '../User/UserGetter.js'
+import EmailHelper from '../Helpers/EmailHelper.js'
 
 const ObjectId = mongodb.ObjectId
 
@@ -27,6 +29,7 @@ export default {
   setCollaboratorInfo: expressify(setCollaboratorInfo),
   transferOwnership: expressify(transferOwnership),
   getShareTokens: expressify(getShareTokens),
+  addUserDirectly: expressify(addUserDirectly),
 }
 
 async function removeUserFromProject(req, res, next) {
@@ -231,4 +234,132 @@ async function getShareTokens(req, res) {
   }
 
   res.json(tokens)
+}
+
+const addUserDirectlySchema = z.object({
+  params: z.object({
+    Project_id: zz.objectId(),
+  }),
+  body: z.object({
+    email: z.string(),
+    privileges: z.enum([
+      PrivilegeLevels.READ_ONLY,
+      PrivilegeLevels.READ_AND_WRITE,
+      PrivilegeLevels.REVIEW,
+    ]),
+    isAnonymous: z.boolean().optional(),
+  }),
+})
+
+async function addUserDirectly(req, res) {
+  const { params, body } = validateReq(req, addUserDirectlySchema)
+  const projectId = params.Project_id
+  let { email, privileges, isAnonymous } = body
+  const sendingUser = SessionManager.getSessionUser(req.session)
+  const sendingUserId = sendingUser._id
+  req.logger.addFields({ email, sendingUserId, isAnonymous })
+
+  if (email === sendingUser.email) {
+    logger.debug(
+      { projectId, email, sendingUserId },
+      'cannot add yourself to project'
+    )
+    return res.status(400).json({ error: 'cannot_add_self' })
+  }
+
+  logger.debug({ projectId, email, sendingUserId }, 'adding user directly to project')
+
+  // Check collaborator limits
+  let allowed = false
+  if (privileges === PrivilegeLevels.READ_ONLY) {
+    allowed = true
+  } else {
+    allowed = await LimitationsManager.promises.canAddXEditCollaborators(
+      projectId,
+      1
+    )
+  }
+
+  if (!allowed) {
+    logger.debug(
+      { projectId, email, sendingUserId },
+      'not allowed to add more users to project'
+    )
+    return res.status(403).json({ error: 'collaborator_limit_reached' })
+  }
+
+  // Parse and validate email
+  email = EmailHelper.parseEmail(email, true)
+  if (email == null || email === '') {
+    logger.debug({ projectId, email, sendingUserId }, 'invalid email address')
+    return res.status(400).json({ error: 'invalid_email' })
+  }
+
+  // Find user by email
+  const user = await UserGetter.promises.getUserByAnyEmail(email, {
+    _id: 1,
+    email: 1,
+  })
+
+  if (user == null) {
+    logger.debug(
+      { email, projectId, sendingUserId },
+      'user not found with this email'
+    )
+    return res.status(404).json({ error: 'user_not_found' })
+  }
+
+  // Check if user is already a member
+  const isMember =
+    await CollaboratorsGetter.promises.isUserInvitedMemberOfProject(
+      user._id,
+      projectId
+    )
+
+  if (isMember) {
+    logger.debug(
+      { projectId, userId: user._id, email },
+      'user is already a member of the project'
+    )
+    return res.status(400).json({ error: 'user_already_member' })
+  }
+
+  // Add user directly to project
+  await CollaboratorsHandler.promises.addUserIdToProject(
+    projectId,
+    sendingUserId,
+    user._id,
+    privileges,
+    { isAnonymous }
+  )
+
+  ProjectAuditLogHandler.addEntryInBackground(
+    projectId,
+    'add-collaborator-direct',
+    sendingUserId,
+    req.ip,
+    {
+      userId: user._id,
+      privileges,
+      isAnonymous,
+    }
+  )
+
+  logger.debug(
+    { projectId, email, userId: user._id, sendingUserId },
+    'user added directly to project'
+  )
+
+  EditorRealTimeController.emitToRoom(projectId, 'project:membership:changed', {
+    members: true,
+  })
+
+  res.json({
+    success: true,
+    user: {
+      _id: user._id,
+      email: user.email,
+      privileges,
+    }
+  })
 }
