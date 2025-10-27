@@ -10,12 +10,18 @@ import { trashProject } from '../../../../util/api'
 import { Project } from '../../../../../../../../types/project/dashboard/api'
 
 function TrashProjectsButton() {
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
-  if (peerReviewMode) return null
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
+  if (!userHasFullPermissions) return null
   const { selectedProjects, toggleSelectedProject, updateProjectViewData } =
     useProjectListContext()
   const { t } = useTranslation()
   const text = t('trash')
+
+  // Hide if any selected project is protected
+  const hasProtectedProject = selectedProjects.some(
+    project => project.isProtected
+  )
+  if (hasProtectedProject) return null
 
   const [showModal, setShowModal] = useState(false)
   const isMounted = useIsMounted()

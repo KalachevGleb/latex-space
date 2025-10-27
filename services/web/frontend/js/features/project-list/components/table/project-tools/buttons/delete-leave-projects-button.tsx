@@ -9,8 +9,7 @@ import { deleteProject, leaveProject } from '../../../../util/api'
 import { Project } from '../../../../../../../../types/project/dashboard/api'
 
 function DeleteLeaveProjectsButton() {
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
-  if (peerReviewMode) return null
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
   const { t } = useTranslation()
   const {
     selectedProjects,
@@ -20,6 +19,14 @@ function DeleteLeaveProjectsButton() {
   } = useProjectListContext()
   const [showModal, setShowModal] = useState(false)
   const isMounted = useIsMounted()
+
+  // Hide if user has basic permissions or any selected project is protected
+  const hasProtectedProject = selectedProjects.some(
+    project => project.isProtected
+  )
+  if (!userHasFullPermissions || hasProtectedProject) {
+    return null
+  }
 
   const handleOpenModal = () => {
     setShowModal(true)

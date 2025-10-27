@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useMemo } from 'react'
 import { EditorState } from '@codemirror/state'
 import useScopeEventEmitter from '../../../shared/hooks/use-scope-event-emitter'
 import useEventListener from '../../../shared/hooks/use-event-listener'
@@ -58,6 +58,7 @@ import { useProjectContext } from '@/shared/context/project-context'
 import { usePermissionsContext } from '@/features/ide-react/context/permissions-context'
 import { useEditorPropertiesContext } from '@/features/ide-react/context/editor-properties-context'
 import { SearchQuery } from '@codemirror/search'
+import { pathInFolder } from '@/features/file-tree/util/path'
 import { beforeChangeDocEffect } from '@/features/source-editor/extensions/before-change-doc'
 import { useActiveOverallTheme } from '@/shared/hooks/use-active-overall-theme'
 
@@ -94,6 +95,20 @@ function useCodeMirrorScope(view: EditorView) {
   const { onlineUserCursorHighlights } = useOnlineUsersContext()
 
   const { project, features: projectFeatures } = useProjectContext()
+
+  // Check if current document is protected
+  const isCurrentDocProtected = useMemo(() => {
+    if (!currentDocument || !project?.protectedFiles || !fileTreeData) {
+      return false
+    }
+    const protectedFiles = project.protectedFiles
+    if (protectedFiles.length === 0) {
+      return false
+    }
+    const path = pathInFolder(fileTreeData, currentDocument.doc_id)
+    return path ? protectedFiles.includes(`/${path}`) : false
+  }, [currentDocument, project, fileTreeData])
+
   let spellCheckLanguage = project?.spellCheckLanguage || ''
   // spell check is off when read-only
   if (!permissions.write && !permissions.trackedWrite) {
@@ -265,7 +280,8 @@ function useCodeMirrorScope(view: EditorView) {
     }
   }, [view, fileTreeData])
 
-  const editableRef = useRef(permissions.write || permissions.trackedWrite)
+  // Protected files are always read-only, regardless of user permissions
+  const editableRef = useRef(!isCurrentDocProtected && (permissions.write || permissions.trackedWrite))
 
   const { previewByPath } = useFileTreePathContext()
 
@@ -403,11 +419,12 @@ function useCodeMirrorScope(view: EditorView) {
   }, [view, previewByPath])
 
   useEffect(() => {
-    editableRef.current = permissions.write || permissions.trackedWrite
+    // Protected files are always read-only, regardless of user permissions
+    editableRef.current = !isCurrentDocProtected && (permissions.write || permissions.trackedWrite)
     window.setTimeout(() => {
       view.dispatch(setEditable(editableRef.current)) // the editor needs to be locked when there's a problem saving data
     })
-  }, [view, permissions.write, permissions.trackedWrite])
+  }, [view, permissions.write, permissions.trackedWrite, isCurrentDocProtected])
 
   useEffect(() => {
     phrasesRef.current = phrases

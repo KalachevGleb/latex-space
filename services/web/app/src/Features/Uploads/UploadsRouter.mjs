@@ -24,13 +24,22 @@ export default {
       RateLimiterMiddleware.rateLimit(rateLimiters.projectUpload),
       async (req, res, next) => {
         try {
-          const SystemSettingsManager = (
-            await import('../SystemSettings/SystemSettingsManager.mjs')
+          const SessionManager = (await import('../Authentication/SessionManager.js')).default
+          const UserPermissionsHandler = (
+            await import('../User/UserPermissionsHandler.mjs')
           ).default
-          const peerReviewMode =
-            await SystemSettingsManager.promises.getSetting('peerReviewMode')
-          if (peerReviewMode) return res.sendStatus(403)
-        } catch {}
+          const currentUser = SessionManager.getSessionUser(req.session)
+          const hasFullPermissions = await UserPermissionsHandler.promises.hasFullPermissions(
+            currentUser._id
+          )
+          if (!hasFullPermissions) {
+            return res.status(403).json({
+              error: 'You do not have permission to upload projects'
+            })
+          }
+        } catch (error) {
+          console.warn('Error checking user permissions:', error)
+        }
         return ProjectUploadController.multerMiddleware(req, res, next)
       },
       ProjectUploadController.uploadProject

@@ -28,6 +28,8 @@ module.exports = ProjectEditorHandler = {
         project.imageName != null
           ? Path.basename(project.imageName)
           : undefined,
+      isProtected: project.isProtected || false,
+      protectedFiles: project.protectedFiles || [],
     }
 
     if (isRestrictedUser) {

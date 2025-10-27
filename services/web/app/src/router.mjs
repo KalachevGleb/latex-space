@@ -4,6 +4,7 @@ import Features from './infrastructure/Features.js'
 import ProjectController from './Features/Project/ProjectController.mjs'
 import ProjectApiController from './Features/Project/ProjectApiController.mjs'
 import ProjectListController from './Features/Project/ProjectListController.mjs'
+import ProjectProtectionController from './Features/Project/ProjectProtectionController.mjs'
 import SpellingController from './Features/Spelling/SpellingController.mjs'
 import EditorRouter from './Features/Editor/EditorRouter.mjs'
 import Settings from '@overleaf/settings'
@@ -20,6 +21,7 @@ import NotificationsController from './Features/Notifications/NotificationsContr
 import CollaboratorsRouter from './Features/Collaborators/CollaboratorsRouter.mjs'
 import UserInfoController from './Features/User/UserInfoController.js'
 import UserController from './Features/User/UserController.mjs'
+import UserPermissionsController from './Features/User/UserPermissionsController.mjs'
 import UserEmailsController from './Features/User/UserEmailsController.js'
 import UserPagesController from './Features/User/UserPagesController.mjs'
 import TutorialController from './Features/Tutorial/TutorialController.mjs'
@@ -467,6 +469,21 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     AuthenticationController.requirePrivateApiAuth(),
     UserInfoController.getPersonalInfo
   )
+
+  // User permissions routes
+  webRouter.post(
+    '/api/user/:user_id/permissions',
+    AuthenticationController.requireLogin(),
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    UserPermissionsController.setUserPermissions
+  )
+
+  webRouter.get(
+    '/api/user/:user_id/permissions',
+    AuthenticationController.requireLogin(),
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    UserPermissionsController.getUserPermissions
+  )
   webRouter.get(
     '/user/features',
     AuthenticationController.requireLogin(),
@@ -797,6 +814,42 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     AuthenticationController.requireLogin(),
     AuthorizationMiddleware.ensureUserCanAdminProject,
     ProjectController.restoreProject
+  )
+
+  // Project protection routes
+  webRouter.post(
+    '/api/project/:Project_id/protection',
+    AuthenticationController.requireLogin(),
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    ProjectProtectionController.setProjectProtection
+  )
+
+  webRouter.get(
+    '/api/project/:Project_id/protection',
+    AuthenticationController.requireLogin(),
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    ProjectProtectionController.getProjectProtection
+  )
+
+  webRouter.post(
+    '/api/project/:Project_id/protected-files',
+    AuthenticationController.requireLogin(),
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    ProjectProtectionController.setProtectedFiles
+  )
+
+  webRouter.get(
+    '/api/project/:Project_id/protected-files',
+    AuthenticationController.requireLogin(),
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    ProjectProtectionController.getProtectedFiles
+  )
+
+  webRouter.get(
+    '/api/project/:Project_id/is-file-protected/:file_path',
+    AuthenticationController.requireLogin(),
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    ProjectProtectionController.isFileProtected
   )
   webRouter.post(
     '/Project/:Project_id/clone',

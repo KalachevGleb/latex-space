@@ -362,6 +362,24 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
       peerReviewMode = false
     }
 
+    // Check user permissions
+    let userHasFullPermissions = true
+    try {
+      const SessionManager = (
+        await import('../Features/Authentication/SessionManager.js')
+      ).default
+      const userId = SessionManager.getLoggedInUserId(req.session)
+      if (userId) {
+        const UserPermissionsHandler = (
+          await import('../Features/User/UserPermissionsHandler.mjs')
+        ).default
+        userHasFullPermissions =
+          await UserPermissionsHandler.promises.hasFullPermissions(userId)
+      }
+    } catch (e) {
+      userHasFullPermissions = true
+    }
+
     res.locals.ExposedSettings = {
       isOverleaf: Settings.overleaf != null,
       appName: Settings.appName,
@@ -415,6 +433,7 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
       cioWriteKey: Settings.analytics?.cio?.writeKey,
       cioSiteId: Settings.analytics?.cio?.siteId,
       peerReviewMode,
+      userHasFullPermissions,
     }
     next()
   })

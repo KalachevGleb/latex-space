@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getJSON } from '@/infrastructure/fetch-json'
+import { getJSON, postJSON } from '@/infrastructure/fetch-json'
 import OLCard from '@/shared/components/ol/ol-card'
 import OLFormControl from '@/shared/components/ol/ol-form-control'
 import OLFormLabel from '@/shared/components/ol/ol-form-label'
 import OLButton from '@/shared/components/ol/ol-button'
+import OLFormSelect from '@/shared/components/ol/ol-form-select'
 import MaterialIcon from '@/shared/components/material-icon'
+import OLTooltip from '@/shared/components/ol/ol-tooltip'
 
 type User = {
   _id: string
   email: string
   name: string
   isAdmin: boolean
+  permissions: 'basic' | 'full'
   loginCount: number
   lastLoggedIn: Date | null
   createdAt: Date | null
@@ -71,6 +74,26 @@ export default function UsersList() {
     })
   }
 
+  async function handlePermissionsChange(
+    userId: string,
+    newPermissions: 'basic' | 'full'
+  ) {
+    try {
+      await postJSON(`/api/user/${userId}/permissions`, {
+        body: { permissions: newPermissions },
+      })
+      // Update local state
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u._id === userId ? { ...u, permissions: newPermissions } : u
+        )
+      )
+    } catch (error) {
+      console.error('Failed to update permissions:', error)
+      alert('Failed to update user permissions')
+    }
+  }
+
   return (
     <OLCard>
       <div className="mb-3">
@@ -106,17 +129,26 @@ export default function UsersList() {
             <table className="table table-hover table-sm mb-0">
               <thead className="table-light">
                 <tr>
-                  <th style={{ width: '30%' }}>{t('email')}</th>
-                  <th style={{ width: '15%' }}>{t('name')}</th>
-                  <th style={{ width: '10%' }} className="text-center">
+                  <th style={{ width: '25%' }}>{t('email')}</th>
+                  <th style={{ width: '12%' }}>{t('name')}</th>
+                  <th style={{ width: '8%' }} className="text-center">
                     {t('projects')}
                   </th>
-                  <th style={{ width: '10%' }} className="text-center">
+                  <th style={{ width: '8%' }} className="text-center">
                     {t('logins')}
                   </th>
-                  <th style={{ width: '15%' }}>{t('last_login')}</th>
-                  <th style={{ width: '15%' }}>{t('created')}</th>
-                  <th style={{ width: '5%' }} className="text-center">
+                  <th style={{ width: '12%' }}>{t('last_login')}</th>
+                  <th style={{ width: '12%' }}>{t('created')}</th>
+                  <th style={{ width: '15%' }}>
+                    <OLTooltip
+                      id="permissions-header-tooltip"
+                      description={t('permissions_basic_description')}
+                      overlayProps={{ placement: 'top' }}
+                    >
+                      <span>{t('user_permissions')} <MaterialIcon type="info" className="align-text-bottom" style={{ fontSize: '14px' }} /></span>
+                    </OLTooltip>
+                  </th>
+                  <th style={{ width: '8%' }} className="text-center">
                     {t('admin')}
                   </th>
                 </tr>
@@ -124,7 +156,7 @@ export default function UsersList() {
               <tbody>
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-muted py-4">
+                    <td colSpan={8} className="text-center text-muted py-4">
                       {search ? t('no_users_found') : t('no_users_yet')}
                     </td>
                   </tr>
@@ -142,6 +174,21 @@ export default function UsersList() {
                       </td>
                       <td className="small text-muted">
                         {formatDate(user.createdAt)}
+                      </td>
+                      <td>
+                        <OLFormSelect
+                          value={user.permissions || 'full'}
+                          onChange={e =>
+                            handlePermissionsChange(
+                              user._id,
+                              e.target.value as 'basic' | 'full'
+                            )
+                          }
+                          size="sm"
+                        >
+                          <option value="full">{t('full_permissions')}</option>
+                          <option value="basic">{t('basic_permissions')}</option>
+                        </OLFormSelect>
                       </td>
                       <td className="text-center">
                         {user.isAdmin && (

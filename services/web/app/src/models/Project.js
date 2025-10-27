@@ -104,6 +104,8 @@ const ProjectSchema = new Schema(
       },
     ],
     deferredTpdsFlushCounter: { type: Number },
+    isProtected: { type: Boolean, default: false },
+    protectedFiles: [{ type: String }],
   },
   { minimize: false }
 )

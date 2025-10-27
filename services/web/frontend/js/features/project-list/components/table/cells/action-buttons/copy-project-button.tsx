@@ -26,8 +26,8 @@ type CopyButtonProps = {
 }
 
 function CopyProjectButton({ project, children }: CopyButtonProps) {
-  const { peerReviewMode } = getMeta('ol-ExposedSettings')
-  if (peerReviewMode) return null
+  const { userHasFullPermissions } = getMeta('ol-ExposedSettings')
+  if (userHasFullPermissions === false) return null
   const {
     addClonedProjectToViewData,
     addProjectToTagInView,
