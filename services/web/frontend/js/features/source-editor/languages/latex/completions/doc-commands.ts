@@ -3,6 +3,7 @@ import { Completion, CompletionContext } from '@codemirror/autocomplete'
 import { documentCommands } from '../document-commands'
 import { Command } from '../../../utils/tree-operations/commands'
 import { syntaxTree } from '@codemirror/language'
+import { metadataState } from '../../../extensions/language'
 
 const commandNameFromLabel = (label: string): string | undefined =>
   label.match(/^\\\w+/)?.[0]
@@ -19,6 +20,7 @@ export function customCommandCompletions(
 
   const output: Completion[] = []
 
+  // Add commands from current document (parsed via syntax tree)
   const items = countCommandUsage(context)
 
   for (const item of items.values()) {
@@ -26,6 +28,7 @@ export function customCommandCompletions(
       !existingCommands.has(commandNameFromLabel(item.label)) &&
       !item.ignoreInAutoComplete
     ) {
+      existingCommands.add(commandNameFromLabel(item.label))
       output.push({
         type: 'cmd',
         label: item.label,
@@ -33,6 +36,24 @@ export function customCommandCompletions(
         apply: applySnippet(item.snippet),
         extend: extendOverUnpairedClosingBrace,
       })
+    }
+  }
+
+  // Add macros from other documents in project (from backend metadata)
+  const metadata = context.state.field(metadataState, false)
+  if (metadata?.macros) {
+    for (const macro of metadata.macros) {
+      const commandName = commandNameFromLabel(macro)
+      if (commandName && !existingCommands.has(commandName)) {
+        existingCommands.add(commandName)
+        output.push({
+          type: 'cmd',
+          label: macro,
+          boost: 5, // Moderate priority for macros from other documents
+          apply: macro,
+          extend: extendOverUnpairedClosingBrace,
+        })
+      }
     }
   }
 

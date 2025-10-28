@@ -20,6 +20,9 @@ describe('MetaHandler', function () {
       '\\label{ e,f,g }', // e,f,g should be in the returned labels
       '\\begin{lstlisting}[label=foo, caption={Test}]', // foo should be in the returned labels
       '\\begin{lstlisting}[label={lst:foo},caption={Test}]', // lst:foo should be in the returned labels
+      '\\bibitem{ref1}', // ref1 should be in bibitems
+      '\\Bibitem{ref2}', // ref2 should be in bibitems
+      '\\RBibitem{ref3}', // ref3 should be in bibitems
     ]
 
     ctx.docs = {
@@ -103,6 +106,8 @@ describe('MetaHandler', function () {
           baz: ctx.packageMapping.baz,
         },
         packageNames: ['foo', 'bar', 'baz'],
+        bibitems: ['ref1', 'ref2', 'ref3'],
+        macros: [],
       })
 
       ctx.DocumentUpdaterHandler.promises.flushDocToMongo.should.be.calledWith(
@@ -161,16 +166,22 @@ describe('MetaHandler', function () {
           labels: ['aaa'],
           packages: {},
           packageNames: [],
+          bibitems: [],
+          macros: [],
         },
         id_two: {
           labels: [],
           packages: {},
           packageNames: [],
+          bibitems: [],
+          macros: [],
         },
         id_three: {
           labels: ['bbb', 'ccc'],
           packages: {},
           packageNames: [],
+          bibitems: [],
+          macros: [],
         },
         id_four: {
           labels: [],
@@ -185,6 +196,8 @@ describe('MetaHandler', function () {
             ],
           },
           packageNames: ['baz', 'amsmath'],
+          bibitems: [],
+          macros: [],
         },
         id_five: {
           labels: ['sec:intro'],
@@ -213,6 +226,8 @@ describe('MetaHandler', function () {
             ],
           },
           packageNames: ['foo', 'baz', 'hello'],
+          bibitems: [],
+          macros: [],
         },
       })
 
