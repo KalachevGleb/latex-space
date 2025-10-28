@@ -12,6 +12,7 @@ import {
   beginEnvironmentCompletionSource,
 } from './complete'
 import { documentCommands } from './document-commands'
+import { documentBibitems } from './document-bibitems'
 import importOverleafModules from '../../../../../macros/import-overleaf-module.macro'
 import { documentOutline } from './document-outline'
 import { LaTeXLanguage } from './latex-language'
@@ -36,6 +37,7 @@ export const latex = () => {
     shortcuts(),
     documentOutline,
     documentCommands,
+    documentBibitems,
     documentEnvironments,
     latexIndentService(),
     linting(),

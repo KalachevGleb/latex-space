@@ -19,6 +19,7 @@ import { useModalsContext } from '@/features/ide-react/context/modals-context'
 import { usePermissionsContext } from '@/features/ide-react/context/permissions-context'
 import { useTranslation } from 'react-i18next'
 import { IdeEvents } from '@/features/ide-react/create-ide-event-emitter'
+import { useCompilationUpdates } from '@/features/ide-react/hooks/use-compilation-updates'
 
 export type Command = {
   caption: string
@@ -31,6 +32,8 @@ export type DocumentMetadata = {
   labels: string[]
   packages: Record<string, Command[]>
   packageNames: string[]
+  bibitems?: string[]
+  macros?: string[]
 }
 
 type DocumentsMetadata = Record<string, DocumentMetadata>
@@ -42,6 +45,8 @@ export const MetadataContext = createContext<
       commands: Command[]
       labels: Set<string>
       packageNames: Set<string>
+      bibitems: Set<string>
+      macros: Set<string>
     }
   | undefined
 >(undefined)
@@ -56,8 +61,10 @@ export const MetadataProvider: FC<React.PropsWithChildren> = ({ children }) => {
   const { showGenericMessageModal } = useModalsContext()
 
   const [documents, setDocuments] = useState<DocumentsMetadata>({})
+  const [hasProjectChanges, setHasProjectChanges] = useState(false)
 
   const debouncerRef = useRef<Map<string, number>>(new Map()) // DocId => Timeout
+  const inactivityTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     const handleEntityDeleted = ({
@@ -166,6 +173,61 @@ export const MetadataProvider: FC<React.PropsWithChildren> = ({ children }) => {
 
   useEventListener('editor:metadata-outdated', handleMetadataOutdated)
 
+  // Trigger 1: Refresh metadata when switching to a different document
+  const previousDocIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (currentDocument?.doc_id && previousDocIdRef.current !== currentDocument.doc_id) {
+      if (previousDocIdRef.current !== null) {
+        // This is a document switch (not initial load)
+        loadProjectMetaFromServer()
+      }
+      previousDocIdRef.current = currentDocument.doc_id
+    }
+  }, [currentDocument, loadProjectMetaFromServer])
+
+  // Trigger 2: Refresh metadata after compilation completes
+  useCompilationUpdates(
+    useCallback(
+      update => {
+        if (update.type === 'compilation-complete' && update.status === 'success') {
+          loadProjectMetaFromServer()
+        }
+      },
+      [loadProjectMetaFromServer]
+    )
+  )
+
+  // Trigger 3: Refresh metadata after 1 minute of inactivity when there are changes
+  useEffect(() => {
+    const handleDocChanged = () => {
+      setHasProjectChanges(true)
+
+      // Clear existing inactivity timer
+      if (inactivityTimerRef.current !== null) {
+        window.clearTimeout(inactivityTimerRef.current)
+      }
+
+      // Start new 1-minute inactivity timer
+      inactivityTimerRef.current = window.setTimeout(() => {
+        if (hasProjectChanges) {
+          loadProjectMetaFromServer()
+          setHasProjectChanges(false)
+        }
+        inactivityTimerRef.current = null
+      }, 60000) // 1 minute
+    }
+
+    window.addEventListener('doc:changed', handleDocChanged)
+
+    return () => {
+      window.removeEventListener('doc:changed', handleDocChanged)
+      if (inactivityTimerRef.current !== null) {
+        window.clearTimeout(inactivityTimerRef.current)
+      }
+    }
+  }, [loadProjectMetaFromServer, hasProjectChanges])
+
   const permissionsRef = useRef(permissions)
 
   useEffect(() => {
@@ -206,6 +268,8 @@ export const MetadataProvider: FC<React.PropsWithChildren> = ({ children }) => {
       commands: docs.flatMap(doc => Object.values(doc.packages).flat()),
       labels: new Set(docs.flatMap(doc => doc.labels)),
       packageNames: new Set(docs.flatMap(doc => doc.packageNames)),
+      bibitems: new Set(docs.flatMap(doc => doc.bibitems || [])),
+      macros: new Set(docs.flatMap(doc => doc.macros || [])),
     }
   }, [documents])
 

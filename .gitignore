@@ -18,3 +18,10 @@ texlive-cache/
 setup.sh
 check-ready.sh
 cookies.txt
+
+# version info (generated automatically)
+services/web/public/version.json
+
+# temporary test files
+test_add_endpoint_*.js
+test_add_endpoint_*.sh

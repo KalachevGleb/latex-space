@@ -7,6 +7,8 @@ import { callbackify } from '@overleaf/promise-utils'
  *   labels: string[]
  *   packages: Record<string, Record<string, any>>,
  *   packageNames: string[],
+ *   bibitems: string[],
+ *   macros: string[],
  * }} DocMeta
  */
 
@@ -20,12 +22,18 @@ async function extractMetaFromDoc(lines) {
     labels: [],
     packages: {},
     packageNames: [],
+    bibitems: [],
+    macros: [],
   }
 
   const labelRe = /\\label{(.{0,80}?)}/g
   const labelOptionRe = /\blabel={?(.{0,80}?)[\s},\]]/g
+  const bibitemRe = /\\[BR]?[Bb]ibitem{(.{0,80}?)}/g
   const packageRe = /^\\usepackage(?:\[.{0,80}?])?{(.{0,80}?)}/g
   const reqPackageRe = /^\\RequirePackage(?:\[.{0,80}?])?{(.{0,80}?)}/g
+  // Regex for \newcommand, \renewcommand, and \def
+  const newCommandRe = /\\(?:newcommand|renewcommand)\*?{?(\\[a-zA-Z@]+)}?/g
+  const defRe = /\\def(\\[a-zA-Z@]+)/g
 
   for (const rawLine of lines) {
     const line = getNonCommentedContent(rawLine)
@@ -38,12 +46,28 @@ async function extractMetaFromDoc(lines) {
       docMeta.labels.push(label)
     }
 
+    for (const bibitem of lineMatches(bibitemRe, line)) {
+      docMeta.bibitems.push(bibitem)
+    }
+
     for (const pkg of lineMatches(packageRe, line, ',')) {
       docMeta.packageNames.push(pkg)
     }
 
     for (const pkg of lineMatches(reqPackageRe, line, ',')) {
       docMeta.packageNames.push(pkg)
+    }
+
+    for (const macro of lineMatches(newCommandRe, line)) {
+      if (!docMeta.macros.includes(macro)) {
+        docMeta.macros.push(macro)
+      }
+    }
+
+    for (const macro of lineMatches(defRe, line)) {
+      if (!docMeta.macros.includes(macro)) {
+        docMeta.macros.push(macro)
+      }
     }
   }
 
