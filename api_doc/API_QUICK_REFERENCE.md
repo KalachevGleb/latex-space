@@ -17,6 +17,13 @@
 | `/user/password/update` | POST | Изменить пароль |
 | `/user/projects` | GET | Список проектов пользователя |
 
+## Управление правами пользователей
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/api/user/:user_id/permissions` | GET | Получить права пользователя (admin) |
+| `/api/user/:user_id/permissions` | POST | Установить права пользователя (admin) |
+
 ## Проекты
 
 | Endpoint | Method | Описание |
@@ -31,6 +38,15 @@
 | `/project/:project_id/trash` | DELETE | Из корзины |
 | `/Project/:Project_id` | DELETE | Удалить навсегда |
 | `/Project/:Project_id/download/zip` | GET | Скачать ZIP |
+
+## Защита проектов и файлов
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/api/project/:Project_id/protection` | GET | Получить статус защиты проекта |
+| `/api/project/:Project_id/protection` | POST | Установить защиту проекта (owner) |
+| `/api/project/:Project_id/protected-files` | GET | Список защищённых файлов |
+| `/api/project/:Project_id/protected-files` | POST | Установить защищённые файлы (owner) |
 
 ## Участники проекта
 
@@ -67,7 +83,7 @@
 | `/internal/project/:project_id/compile/pdf` | GET | Компиляция + PDF |
 | `/user/:user_id/personal_info` | GET | Информация о пользователе |
 
-## Роли участников
+## Роли участников проекта
 
 | Значение | Описание |
 |----------|----------|
@@ -75,6 +91,13 @@
 | `readOnly` | Только чтение |
 | `review` | Рецензент (комментарии + track changes) |
 | `owner` | Владелец проекта |
+
+## Уровни прав пользователя
+
+| Значение | Описание |
+|----------|----------|
+| `full` | Полные права (по умолчанию) |
+| `basic` | Ограниченные права: просмотр, редактирование, компиляция, но без создания/загрузки/копирования/удаления проектов |
 
 ## Коды ответов
 

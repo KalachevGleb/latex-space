@@ -26,7 +26,10 @@ async function setProjectProtection(req, res) {
   const { isProtected } = body
   const projectId = params.Project_id
 
-  await ProjectProtectionHandler.setProjectProtection(projectId, isProtected)
+  await ProjectProtectionHandler.promises.setProjectProtection(
+    projectId,
+    isProtected
+  )
 
   res.sendStatus(204)
 }
@@ -34,9 +37,8 @@ async function setProjectProtection(req, res) {
 async function getProjectProtection(req, res) {
   const projectId = req.params.Project_id
 
-  const protection = await ProjectProtectionHandler.getProjectProtection(
-    projectId
-  )
+  const protection =
+    await ProjectProtectionHandler.promises.getProjectProtection(projectId)
 
   res.json(protection)
 }
@@ -46,7 +48,10 @@ async function setProtectedFiles(req, res) {
   const { protectedFiles } = body
   const projectId = params.Project_id
 
-  await ProjectProtectionHandler.setProtectedFiles(projectId, protectedFiles)
+  await ProjectProtectionHandler.promises.setProtectedFiles(
+    projectId,
+    protectedFiles
+  )
 
   res.sendStatus(204)
 }
@@ -54,9 +59,8 @@ async function setProtectedFiles(req, res) {
 async function getProtectedFiles(req, res) {
   const projectId = req.params.Project_id
 
-  const protectedFiles = await ProjectProtectionHandler.getProtectedFiles(
-    projectId
-  )
+  const protectedFiles =
+    await ProjectProtectionHandler.promises.getProtectedFiles(projectId)
 
   res.json({ protectedFiles })
 }
@@ -65,7 +69,7 @@ async function isFileProtected(req, res) {
   const projectId = req.params.Project_id
   const filePath = req.params.file_path
 
-  const isProtected = await ProjectProtectionHandler.isFileProtected(
+  const isProtected = await ProjectProtectionHandler.promises.isFileProtected(
     projectId,
     filePath
   )

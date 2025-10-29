@@ -6,9 +6,11 @@
 3. [Управление пользователями](#управление-пользователями)
 4. [Управление проектами](#управление-проектами)
 5. [Управление участниками проекта](#управление-участниками-проекта)
-6. [Компиляция и скачивание](#компиляция-и-скачивание)
-7. [Private API](#private-api)
-8. [Примеры использования](#примеры-использования)
+6. [Защита проектов и файлов](#защита-проектов-и-файлов)
+7. [Управление правами пользователей](#управление-правами-пользователей)
+8. [Компиляция и скачивание](#компиляция-и-скачивание)
+9. [Private API](#private-api)
+10. [Примеры использования](#примеры-использования)
 
 ---
 
@@ -438,6 +440,161 @@ POST /project/:Project_id/leave
 
 ---
 
+## Защита проектов и файлов
+
+### Установить защиту проекта
+```http
+POST /api/project/:Project_id/protection
+Content-Type: application/json
+
+{
+  "isProtected": true
+}
+```
+
+**Параметры:**
+- `isProtected` - `true` для защиты, `false` для снятия защиты
+
+**Ответ:**
+- `204 No Content` - успех
+- `403 Forbidden` - недостаточно прав (требуется owner)
+- `404 Not Found` - проект не найден
+
+**Описание:** Защищённый проект нельзя удалить через UI или API. Защита может быть установлена только владельцем проекта.
+
+### Получить статус защиты проекта
+```http
+GET /api/project/:Project_id/protection
+```
+
+**Ответ:**
+```json
+{
+  "isProtected": true
+}
+```
+
+### Установить список защищённых файлов
+```http
+POST /api/project/:Project_id/protected-files
+Content-Type: application/json
+
+{
+  "protectedFiles": [
+    "/source/template.sty",
+    "/source/config.tex",
+    "/images/logo.png"
+  ]
+}
+```
+
+**Параметры:**
+- `protectedFiles` - массив путей к файлам (полные пути от корня проекта)
+
+**Ответ:**
+- `204 No Content` - успех
+
+**Описание:** Защищённые файлы:
+- Нельзя удалить
+- Нельзя переименовать
+- Нельзя изменить содержимое (только для чтения в редакторе)
+- Отображаются с иконкой замка в файловом дереве
+- Можно скрыть/показать через кнопку в тулбаре файлового дерева
+
+**Формат путей:**
+- Пути должны начинаться с `/`
+- Примеры: `/main.tex`, `/chapters/intro.tex`, `/images/figure1.png`
+
+### Получить список защищённых файлов
+```http
+GET /api/project/:Project_id/protected-files
+```
+
+**Ответ:**
+```json
+{
+  "protectedFiles": [
+    "/source/template.sty",
+    "/source/config.tex"
+  ]
+}
+```
+
+### Снять защиту со всех файлов
+```http
+POST /api/project/:Project_id/protected-files
+Content-Type: application/json
+
+{
+  "protectedFiles": []
+}
+```
+
+---
+
+## Управление правами пользователей
+
+### Уровни прав пользователей
+- `full` - Полные права (может создавать, загружать, копировать и удалять проекты)
+- `basic` - Базовые права (может только работать с существующими проектами, не может создавать новые)
+
+### Установить права пользователя
+```http
+POST /api/user/:user_id/permissions
+Content-Type: application/json
+
+{
+  "permissions": "basic"
+}
+```
+
+**Параметры:**
+- `permissions` - `"full"` или `"basic"`
+
+**Ответ:**
+- `204 No Content` - успех
+- `403 Forbidden` - недостаточно прав (требуется admin)
+- `404 Not Found` - пользователь не найден
+
+**Требования:**
+- Доступно только администраторам системы
+- Можно вызывать через admin UI на `/admin/users/list`
+
+### Получить права пользователя
+```http
+GET /api/user/:user_id/permissions
+```
+
+**Ответ:**
+```json
+{
+  "permissions": "full"
+}
+```
+
+### Права пользователей по умолчанию
+
+При создании нового пользователя:
+- Если система в обычном режиме → права `full`
+- Если включен режим peer-review → права `basic`
+
+### Ограничения для пользователей с базовыми правами
+
+Пользователи с `permissions: "basic"` **НЕ МОГУТ**:
+- Создавать новые проекты
+- Загружать проекты (upload)
+- Копировать/клонировать проекты
+- Удалять проекты (включая перемещение в корзину)
+
+Пользователи с `permissions: "basic"` **МОГУТ**:
+- Редактировать существующие проекты (если есть права collaborator)
+- Компилировать проекты
+- Скачивать PDF и файлы проектов
+- Работать с комментариями и track changes
+- Переименовывать файлы и папки внутри проектов
+
+---
+
 ## Компиляция и скачивание
 
 ### Запустить компиляцию
@@ -827,6 +984,242 @@ for member in members['members']:
         print(f'Removed {member["email"]} from project')
 ```
 
+### Пример 5: Защита проекта и установка защищённых файлов
+
+```bash
+#!/bin/bash
+
+# Предполагается, что сессия активна
+CSRF_TOKEN=$(curl -s -b cookies.txt http://localhost:3000/dev/csrf)
+PROJECT_ID="68f66d808f3d24862ffcc607"
+
+# Защитить проект от удаления
+curl -s -b cookies.txt \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $CSRF_TOKEN" \
+  -d '{"isProtected": true}' \
+  http://localhost:3000/api/project/$PROJECT_ID/protection
+
+echo "Project protected"
+
+# Установить список защищённых файлов
+curl -s -b cookies.txt \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $CSRF_TOKEN" \
+  -d '{
+    "protectedFiles": [
+      "/source/template.sty",
+      "/source/config.tex",
+      "/source/header.tex"
+    ]
+  }' \
+  http://localhost:3000/api/project/$PROJECT_ID/protected-files
+
+echo "Protected files set"
+
+# Проверить статус защиты
+curl -s -b cookies.txt \
+  http://localhost:3000/api/project/$PROJECT_ID/protection
+
+# Получить список защищённых файлов
+curl -s -b cookies.txt \
+  http://localhost:3000/api/project/$PROJECT_ID/protected-files
+```
+
+### Пример 6: Управление правами пользователей (admin)
+
+```python
+import requests
+
+BASE_URL = 'http://localhost:3000'
+
+class OverleafAdminAPI:
+    def __init__(self, admin_email, admin_password):
+        self.session = requests.Session()
+        self.csrf_token = None
+        self.login(admin_email, admin_password)
+
+    def login(self, email, password):
+        # Получить CSRF token
+        response = self.session.get(f'{BASE_URL}/dev/csrf')
+        self.csrf_token = response.text.strip()
+
+        # Войти
+        response = self.session.post(
+            f'{BASE_URL}/login',
+            json={'email': email, 'password': password},
+            headers={'X-CSRF-Token': self.csrf_token}
+        )
+        return response.json()
+
+    def set_user_permissions(self, user_id, permissions):
+        """
+        Установить права пользователя
+        permissions: 'full' или 'basic'
+        """
+        response = self.session.post(
+            f'{BASE_URL}/api/user/{user_id}/permissions',
+            json={'permissions': permissions},
+            headers={'X-CSRF-Token': self.csrf_token}
+        )
+        return response.status_code == 204
+
+    def get_user_permissions(self, user_id):
+        """Получить текущие права пользователя"""
+        response = self.session.get(
+            f'{BASE_URL}/api/user/{user_id}/permissions',
+            headers={'X-CSRF-Token': self.csrf_token}
+        )
+        return response.json()
+
+    def protect_project(self, project_id, is_protected=True):
+        """Защитить/разprotected проект"""
+        response = self.session.post(
+            f'{BASE_URL}/api/project/{project_id}/protection',
+            json={'isProtected': is_protected},
+            headers={'X-CSRF-Token': self.csrf_token}
+        )
+        return response.status_code == 204
+
+    def set_protected_files(self, project_id, file_paths):
+        """
+        Установить список защищённых файлов
+        file_paths: список путей, например ['/main.tex', '/config.sty']
+        """
+        response = self.session.post(
+            f'{BASE_URL}/api/project/{project_id}/protected-files',
+            json={'protectedFiles': file_paths},
+            headers={'X-CSRF-Token': self.csrf_token}
+        )
+        return response.status_code == 204
+
+# Использование
+admin = OverleafAdminAPI('admin@example.com', 'admin_password')
+
+# Установить базовые права пользователю
+user_id = '68eeb449ee75875128fa170f'
+admin.set_user_permissions(user_id, 'basic')
+print(f'Set basic permissions for user {user_id}')
+
+# Проверить права
+perms = admin.get_user_permissions(user_id)
+print(f'Current permissions: {perms["permissions"]}')
+
+# Защитить проект
+project_id = '68f66d808f3d24862ffcc607'
+admin.protect_project(project_id, True)
+print(f'Protected project {project_id}')
+
+# Установить защищённые файлы
+protected_files = [
+    '/source/template.sty',
+    '/source/config.tex',
+    '/images/logo.png'
+]
+admin.set_protected_files(project_id, protected_files)
+print(f'Set {len(protected_files)} protected files')
+
+# Вернуть полные права пользователю
+admin.set_user_permissions(user_id, 'full')
+print(f'Restored full permissions for user {user_id}')
+```
+
+### Пример 7: Комбинированный сценарий - создание шаблона проекта
+
+```javascript
+const axios = require('axios');
+
+const BASE_URL = 'http://localhost:3000';
+
+class OverleafTemplateManager {
+  constructor(email, password) {
+    this.session = axios.create({
+      baseURL: BASE_URL,
+      withCredentials: true
+    });
+    this.csrfToken = null;
+  }
+
+  async login(email, password) {
+    // Получить CSRF token
+    const csrfResponse = await this.session.get('/dev/csrf');
+    this.csrfToken = csrfResponse.data.trim();
+
+    // Войти
+    await this.session.post('/login',
+      { email, password },
+      { headers: { 'X-CSRF-Token': this.csrfToken } }
+    );
+  }
+
+  async createTemplateProject(name) {
+    // Создать проект
+    const projectResponse = await this.session.post('/project/new',
+      { projectName: name },
+      { headers: { 'X-CSRF-Token': this.csrfToken } }
+    );
+
+    const projectId = projectResponse.data.project_id;
+
+    // Защитить проект
+    await this.session.post(`/api/project/${projectId}/protection`,
+      { isProtected: true },
+      { headers: { 'X-CSRF-Token': this.csrfToken } }
+    );
+
+    // Установить защищённые файлы (например, стилевые файлы шаблона)
+    await this.session.post(`/api/project/${projectId}/protected-files`,
+      {
+        protectedFiles: [
+          '/template.sty',
+          '/settings.tex',
+          '/bibliography.bib'
+        ]
+      },
+      { headers: { 'X-CSRF-Token': this.csrfToken } }
+    );
+
+    return projectId;
+  }
+
+  async shareTemplateWithUsers(projectId, userEmails) {
+    // Добавить пользователей как readAndWrite (могут использовать шаблон)
+    for (const email of userEmails) {
+      try {
+        await this.session.post(`/project/${projectId}/add`,
+          { email, privileges: 'readAndWrite' },
+          { headers: { 'X-CSRF-Token': this.csrfToken } }
+        );
+        console.log(`Added ${email} to template project`);
+      } catch (error) {
+        console.error(`Failed to add ${email}:`, error.response?.data);
+      }
+    }
+  }
+}
+
+// Использование
+(async () => {
+  const manager = new OverleafTemplateManager();
+  await manager.login('admin@example.com', 'password');
+
+  // Создать защищённый шаблон
+  const templateId = await manager.createTemplateProject('Company LaTeX Template');
+  console.log(`Created template project: ${templateId}`);
+
+  // Поделиться с пользователями
+  await manager.shareTemplateWithUsers(templateId, [
+    'user1@example.com',
+    'user2@example.com',
+    'user3@example.com'
+  ]);
+
+  console.log('Template project created and shared!');
+})();
+```
+
 ---
 
 ## Дополнительная информация
@@ -911,7 +1304,12 @@ Content-Type: application/json
 - GitHub Issues: https://github.com/overleaf/overleaf
 - Community Edition Wiki: https://github.com/overleaf/overleaf/wiki
 
-**Версия документации**: 1.0  
-**Дата**: 2024-10-12  
+**Версия документации**: 2.0
+**Дата**: 2025-10-29
 **Overleaf CE Version**: Compatible with latest main branch
+**Новые возможности в v2.0:**
+- Защита проектов от удаления
+- Защищённые файлы (read-only)
+- Управление правами пользователей (full/basic)
+- UI для скрытия/показа защищённых файлов
 
