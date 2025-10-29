@@ -106,7 +106,7 @@ function useCodeMirrorScope(view: EditorView) {
       return false
     }
     const path = pathInFolder(fileTreeData, currentDocument.doc_id)
-    return path ? protectedFiles.includes(`/${path}`) : false
+    return path ? protectedFiles.includes(path) : false
   }, [currentDocument, project, fileTreeData])
 
   let spellCheckLanguage = project?.spellCheckLanguage || ''

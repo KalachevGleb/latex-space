@@ -73,7 +73,7 @@ function ReviewModeSwitcher() {
       return false
     }
     const path = pathInFolder(fileTreeData, currentDocument.doc_id)
-    return path ? protectedFiles.includes(`/${path}`) : false
+    return path ? protectedFiles.includes(path) : false
   }, [currentDocument, project, fileTreeData])
 
   // Show lock icon for protected files instead of mode switcher

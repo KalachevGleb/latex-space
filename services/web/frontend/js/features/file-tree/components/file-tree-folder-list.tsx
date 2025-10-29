@@ -76,7 +76,7 @@ function FileTreeFolderList({
     }
     return (entityId: string) => {
       const path = pathInFolder(fileTreeData, entityId)
-      return path ? protectedFiles.includes(`/${path}`) : false
+      return path ? protectedFiles.includes(path) : false
     }
   }, [project, fileTreeData])
 

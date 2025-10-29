@@ -51,7 +51,7 @@ function FileTreeItemInner({
       return false
     }
     const path = pathInFolder(fileTreeData, id)
-    return path ? protectedFiles.includes(`/${path}`) : false
+    return path ? protectedFiles.includes(path) : false
   }, [id, project, fileTreeData])
 
   const hasMenu =

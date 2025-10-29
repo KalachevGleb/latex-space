@@ -532,7 +532,7 @@ export const FileTreeActionableProvider: FC<React.PropsWithChildren> = ({
 
     for (const selectedEntityId of selectedEntityIds) {
       const path = pathInFolder(fileTreeData, selectedEntityId)
-      if (path && protectedFiles.includes(`/${path}`)) {
+      if (path && protectedFiles.includes(path)) {
         return true
       }
     }
