@@ -702,7 +702,12 @@ async function _checkFileExists(dir, filename) {
 }
 
 async function _runSynctex(projectId, userId, command, opts) {
-  const { imageName, editorId, buildId, compileFromClsiCache } = opts
+  let { imageName, editorId, buildId, compileFromClsiCache } = opts
+
+  // Normalize imageName - convert string "undefined" or "null" to actual undefined
+  if (imageName === 'undefined' || imageName === 'null' || imageName === '') {
+    imageName = undefined
+  }
 
   if (imageName && !_isImageNameAllowed(imageName)) {
     throw new Errors.InvalidParameter('invalid image')
@@ -715,14 +720,15 @@ async function _runSynctex(projectId, userId, command, opts) {
   }
 
   const outputDir = getOutputDir(projectId, userId)
-  const runInOutputDir = buildId && CommandRunner.canRunSyncTeXInOutputDir()
+  const compileDir = getCompileDir(projectId, userId)
+  const runInOutputDir = buildId && CommandRunner.canRunSyncTeXInOutputDir?.()
 
-  const directory = runInOutputDir
+  let directory = runInOutputDir
     ? Path.join(outputDir, OutputCacheManager.CACHE_SUBDIR, buildId)
-    : getCompileDir(projectId, userId)
+    : compileDir
   const timeout = 60 * 1000 // increased to allow for large projects
   const compileName = getCompileName(projectId, userId)
-  const compileGroup = runInOutputDir ? 'synctex-output' : 'synctex'
+  let compileGroup = runInOutputDir ? 'synctex-output' : 'synctex'
   const defaultImageName =
     Settings.clsi && Settings.clsi.docker && Settings.clsi.docker.image
   // eslint-disable-next-line @typescript-eslint/return-await
@@ -757,6 +763,15 @@ async function _runSynctex(projectId, userId, command, opts) {
               'failed to download output.synctex.gz from clsi-cache'
             )
           }
+          await _checkFileExists(directory, 'output.synctex.gz')
+        } else if (err instanceof Errors.NotFoundError && runInOutputDir) {
+          // Fallback: try compile directory if synctex not in cached directory
+          logger.debug(
+            { projectId, userId, buildId },
+            'synctex not found in cached directory, falling back to compile directory'
+          )
+          directory = compileDir
+          compileGroup = 'synctex'
           await _checkFileExists(directory, 'output.synctex.gz')
         } else {
           throw err
