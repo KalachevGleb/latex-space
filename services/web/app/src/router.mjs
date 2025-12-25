@@ -612,6 +612,13 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     RangesController.getAllRanges
   )
   
+  // API endpoint to get comments with positions
+  webRouter.get(
+    '/api/project/:Project_id/comments',
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    CommentsController.getCommentsWithPositions
+  )
+  
   // Track Changes routes
   webRouter.post(
     '/project/:Project_id/track_changes',

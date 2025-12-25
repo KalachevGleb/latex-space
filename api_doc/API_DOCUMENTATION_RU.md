@@ -5,12 +5,15 @@
 2. [Аутентификация](#аутентификация)
 3. [Управление пользователями](#управление-пользователями)
 4. [Управление проектами](#управление-проектами)
-5. [Управление участниками проекта](#управление-участниками-проекта)
-6. [Защита проектов и файлов](#защита-проектов-и-файлов)
-7. [Управление правами пользователей](#управление-правами-пользователей)
-8. [Компиляция и скачивание](#компиляция-и-скачивание)
-9. [Private API](#private-api)
-10. [Примеры использования](#примеры-использования)
+5. [Файлы и документы](#файлы-и-документы)
+6. [Управление участниками проекта](#управление-участниками-проекта)
+7. [Защита проектов и файлов](#защита-проектов-и-файлов)
+8. [Управление правами пользователей](#управление-правами-пользователей)
+9. [История проекта](#история-проекта)
+10. [Компиляция и скачивание](#компиляция-и-скачивание)
+11. [Private API](#private-api)
+12. [Review Panel (комментарии и track changes)](#review-panel-комментарии-и-track-changes)
+13. [Примеры использования](#примеры-использования)
 
 ---
 
@@ -247,6 +250,46 @@ GET /project/:Project_id/entities
 }
 ```
 
+### Получить список проектов (JSON API)
+```http
+POST /api/project
+Content-Type: application/json
+
+{
+  "filters": ["owned", "shared"],
+  "limit": 100
+}
+```
+
+**Ответ:** Массив проектов с детальной информацией
+
+### Обновить настройки проекта
+```http
+POST /project/:Project_id/settings
+Content-Type: application/json
+
+{
+  "compiler": "pdflatex",
+  "rootDoc_id": "doc_id",
+  "spellCheckLanguage": "en"
+}
+```
+
+**Параметры:**
+- `compiler` - компилятор (pdflatex, xelatex, lualatex)
+- `rootDoc_id` - ID главного документа
+- `spellCheckLanguage` - язык проверки орфографии
+- `imageName` - Docker образ для компиляции
+
+**Ответ:** 204 No Content
+
+### Открыть проект в редакторе
+```http
+GET /Project/:Project_id
+```
+
+**Ответ:** HTML страница редактора
+
 ### Клонировать проект
 ```http
 POST /Project/:Project_id/clone
@@ -287,6 +330,61 @@ DELETE /Project/:Project_id
 ### Скачать проект как ZIP
 ```http
 GET /Project/:Project_id/download/zip
+```
+
+---
+
+## Файлы и документы
+
+### Скачать файл
+```http
+GET /Project/:Project_id/file/:File_id
+```
+
+**Ответ:** Содержимое файла (бинарные данные)
+
+### Получить метаданные файла
+```http
+HEAD /Project/:Project_id/file/:File_id
+```
+
+**Ответ:** HTTP заголовки с информацией о файле (Content-Type, Content-Length)
+
+### Скачать документ
+```http
+GET /Project/:Project_id/doc/:Doc_id/download
+```
+
+**Ответ:** Текстовое содержимое документа
+
+### Обновить метаданные документа
+```http
+POST /project/:project_id/doc/:doc_id/metadata
+Content-Type: application/json
+
+{
+  "metadata": {
+    "labels": ["important"],
+    "folderId": "folder_id"
+  }
+}
+```
+
+**Ответ:** 204 No Content
+
+### Проверить, защищён ли файл
+```http
+GET /api/project/:Project_id/is-file-protected/:file_path
+```
+
+**Параметры:**
+- `file_path` - путь к файлу (URL-encoded)
+
+**Ответ:**
+```json
+{
+  "isProtected": true
+}
 ```
 
 ---
@@ -595,6 +693,94 @@ GET /api/user/:user_id/permissions
 
 ---
 
+## История проекта
+
+### Получить последнюю версию истории
+```http
+GET /project/:project_id/latest/history
+```
+
+**Ответ:** JSON с информацией о последних изменениях
+
+### Получить список изменений
+```http
+GET /project/:project_id/changes
+```
+
+**Ответ:** Массив изменений с авторами и временными метками
+
+### Скачать ZIP определённой версии
+```http
+GET /project/:project_id/version/:version/zip
+```
+
+**Параметры:**
+- `version` - номер версии проекта
+
+**Ответ:** ZIP архив проекта в указанной версии
+
+### Откатить проект к версии
+```http
+POST /project/:project_id/revert-project
+Content-Type: application/json
+
+{
+  "version": 42
+}
+```
+
+**Параметры:**
+- `version` - номер версии для отката
+
+**Ответ:** 200 OK
+
+### Сбросить историю в хранилище
+```http
+POST /project/:Project_id/flush
+```
+
+**Ответ:** 204 No Content
+
+### Получить метки (labels)
+```http
+GET /project/:Project_id/labels
+```
+
+**Ответ:**
+```json
+[
+  {
+    "id": "label_id",
+    "comment": "Версия для публикации",
+    "version": 42,
+    "created_at": "2024-01-15T10:30:00.000Z",
+    "user_id": "user_id"
+  }
+]
+```
+
+### Создать метку
+```http
+POST /project/:Project_id/labels
+Content-Type: application/json
+
+{
+  "comment": "Важная версия",
+  "version": 42
+}
+```
+
+**Ответ:** 200 OK с данными созданной метки
+
+### Удалить метку
+```http
+DELETE /project/:Project_id/labels/:label_id
+```
+
+**Ответ:** 204 No Content
+
+---
+
 ## Компиляция и скачивание
 
 ### Запустить компиляцию
@@ -748,6 +934,351 @@ Authorization: Basic <credentials>
 GET /user/:user_id/personal_info
 Authorization: Basic <credentials>
 ```
+
+---
+
+## Review Panel (комментарии и track changes)
+
+### Получить все комментарии с позициями (JSON API)
+
+Возвращает все комментарии проекта в структурированном формате с информацией о файлах, позициях и сообщениях.
+
+```http
+GET /api/project/:Project_id/comments
+```
+
+**Ответ:**
+```json
+{
+  "comments": [
+    {
+      "thread_id": "507f1f77bcf86cd799439011",
+      "file": "main.tex",
+      "position": {
+        "start": 145,
+        "end": 178
+      },
+      "text": "выделенный текст комментария",
+      "messages": [
+        {
+          "author": {
+            "id": "60a7b1234567890abcdef123",
+            "email": "user@example.com",
+            "first_name": "Иван",
+            "last_name": "Петров",
+            "alias": "Рецензент 1"
+          },
+          "text": "Нужно исправить эту формулу",
+          "timestamp": "2024-01-15T10:30:00.000Z"
+        },
+        {
+          "author": {
+            "id": "60a7b1234567890abcdef456",
+            "email": "author@example.com",
+            "first_name": "Мария",
+            "last_name": "Иванова"
+          },
+          "text": "Спасибо, исправлю",
+          "timestamp": "2024-01-15T11:00:00.000Z"
+        }
+      ],
+      "resolved": false
+    },
+    {
+      "thread_id": "507f1f77bcf86cd799439012",
+      "file": "sections/introduction.tex",
+      "position": {
+        "start": 89,
+        "end": 120
+      },
+      "text": "другой выделенный текст",
+      "messages": [
+        {
+          "author": {
+            "id": "60a7b1234567890abcdef123",
+            "email": "user@example.com",
+            "first_name": "Иван",
+            "last_name": "Петров"
+          },
+          "text": "Отличное введение!",
+          "timestamp": "2024-01-14T15:20:00.000Z"
+        }
+      ],
+      "resolved": true
+    }
+  ]
+}
+```
+
+**Структура ответа:**
+
+- `comments` - массив всех комментариев проекта
+  - `thread_id` - уникальный идентификатор треда комментариев
+  - `file` - путь к файлу относительно корня проекта
+  - `position` - позиция выделенного текста в файле
+    - `start` - начальная позиция (количество символов от начала файла)
+    - `end` - конечная позиция
+  - `text` - выделенный текст, к которому относится комментарий
+  - `messages` - массив сообщений в треде
+    - `author` - информация об авторе сообщения
+      - `id` - ID пользователя
+      - `email` - email пользователя
+      - `first_name` - имя
+      - `last_name` - фамилия
+      - `alias` - псевдоним (если установлен в настройках проекта)
+    - `text` - текст сообщения
+    - `timestamp` - время создания сообщения (ISO 8601)
+  - `resolved` - статус комментария (решён или нет)
+
+**Пример использования (bash):**
+
+```bash
+#!/bin/bash
+
+# Получить CSRF token
+CSRF_TOKEN=$(curl -s http://localhost:3000/dev/csrf)
+
+# Войти в систему
+curl -c cookies.txt -b cookies.txt \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $CSRF_TOKEN" \
+  -d '{"email":"user@example.com","password":"password123"}' \
+  http://localhost:3000/login
+
+# Получить комментарии проекта
+PROJECT_ID="60a7b1234567890abcdef123"
+curl -s -b cookies.txt \
+  http://localhost:3000/api/project/$PROJECT_ID/comments | jq .
+```
+
+**Пример использования (Python):**
+
+```python
+import requests
+import json
+
+BASE_URL = 'http://localhost:3000'
+
+# Создать сессию
+session = requests.Session()
+
+# Получить CSRF token
+csrf_token = session.get(f'{BASE_URL}/dev/csrf').text
+
+# Войти в систему
+session.post(
+    f'{BASE_URL}/login',
+    json={'email': 'user@example.com', 'password': 'password123'},
+    headers={'X-CSRF-Token': csrf_token}
+)
+
+# Получить комментарии
+project_id = '60a7b1234567890abcdef123'
+response = session.get(f'{BASE_URL}/api/project/{project_id}/comments')
+comments_data = response.json()
+
+# Вывести информацию о комментариях
+for comment in comments_data['comments']:
+    print(f"Файл: {comment['file']}")
+    print(f"Позиция: {comment['position']['start']}-{comment['position']['end']}")
+    print(f"Текст: {comment['text']}")
+    print(f"Сообщений: {len(comment['messages'])}")
+    print(f"Решён: {comment['resolved']}")
+    print("---")
+```
+
+**Примечания:**
+
+- Комментарии возвращаются только для документов, которые имеют активные комментарии
+- Позиции указаны в символах от начала файла (включая переводы строк)
+- Если у автора сообщения установлен псевдоним в настройках проекта, он будет включён в поле `alias`
+- Удалённые комментарии не возвращаются
+- Endpoint требует прав на чтение проекта
+
+### Получить ranges (комментарии и изменения)
+
+Возвращает информацию о комментариях и tracked changes для всех документов проекта.
+
+```http
+GET /project/:Project_id/ranges
+```
+
+**Ответ:**
+```json
+[
+  {
+    "id": "doc_id",
+    "ranges": {
+      "comments": [
+        {
+          "id": "thread_id",
+          "op": {
+            "c": "выделенный текст",
+            "p": 145,
+            "t": "thread_id"
+          },
+          "resolved": false
+        }
+      ],
+      "changes": [
+        {
+          "id": "change_id",
+          "op": {
+            "i": "вставленный текст",
+            "p": 100
+          },
+          "metadata": {
+            "user_id": "user_id",
+            "ts": "2024-01-15T10:30:00.000Z"
+          }
+        }
+      ]
+    }
+  }
+]
+```
+
+### Получить треды комментариев
+
+Возвращает все треды комментариев с сообщениями и информацией об авторах.
+
+```http
+GET /project/:Project_id/threads
+```
+
+**Ответ:**
+```json
+{
+  "thread_id": {
+    "id": "thread_id",
+    "messages": [
+      {
+        "id": "message_id",
+        "content": "Текст комментария",
+        "timestamp": "2024-01-15T10:30:00.000Z",
+        "user": {
+          "id": "user_id",
+          "email": "user@example.com",
+          "first_name": "Иван",
+          "last_name": "Петров"
+        }
+      }
+    ],
+    "resolved": false
+  }
+}
+```
+
+### Получить пользователей, делавших изменения
+
+Возвращает список пользователей, которые делали изменения в проекте.
+
+```http
+GET /project/:Project_id/changes/users
+```
+
+**Ответ:**
+```json
+[
+  {
+    "id": "user_id",
+    "email": "user@example.com",
+    "first_name": "Иван",
+    "last_name": "Петров",
+    "alias": "Рецензент 1"
+  }
+]
+```
+
+### Добавить сообщение в тред
+
+```http
+POST /project/:Project_id/thread/:thread_id/messages
+Content-Type: application/json
+
+{
+  "content": "Текст сообщения"
+}
+```
+
+**Ответ:** 200 OK с данными созданного сообщения
+
+### Удалить тред комментариев
+
+```http
+DELETE /project/:Project_id/doc/:Doc_id/thread/:thread_id
+```
+
+**Ответ:** 204 No Content
+
+### Отметить комментарий как решённый
+
+```http
+POST /project/:Project_id/doc/:Doc_id/thread/:thread_id/resolve
+```
+
+**Ответ:** 204 No Content
+
+### Открыть комментарий заново
+
+```http
+POST /project/:Project_id/doc/:Doc_id/thread/:thread_id/reopen
+```
+
+**Ответ:** 204 No Content
+
+### Редактировать сообщение
+
+```http
+POST /project/:Project_id/thread/:thread_id/messages/:message_id/edit
+Content-Type: application/json
+
+{
+  "content": "Обновлённый текст"
+}
+```
+
+**Ответ:** 204 No Content
+
+### Удалить сообщение
+
+```http
+DELETE /project/:Project_id/thread/:thread_id/messages/:message_id
+```
+
+**Ответ:** 204 No Content
+
+### Включить/выключить track changes
+
+```http
+POST /project/:Project_id/track_changes
+Content-Type: application/json
+
+{
+  "on": true
+}
+```
+
+**Параметры:**
+- `on` (boolean) - `true` для включения, `false` для выключения
+
+**Ответ:** 204 No Content
+
+### Принять изменения
+
+```http
+POST /project/:Project_id/doc/:doc_id/changes/accept
+Content-Type: application/json
+
+{
+  "change_ids": ["change_id_1", "change_id_2"]
+}
+```
+
+**Параметры:**
+- `change_ids` (array) - массив ID изменений для принятия
+
+**Ответ:** 204 No Content
 
 ---
 

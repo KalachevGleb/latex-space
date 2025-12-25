@@ -28,9 +28,13 @@
 
 | Endpoint | Method | Описание |
 |----------|--------|----------|
+| `/user/projects` | GET | Список проектов пользователя |
+| `/api/project` | POST | Получить список проектов (JSON) |
 | `/project/new` | POST | Создать проект |
+| `/project/:Project_id/entities` | GET | Структура проекта (файлы и папки) |
 | `/project/:Project_id/rename` | POST | Переименовать проект |
-| `/project/:Project_id/entities` | GET | Структура проекта |
+| `/project/:Project_id/settings` | POST | Обновить настройки проекта |
+| `/Project/:Project_id` | GET | Открыть проект в редакторе |
 | `/Project/:Project_id/clone` | POST | Клонировать проект |
 | `/Project/:Project_id/archive` | POST | Архивировать |
 | `/Project/:Project_id/archive` | DELETE | Разархивировать |
@@ -38,6 +42,16 @@
 | `/project/:project_id/trash` | DELETE | Из корзины |
 | `/Project/:Project_id` | DELETE | Удалить навсегда |
 | `/Project/:Project_id/download/zip` | GET | Скачать ZIP |
+
+## Файлы и документы
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/Project/:Project_id/file/:File_id` | GET | Скачать файл |
+| `/Project/:Project_id/file/:File_id` | HEAD | Получить метаданные файла |
+| `/Project/:Project_id/doc/:Doc_id/download` | GET | Скачать документ |
+| `/project/:project_id/doc/:doc_id/metadata` | POST | Обновить метаданные документа |
+| `/api/project/:Project_id/is-file-protected/:file_path` | GET | Проверить, защищён ли файл |
 
 ## Защита проектов и файлов
 
@@ -62,6 +76,19 @@
 | `/project/:Project_id/transfer-ownership` | POST | Передать владельца |
 | `/project/:Project_id/leave` | POST | Покинуть проект |
 
+## История проекта
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/project/:project_id/latest/history` | GET | Получить последнюю версию истории |
+| `/project/:project_id/changes` | GET | Получить список изменений |
+| `/project/:project_id/version/:version/zip` | GET | Скачать ZIP определённой версии |
+| `/project/:project_id/revert-project` | POST | Откатить проект к версии |
+| `/project/:Project_id/flush` | POST | Сбросить историю в хранилище |
+| `/project/:Project_id/labels` | GET | Получить метки (labels) |
+| `/project/:Project_id/labels` | POST | Создать метку |
+| `/project/:Project_id/labels/:label_id` | DELETE | Удалить метку |
+
 ## Компиляция
 
 | Endpoint | Method | Описание |
@@ -71,6 +98,23 @@
 | `/download/project/:Project_id/build/:build_id/output/output.pdf` | GET | Скачать PDF |
 | `/project/:Project_id/build/:build_id/output/:filename` | GET | Скачать файл |
 | `/project/:Project_id/wordcount` | GET | Подсчёт слов |
+
+## Review Panel (комментарии и track changes)
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/api/project/:Project_id/comments` | GET | Получить все комментарии с позициями (JSON API) |
+| `/project/:Project_id/ranges` | GET | Получить ranges (комментарии и изменения) |
+| `/project/:Project_id/threads` | GET | Получить треды комментариев |
+| `/project/:Project_id/changes/users` | GET | Получить пользователей, делавших изменения |
+| `/project/:Project_id/thread/:thread_id/messages` | POST | Добавить сообщение в тред |
+| `/project/:Project_id/doc/:Doc_id/thread/:thread_id` | DELETE | Удалить тред комментариев |
+| `/project/:Project_id/doc/:Doc_id/thread/:thread_id/resolve` | POST | Отметить комментарий как решённый |
+| `/project/:Project_id/doc/:Doc_id/thread/:thread_id/reopen` | POST | Открыть комментарий заново |
+| `/project/:Project_id/thread/:thread_id/messages/:message_id/edit` | POST | Редактировать сообщение |
+| `/project/:Project_id/thread/:thread_id/messages/:message_id` | DELETE | Удалить сообщение |
+| `/project/:Project_id/track_changes` | POST | Включить/выключить track changes |
+| `/project/:Project_id/doc/:doc_id/changes/accept` | POST | Принять изменения |
 
 ## Private API (требует Basic Auth)
 

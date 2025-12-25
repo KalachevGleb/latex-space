@@ -3,6 +3,8 @@ import { db, ObjectId } from '../../infrastructure/mongodb.js'
 import UserGetter from '../User/UserGetter.js'
 import EditorRealTimeController from '../Editor/EditorRealTimeController.js'
 import ProjectGetter from '../Project/ProjectGetter.js'
+import ProjectEntityHandler from '../Project/ProjectEntityHandler.js'
+import DocstoreManager from '../Docstore/DocstoreManager.js'
 
 async function getChangesUsers(req, res) {
   const projectId = req.params.Project_id
@@ -368,6 +370,110 @@ async function deleteMessage(req, res) {
   }
 }
 
+async function getCommentsWithPositions(req, res) {
+  const projectId = req.params.Project_id
+  
+  try {
+    // Получаем псевдонимы из проекта
+    const project = await ProjectGetter.promises.getProject(projectId, {
+      memberAliases: 1,
+    })
+    const memberAliases = project?.memberAliases || {}
+    
+    // Получаем пути к документам проекта
+    const docPaths = await ProjectEntityHandler.promises.getAllDocPathsFromProjectById(projectId)
+    
+    // Получаем ranges (позиции комментариев) из docstore
+    const docRanges = await DocstoreManager.promises.getAllRanges(projectId)
+    
+    // Получаем threads (сообщения комментариев) из MongoDB
+    const threads = await db.projectHistoryComments
+      .find({ project_id: new ObjectId(projectId) })
+      .toArray()
+    
+    // Создаем map thread_id -> thread data
+    const threadsMap = new Map()
+    for (const thread of threads) {
+      threadsMap.set(thread._id.toString(), thread)
+    }
+    
+    // Собираем все комментарии с позициями
+    const comments = []
+    
+    for (const docRange of docRanges) {
+      const docId = docRange.id
+      const docPath = docPaths[docId] || 'unknown'
+      
+      for (const comment of docRange.ranges?.comments || []) {
+        const threadId = comment.op?.t || comment.id?.toString()
+        const thread = threadsMap.get(threadId)
+        
+        if (!thread) {
+          // Комментарий без thread (возможно удален)
+          continue
+        }
+        
+        // Получаем информацию о пользователях для каждого сообщения
+        const messages = []
+        for (const message of thread.messages || []) {
+          let user = null
+          if (message.user_id) {
+            try {
+              const userId = message.user_id.toString()
+              user = await UserGetter.promises.getUser(userId, {
+                email: 1,
+                first_name: 1,
+                last_name: 1,
+              })
+              // Добавляем псевдоним если он есть
+              if (user && memberAliases[userId]) {
+                user.alias = memberAliases[userId]
+              }
+            } catch (err) {
+              logger.warn({ err, userId: message.user_id }, 'error getting user for comment message')
+            }
+          }
+          
+          const author = user ? {
+            id: message.user_id.toString(),
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            alias: user.alias,
+          } : null
+          
+          messages.push({
+            author,
+            text: message.content,
+            timestamp: message.timestamp,
+          })
+        }
+        
+        // Позиция комментария в документе
+        const position = comment.op?.p || 0
+        const commentText = comment.op?.c || ''
+        
+        comments.push({
+          thread_id: threadId,
+          file: docPath,
+          position: {
+            start: position,
+            end: position + commentText.length,
+          },
+          text: commentText,
+          messages,
+          resolved: thread.resolved || false,
+        })
+      }
+    }
+    
+    res.json({ comments })
+  } catch (error) {
+    logger.error({ err: error, projectId }, 'error getting comments with positions')
+    res.status(500).json({ error: 'Failed to get comments with positions' })
+  }
+}
+
 export default {
   getChangesUsers,
   getThreads,
@@ -377,5 +483,6 @@ export default {
   reopenThread,
   editMessage,
   deleteMessage,
+  getCommentsWithPositions,
 }
 
