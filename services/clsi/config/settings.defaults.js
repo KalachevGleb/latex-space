@@ -83,6 +83,18 @@ module.exports = {
   compileConcurrencyLimit: isPreEmptible ? 32 : 64,
   performanceLogSamplingPercentage:
     parseFloat(process.env.CLSI_PERFORMANCE_LOG_SAMPLING, 10) || 0,
+
+  // Output cache settings
+  outputCacheLimit:
+    parseInt(process.env.OUTPUT_CACHE_LIMIT, 10) || 10, // max number of cached builds per project
+  outputCacheMaxAge:
+    parseInt(process.env.OUTPUT_CACHE_MAX_AGE_MS, 10) || 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+
+  // Compilation queue settings
+  // Note: compilation cache is also cleared when output files are deleted
+  // This timeout is just a safety mechanism for abandoned projects
+  compilationCacheMaxAge:
+    parseInt(process.env.COMPILATION_CACHE_MAX_AGE_MS, 10) || 7 * 24 * 60 * 60 * 1000, // 7 days (same as output cache)
 }
 
 if (process.env.ALLOWED_COMPILE_GROUPS) {

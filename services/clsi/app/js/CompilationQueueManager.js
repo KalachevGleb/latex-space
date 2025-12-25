@@ -2,6 +2,7 @@ const crypto = require('node:crypto')
 const logger = require('@overleaf/logger')
 const Metrics = require('@overleaf/metrics')
 const EventEmitter = require('node:events')
+const Settings = require('@overleaf/settings')
 
 /**
  * CompilationQueueManager
@@ -376,7 +377,14 @@ class CompilationQueueManager extends EventEmitter {
     this.userProjects.get(userId).add(projectId)
   }
 
-  _hashConfig(config) {
+  /**
+   * Generate hash from compilation configuration
+   * Used both internally and by CompileManager to determine compile directory
+   *
+   * @param {object} config - Compilation configuration
+   * @returns {string} 16-character hex hash
+   */
+  hashConfig(config) {
     // Create canonical representation of config
     // NOTE: Do NOT include buildId - version tracking is separate!
     // NOTE: Do NOT include force - it's a trigger, not part of config
@@ -392,6 +400,11 @@ class CompilationQueueManager extends EventEmitter {
 
     const str = JSON.stringify(canonical, Object.keys(canonical).sort())
     return crypto.createHash('sha256').update(str).digest('hex').substring(0, 16)
+  }
+
+  // Keep for backward compatibility
+  _hashConfig(config) {
+    return this.hashConfig(config)
   }
 
   _getCurrentVersion(projectId) {
@@ -506,13 +519,13 @@ class CompilationQueueManager extends EventEmitter {
 
   _cleanupExpiredStates() {
     const now = Date.now()
-    const expiryTime = 60 * 60 * 1000 // 1 hour
+    const expiryTime = Settings.compilationCacheMaxAge || 24 * 60 * 60 * 1000 // configurable via settings
 
     for (const [projectId, state] of this.states.entries()) {
       // Don't cleanup if compilation is running
       if (state.runningCompilation) continue
 
-      // Cleanup if not accessed for 1 hour
+      // Cleanup if not accessed for configured time
       if (now - state.lastAccessedAt.getTime() > expiryTime) {
         logger.debug({ projectId }, 'cleaning up expired compilation state')
         this.states.delete(projectId)
@@ -520,6 +533,28 @@ class CompilationQueueManager extends EventEmitter {
     }
 
     Metrics.gauge('compilation-states-count', this.states.size)
+  }
+
+  /**
+   * Clear compilation cache for a specific project
+   * Called when output files for the project are deleted
+   *
+   * @param {string} projectId - Project ID to clear
+   */
+  clearProjectCache(projectId) {
+    logger.debug({ projectId }, 'clearing compilation cache for project')
+    this.states.delete(projectId)
+    this.projectVersions.delete(projectId)
+
+    // Remove from user-project tracking
+    for (const [userId, projects] of this.userProjects.entries()) {
+      if (projects.has(projectId)) {
+        projects.delete(projectId)
+        if (projects.size === 0) {
+          this.userProjects.delete(userId)
+        }
+      }
+    }
   }
 
   shutdown() {
