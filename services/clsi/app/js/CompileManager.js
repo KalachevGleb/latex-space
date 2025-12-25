@@ -59,7 +59,7 @@ async function doCompileWithLock(request, stats, timings) {
 
   // Calculate MD5 of all project files (simplified - using resources array)
   const filesMd5 = calculateFilesMd5(request.resources)
-  
+
   // Check if files changed and update version
   CompilationQueueManager.checkAndUpdateVersion(request.project_id, filesMd5)
 

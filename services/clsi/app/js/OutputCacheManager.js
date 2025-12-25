@@ -11,6 +11,7 @@ const Metrics = require('./Metrics')
 
 const OutputFileOptimiser = require('./OutputFileOptimiser')
 const ContentCacheManager = require('./ContentCacheManager')
+const CompilationQueueManager = require('./CompilationQueueManager')
 const {
   QueueLimitReachedError,
   TimedOutError,
@@ -108,8 +109,8 @@ module.exports = OutputCacheManager = {
   // build id is HEXDATE-HEXRANDOM from Date.now() and RandomBytes
   BUILD_REGEX: /^[0-9a-f]+-[0-9a-f]+$/,
   CONTENT_REGEX: /^[0-9a-f]+-[0-9a-f]+$/,
-  CACHE_LIMIT: 2, // maximum number of cache directories
-  CACHE_AGE: 90 * 60 * 1000, // up to 90 minutes old
+  CACHE_LIMIT: Settings.outputCacheLimit || 10, // maximum number of cache directories
+  CACHE_AGE: Settings.outputCacheMaxAge || 7 * 24 * 60 * 60 * 1000, // max age in milliseconds
 
   init,
   queueDirOperation: callbackify(queueDirOperation),
@@ -524,6 +525,17 @@ module.exports = OutputCacheManager = {
         }
         // Drop reference after successful cleanup of the output dir.
         OLDEST_BUILD_DIR.delete(outputDir)
+
+        // Extract projectId from outputDir path and clear compilation cache
+        const projectId = Path.basename(outputDir)
+        if (projectId) {
+          logger.debug(
+            { projectId, outputDir },
+            'clearing compilation cache after removing output directory'
+          )
+          CompilationQueueManager.clearProjectCache(projectId)
+        }
+
         cb(null)
       })
     }
