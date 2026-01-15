@@ -546,6 +546,7 @@ async function moveReadWriteToCollaborators(req, res, next) {
       pendingEditor
         ? PrivilegeLevels.READ_ONLY
         : PrivilegeLevels.READ_AND_WRITE,
+      undefined,
       { pendingEditor }
     )
   } else {

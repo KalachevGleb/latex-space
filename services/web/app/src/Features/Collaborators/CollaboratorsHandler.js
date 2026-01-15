@@ -94,7 +94,7 @@ async function addUserIdToProject(
   addingUserId,
   userId,
   privilegeLevel,
-  { pendingEditor, pendingReviewer, isAnonymous } = {}
+  { pendingEditor, pendingReviewer, isAnonymous, canEdit } = {}
 ) {
   const project = await ProjectGetter.promises.getProject(projectId, {
     owner_ref: 1,
@@ -165,7 +165,16 @@ async function addUserIdToProject(
       projectId,
       project.track_changes
     )
-    trackChanges[userId] = true
+    // Support new format with canEdit flag for reviewer permissions
+    trackChanges[userId] = {
+      enabled: true,
+      canEdit: canEdit !== undefined ? canEdit : true  // default true for backward compatibility
+    }
+
+    logger.debug(
+      { projectId, userId, canEdit, trackChangesValue: trackChanges[userId] },
+      'setting track changes for reviewer'
+    )
 
     await Project.updateOne(
       { _id: projectId },
@@ -283,8 +292,14 @@ async function setCollaboratorPrivilegeLevel(
   projectId,
   userId,
   privilegeLevel,
+  canEdit,
   { pendingEditor, pendingReviewer } = {}
 ) {
+  logger.debug(
+    { projectId, userId, privilegeLevel, canEdit, pendingEditor, pendingReviewer },
+    'setCollaboratorPrivilegeLevel called'
+  )
+
   // Make sure we're only updating the project if the user is already a
   // collaborator
   const query = {
@@ -328,14 +343,25 @@ async function setCollaboratorPrivilegeLevel(
         projectId,
         project.track_changes
       )
-      if (newTrackChangesState[userId] !== true) {
-        newTrackChangesState[userId] = true
+
+      // Set track changes with canEdit flag
+      const trackChangesValue = {
+        enabled: true,
+        canEdit: canEdit !== undefined ? canEdit : true
       }
+
+      newTrackChangesState[userId] = trackChangesValue
+
       if (typeof project.track_changes === 'object') {
-        update.$set = { [`track_changes.${userId}`]: true }
+        update.$set = { [`track_changes.${userId}`]: trackChangesValue }
       } else {
         update.$set = { track_changes: newTrackChangesState }
       }
+
+      logger.debug(
+        { projectId, userId, canEdit, trackChangesValue },
+        'setting track changes for reviewer (setCollaboratorPrivilegeLevel)'
+      )
       break
     }
     case PrivilegeLevels.READ_ONLY: {
@@ -365,17 +391,39 @@ async function setCollaboratorPrivilegeLevel(
       throw new OError(`unknown privilege level: ${privilegeLevel}`)
     }
   }
+  logger.debug(
+    { projectId, userId, update: JSON.stringify(update) },
+    'Applying MongoDB update in setCollaboratorPrivilegeLevel'
+  )
+
   const mongoResponse = await Project.updateOne(query, update).exec()
   if (mongoResponse.matchedCount === 0) {
     throw new Errors.NotFoundError('project or collaborator not found')
   }
 
-  if (update.$set?.track_changes) {
-    EditorRealTimeController.emitToRoom(
-      projectId,
-      'toggle-track-changes',
-      update.$set.track_changes
+  logger.debug(
+    { projectId, userId, mongoResponse },
+    'MongoDB update completed'
+  )
+
+  // Emit track changes updates to real-time clients
+  if (update.$set) {
+    // Check if we're updating track_changes (either the whole object or a specific user)
+    const trackChangesUpdated = Object.keys(update.$set).some(key =>
+      key === 'track_changes' || key.startsWith('track_changes.')
     )
+
+    if (trackChangesUpdated) {
+      logger.debug(
+        { projectId, userId, updateSet: update.$set },
+        'Emitting track-changes update to real-time'
+      )
+      EditorRealTimeController.emitToRoom(
+        projectId,
+        'toggle-track-changes',
+        update.$set.track_changes || update.$set
+      )
+    }
   }
 }
 

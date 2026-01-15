@@ -98,7 +98,14 @@ export const PermissionsProvider: React.FC<React.PropsWithChildren> = ({
   const { permissionsLevel } = useIdeReactContext()
   const hasViewerPermissions = useViewerPermissions()
   const anonymous = getMeta('ol-anonymous')
-  const { features } = useProjectContext()
+  const { features, project } = useProjectContext()
+  const user = getMeta('ol-user')
+
+  console.log('[PermissionsProvider] Init:', {
+    permissionsLevel,
+    user,
+    projectTrackChangesState: project?.trackChangesState,
+  })
 
   useEffect(() => {
     let activePermissionsMap
@@ -111,13 +118,39 @@ export const PermissionsProvider: React.FC<React.PropsWithChildren> = ({
     } else {
       activePermissionsMap = permissionsMap
     }
-    setPermissions(activePermissionsMap[permissionsLevel])
+
+    let perms = activePermissionsMap[permissionsLevel]
+
+    // Check if reviewer has canEdit=false (comment-only mode)
+    if (permissionsLevel === 'review' && project?.trackChangesState) {
+      const trackChanges = project.trackChangesState
+      const userId = user?.id
+      const userTrackChanges = userId ? trackChanges[userId] : trackChanges.__guests__
+
+      console.log('[PermissionsProvider] Checking canEdit for reviewer:', {
+        userId,
+        userTrackChanges,
+        trackChanges,
+      })
+
+      // If track changes is an object with canEdit flag
+      if (userTrackChanges && typeof userTrackChanges === 'object' &&
+          'canEdit' in userTrackChanges && userTrackChanges.canEdit === false) {
+        // Comment-only reviewer: disable trackedWrite
+        console.log('[PermissionsProvider] Comment-only reviewer detected, disabling trackedWrite')
+        perms = { ...perms, trackedWrite: false }
+      }
+    }
+
+    setPermissions(perms)
   }, [
     anonymous,
     permissionsLevel,
     setPermissions,
     hasViewerPermissions,
     features.trackChanges,
+    project?.trackChangesState,
+    user?.id,
   ])
 
   useEffect(() => {

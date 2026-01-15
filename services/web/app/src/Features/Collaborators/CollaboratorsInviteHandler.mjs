@@ -70,9 +70,9 @@ const CollaboratorsInviteHandler = {
     await notificationJob
   },
 
-  async inviteToProject(projectId, sendingUser, email, privileges, isAnonymous) {
+  async inviteToProject(projectId, sendingUser, email, privileges, isAnonymous, canEdit) {
     logger.debug(
-      { projectId, sendingUserId: sendingUser._id, email, privileges, isAnonymous },
+      { projectId, sendingUserId: sendingUser._id, email, privileges, isAnonymous, canEdit },
       'adding invite'
     )
     const token = CollaboratorsInviteHelper.generateToken()
@@ -84,6 +84,7 @@ const CollaboratorsInviteHandler = {
       projectId,
       privileges,
       isAnonymous,
+      canEdit,
     })
     invite = await invite.save()
     invite = invite.toObject()
@@ -94,7 +95,7 @@ const CollaboratorsInviteHandler = {
       token,
     })
 
-    return _.pick(invite, ['_id', 'email', 'privileges', 'isAnonymous'])
+    return _.pick(invite, ['_id', 'email', 'privileges', 'isAnonymous', 'canEdit'])
   },
 
   async revokeInviteForUser(projectId, targetEmails) {
@@ -159,6 +160,10 @@ const CollaboratorsInviteHandler = {
     // Add isAnonymous to opts if it's set in the invite
     if (invite.isAnonymous) {
       opts.isAnonymous = true
+    }
+    // Add canEdit to opts if it's set in the invite
+    if (invite.canEdit !== undefined) {
+      opts.canEdit = invite.canEdit
     }
     if (
       [PrivilegeLevels.READ_AND_WRITE, PrivilegeLevels.REVIEW].includes(
