@@ -90,6 +90,7 @@ const setCollaboratorInfoSchema = z.object({
       PrivilegeLevels.READ_AND_WRITE,
       PrivilegeLevels.REVIEW,
     ]),
+    canEdit: z.boolean().optional(),
   }),
 })
 
@@ -98,7 +99,12 @@ async function setCollaboratorInfo(req, res, next) {
     const { params, body } = validateReq(req, setCollaboratorInfoSchema)
     const projectId = params.Project_id
     const userId = params.user_id
-    const { privilegeLevel } = body
+    const { privilegeLevel, canEdit } = body
+
+    logger.debug(
+      { projectId, userId, privilegeLevel, canEdit },
+      'setCollaboratorInfo received request'
+    )
 
     const allowed =
       await LimitationsManager.promises.canChangeCollaboratorPrivilegeLevel(
@@ -117,7 +123,8 @@ async function setCollaboratorInfo(req, res, next) {
     await CollaboratorsHandler.promises.setCollaboratorPrivilegeLevel(
       projectId,
       userId,
-      privilegeLevel
+      privilegeLevel,
+      canEdit
     )
     EditorRealTimeController.emitToRoom(
       projectId,

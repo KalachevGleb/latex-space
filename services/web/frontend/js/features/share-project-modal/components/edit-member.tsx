@@ -16,7 +16,7 @@ import MaterialIcon from '@/shared/components/material-icon'
 import { useUserContext } from '@/shared/context/user-context'
 import { upgradePlan } from '@/main/account-upgrade'
 
-type PermissionsOption = PermissionsLevel | 'removeAccess' | 'downgraded'
+type PermissionsOption = PermissionsLevel | 'removeAccess' | 'downgraded' | 'reviewCanEdit' | 'reviewCanComment'
 
 type EditMemberProps = {
   member: ProjectMember
@@ -29,6 +29,8 @@ type EditMemberProps = {
 type Privilege = {
   key: PermissionsOption
   label: string
+  actualPrivilege?: PermissionsLevel
+  canEdit?: boolean
 }
 
 export default function EditMember({
@@ -46,22 +48,40 @@ export default function EditMember({
   const [privilegeChangePending, setPrivilegeChangePending] = useState(false)
   const { t } = useTranslation()
 
-  // update the local state if the member's privileges change externally
-  useEffect(() => {
-    setPrivileges(member.privileges)
-  }, [member.privileges])
-
   const { monitorRequest } = useShareProjectContext()
   const { projectId, project, updateProject } = useProjectContext()
   const { members, invites } = project || {}
   const user = useUserContext()
+
+  // Determine current canEdit value for reviewer
+  const currentCanEdit = useMemo(() => {
+    if (member.privileges !== 'review') return true
+
+    const trackChanges = project?.trackChangesState
+    if (!trackChanges || typeof trackChanges === 'boolean') return true
+
+    const userTrackChanges = trackChanges[member._id]
+    if (userTrackChanges && typeof userTrackChanges === 'object' && 'canEdit' in userTrackChanges) {
+      return userTrackChanges.canEdit !== false
+    }
+
+    return true
+  }, [member.privileges, member._id, project?.trackChangesState])
+
+  const [reviewerCanEdit, setReviewerCanEdit] = useState(currentCanEdit)
+
+  // update the local state if the member's privileges change externally
+  useEffect(() => {
+    setPrivileges(member.privileges)
+    setReviewerCanEdit(currentCanEdit)
+  }, [member.privileges, currentCanEdit])
   
   // Check if this member is the current user
   const isCurrentUser = user.id && member._id === user.id
 
   // Immediately commit this change if it's lower impact (eg. editor > viewer)
   // but show a confirmation button for removing access
-  function handlePrivilegeChange(newPrivileges: PermissionsOption) {
+  function handlePrivilegeChange(newPrivileges: PermissionsOption, newCanEdit?: boolean) {
     sendMB('collaborator-role-change', {
       previousMode: member.privileges,
       newMode: newPrivileges,
@@ -69,8 +89,11 @@ export default function EditMember({
     })
 
     setPrivileges(newPrivileges)
+    if (newCanEdit !== undefined) {
+      setReviewerCanEdit(newCanEdit)
+    }
     if (newPrivileges !== 'removeAccess') {
-      commitPrivilegeChange(newPrivileges)
+      commitPrivilegeChange(newPrivileges, newCanEdit)
     } else {
       setPrivilegeChangePending(true)
     }
@@ -83,7 +106,7 @@ export default function EditMember({
     )
   }
 
-  function commitPrivilegeChange(newPrivileges: PermissionsOption) {
+  function commitPrivilegeChange(newPrivileges: PermissionsOption, newCanEdit?: boolean) {
     setPrivileges(newPrivileges)
     setPrivilegeChangePending(false)
 
@@ -109,10 +132,27 @@ export default function EditMember({
       newPrivileges === 'review' ||
       newPrivileges === 'readOnly'
     ) {
+      const updateData: { privilegeLevel: typeof newPrivileges; canEdit?: boolean } = {
+        privilegeLevel: newPrivileges,
+      }
+
+      // Pass canEdit when changing to review role
+      if (newPrivileges === 'review') {
+        // Use the newCanEdit parameter if provided, otherwise fall back to current state
+        updateData.canEdit = newCanEdit !== undefined ? newCanEdit : reviewerCanEdit
+      }
+
+      console.log('[EditMember] Updating member role:', {
+        memberId: member._id,
+        email: member.email,
+        newPrivileges,
+        newCanEdit,
+        reviewerCanEdit,
+        updateData,
+      })
+
       monitorRequest(() =>
-        updateMember(projectId, member, {
-          privilegeLevel: newPrivileges,
-        })
+        updateMember(projectId, member, updateData)
       ).then(() => {
         updateProject({
           members:
@@ -219,9 +259,12 @@ export default function EditMember({
 
             <SelectPrivilege
               value={privileges}
+              reviewerCanEdit={reviewerCanEdit}
               handleChange={value => {
                 if (value) {
-                  handlePrivilegeChange(value.key)
+                  const actualPrivilege = value.actualPrivilege || value.key
+                  // Pass canEdit directly to handlePrivilegeChange
+                  handlePrivilegeChange(actualPrivilege as PermissionsOption, value.canEdit)
                 }
               }}
               hasBeenDowngraded={hasBeenDowngraded && !confirmRemoval}
@@ -236,6 +279,7 @@ export default function EditMember({
 
 type SelectPrivilegeProps = {
   value: string
+  reviewerCanEdit: boolean
   handleChange: (item: Privilege | null | undefined) => void
   hasBeenDowngraded: boolean
   canAddCollaborators: boolean
@@ -243,6 +287,7 @@ type SelectPrivilegeProps = {
 
 function SelectPrivilege({
   value,
+  reviewerCanEdit,
   handleChange,
   hasBeenDowngraded,
   canAddCollaborators,
@@ -250,24 +295,36 @@ function SelectPrivilege({
   const { t } = useTranslation()
   const { features } = useProjectContext()
 
-  const privileges = useMemo(
-    (): Privilege[] =>
-      features.trackChangesVisible
-        ? [
-            { key: 'owner', label: t('make_owner') },
-            { key: 'readAndWrite', label: t('editor') },
-            { key: 'review', label: t('reviewer') },
-            { key: 'readOnly', label: t('viewer') },
-            { key: 'removeAccess', label: t('remove_access') },
-          ]
-        : [
-            { key: 'owner', label: t('make_owner') },
-            { key: 'readAndWrite', label: t('editor') },
-            { key: 'readOnly', label: t('viewer') },
-            { key: 'removeAccess', label: t('remove_access') },
-          ],
-    [features.trackChangesVisible, t]
-  )
+  const privileges = useMemo((): Privilege[] => {
+    const baseOptions: Privilege[] = [
+      { key: 'owner', label: t('make_owner') },
+      { key: 'readAndWrite', label: t('editor') },
+    ]
+
+    if (features.trackChangesVisible) {
+      baseOptions.push(
+        {
+          key: 'reviewCanEdit',
+          label: t('reviewer_can_edit'),
+          actualPrivilege: 'review',
+          canEdit: true,
+        },
+        {
+          key: 'reviewCanComment',
+          label: t('reviewer_can_comment'),
+          actualPrivilege: 'review',
+          canEdit: false,
+        }
+      )
+    }
+
+    baseOptions.push(
+      { key: 'readOnly', label: t('viewer') },
+      { key: 'removeAccess', label: t('remove_access') }
+    )
+
+    return baseOptions
+  }, [features.trackChangesVisible, t])
 
   const downgradedPseudoPrivilege: Privilege = {
     key: 'downgraded',
@@ -312,7 +369,14 @@ function SelectPrivilege({
       selected={
         hasBeenDowngraded
           ? downgradedPseudoPrivilege
-          : privileges.find(item => item.key === value)
+          : privileges.find(item => {
+              // For reviewer variants, match by actualPrivilege and canEdit
+              if (item.actualPrivilege === 'review' && value === 'review') {
+                return item.canEdit === reviewerCanEdit
+              }
+              // For other roles, match by key
+              return item.key === value
+            })
       }
       name="privileges"
       onSelectedItemChanged={handleChange}

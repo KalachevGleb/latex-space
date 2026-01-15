@@ -12,6 +12,7 @@ export type ProjectMember = {
   alias?: string
   pendingEditor?: boolean
   pendingReviewer?: boolean
+  canEdit?: boolean
 }
 
 export interface ProjectMetadata extends ProjectSettings {
@@ -42,7 +43,7 @@ export interface ProjectMetadata extends ProjectSettings {
     signUpDate: string
   }
   rootFolder?: Folder[]
-  trackChangesState: boolean | Record<UserId | '__guests__', boolean>
+  trackChangesState: boolean | Record<UserId | '__guests__', boolean | { enabled: boolean; canEdit?: boolean }>
   protectedFiles?: string[]
 }
 

@@ -19,6 +19,7 @@ const ProjectInviteSchema = new Schema(
     projectId: ObjectId,
     privileges: String,
     isAnonymous: { type: Boolean, default: false },
+    canEdit: { type: Boolean },
     createdAt: { type: Date, default: Date.now },
     expires: {
       type: Date,

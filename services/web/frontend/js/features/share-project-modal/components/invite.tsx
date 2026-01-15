@@ -20,6 +20,8 @@ export default function Invite({
   isProjectOwner: boolean
 }) {
   const { t } = useTranslation()
+  const { project } = useProjectContext()
+
   return (
     <OLRow className="project-invite">
       <OLCol xs={8}>
@@ -32,7 +34,11 @@ export default function Invite({
       </OLCol>
 
       <OLCol xs={3} className="text-end">
-        <MemberPrivileges privileges={invite.privileges} />
+        <MemberPrivileges
+          privileges={invite.privileges}
+          member={invite}
+          trackChangesState={project?.trackChangesState}
+        />
       </OLCol>
 
       {isProjectOwner && (

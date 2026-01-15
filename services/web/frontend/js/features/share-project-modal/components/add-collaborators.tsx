@@ -19,6 +19,7 @@ import OLFormText from '@/shared/components/ol/ol-form-text'
 export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
   const [privileges, setPrivileges] = useState<PermissionsLevel>('readAndWrite')
   const [isAnonymous, setIsAnonymous] = useState(false)
+  const [reviewerCanEdit, setReviewerCanEdit] = useState(true)
 
   const isMounted = useIsMounted()
 
@@ -95,7 +96,8 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
         if (invite) {
           data = await resendInvite(projectId, invite)
         } else {
-          data = await sendInvite(projectId, email, privileges, isAnonymous)
+          const canEdit = privileges === 'review' ? reviewerCanEdit : undefined
+          data = await sendInvite(projectId, email, privileges, isAnonymous, canEdit)
         }
 
         const role = data?.invite?.privileges
@@ -181,12 +183,16 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
     updateProject,
   ])
 
+  type PrivilegeOption = {
+    key: PermissionsLevel | 'reviewCanEdit' | 'reviewCanComment'
+    label: string
+    description?: string | null
+    actualPrivilege?: PermissionsLevel
+    canEdit?: boolean
+  }
+
   const privilegeOptions = useMemo(() => {
-    const options: {
-      key: PermissionsLevel
-      label: string
-      description?: string | null
-    }[] = [
+    const options: PrivilegeOption[] = [
       {
         key: 'readAndWrite',
         label: t('editor'),
@@ -194,13 +200,26 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
     ]
 
     if (features.trackChangesVisible) {
-      options.push({
-        key: 'review',
-        label: t('reviewer'),
-        description: !features.trackChanges
-          ? t('comment_only_upgrade_for_track_changes')
-          : null,
-      })
+      options.push(
+        {
+          key: 'reviewCanEdit',
+          label: t('reviewer_can_edit'),
+          actualPrivilege: 'review',
+          canEdit: true,
+          description: !features.trackChanges
+            ? t('comment_only_upgrade_for_track_changes')
+            : null,
+        },
+        {
+          key: 'reviewCanComment',
+          label: t('reviewer_can_comment'),
+          actualPrivilege: 'review',
+          canEdit: false,
+          description: !features.trackChanges
+            ? t('comment_only_upgrade_for_track_changes')
+            : null,
+        }
+      )
     }
 
     options.push({
@@ -242,12 +261,22 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
             itemToString={item => item?.label || ''}
             itemToSubtitle={item => item?.description || ''}
             itemToDisabled={item => !!(readOnly && item?.key !== 'readOnly')}
-            selected={privilegeOptions.find(
-              option => option.key === privileges
-            )}
+            selected={privilegeOptions.find((option: PrivilegeOption) => {
+              // For reviewer variants, match by actualPrivilege and canEdit
+              if (option.actualPrivilege === 'review' && privileges === 'review') {
+                return option.canEdit === reviewerCanEdit
+              }
+              // For other roles, match by key
+              return option.key === privileges
+            })}
+
             onSelectedItemChanged={item => {
               if (item) {
-                setPrivileges(item.key)
+                const actualPrivilege = item.actualPrivilege || item.key
+                setPrivileges(actualPrivilege as PermissionsLevel)
+                if (item.canEdit !== undefined) {
+                  setReviewerCanEdit(item.canEdit)
+                }
               }
             }}
           />

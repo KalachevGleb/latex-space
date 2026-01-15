@@ -13,7 +13,8 @@ export function sendInvite(
   projectId: string,
   email: string,
   privileges: PermissionsLevel,
-  isAnonymous?: boolean
+  isAnonymous?: boolean,
+  canEdit?: boolean
 ) {
   return executeV2Captcha(
     getMeta('ol-ExposedSettings').recaptchaDisabled?.invite
@@ -23,6 +24,7 @@ export function sendInvite(
         email, // TODO: normalisedEmail?
         privileges,
         isAnonymous,
+        canEdit,
         'g-recaptcha-response': grecaptchaResponse,
       },
     })
@@ -40,7 +42,7 @@ export function revokeInvite(projectId: string, invite: ProjectMember) {
 export function updateMember(
   projectId: string,
   member: ProjectMember,
-  data: { privilegeLevel: PermissionsLevel }
+  data: { privilegeLevel: PermissionsLevel; canEdit?: boolean }
 ) {
   return putJSON(`/project/${projectId}/users/${member._id}`, {
     body: data,

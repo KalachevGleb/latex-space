@@ -2030,6 +2030,8 @@
   "review_panel": "Review panel",
   "review_panel_and_error_logs_moved_to_the_left": "Review panel and error logs moved to the left",
   "reviewer": "Reviewer",
+  "reviewer_can_edit": "Reviewer (can edit)",
+  "reviewer_can_comment": "Reviewer (can comment)",
   "anonymous": "Anonymous",
   "anonymous_reviewer": "Anonymous Reviewer",
   "reviewer_dropbox_sync_message": "As a reviewer you can sync the current project version to Dropbox, but changes made in Dropbox will <0>not</0> sync back to Overleaf.",
