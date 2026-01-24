@@ -1,4 +1,5 @@
 import AdminController from './Features/ServerAdmin/AdminController.mjs'
+import * as ServiceApiController from './Features/ServerAdmin/ServiceApiController.mjs'
 import ErrorController from './Features/Errors/ErrorController.mjs'
 import Features from './infrastructure/Features.js'
 import ProjectController from './Features/Project/ProjectController.mjs'
@@ -1246,6 +1247,23 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     '/admin/settings',
     AuthorizationMiddleware.ensureUserIsSiteAdmin,
     AdminController.updateSiteSettings
+  )
+
+  // Service API settings
+  webRouter.get(
+    '/admin/service-api/settings',
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    ServiceApiController.getServiceApiSettings
+  )
+  webRouter.post(
+    '/admin/service-api/settings',
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    ServiceApiController.updateServiceApiSettings
+  )
+  webRouter.post(
+    '/admin/service-api/generate-password',
+    AuthorizationMiddleware.ensureUserIsSiteAdmin,
+    ServiceApiController.generateServiceApiPassword
   )
 
   privateApiRouter.get('/perfTest', (req, res) => {

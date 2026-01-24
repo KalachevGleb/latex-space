@@ -63,6 +63,7 @@ const AdminController = {
         adminEmail: adminEmail || 'placeholder@example.com',
         maxDocLength: Number(maxDocLength) || 2,
         maxUploadSize: Number(maxUploadSize) || 50,
+        serviceApiEnabled: Settings.serviceApi?.enabled || false,
       })
     } catch (error) {
       return next(error)

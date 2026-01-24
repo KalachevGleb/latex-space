@@ -15,6 +15,7 @@ block content
 									ul.nav.nav-tabs.align-left(role='tablist')
 										+bookmarkable-tabset-header('system-messages', translate("system_messages"), true)
 										+bookmarkable-tabset-header('site-settings', translate("settings"))
+										+bookmarkable-tabset-header('service-api', 'Service API')
 										+bookmarkable-tabset-header('open-sockets', translate("open_sockets"))
 										+bookmarkable-tabset-header('open-close-editor', translate("open_close_editor"))
 										if hasFeature('saas')
@@ -156,6 +157,136 @@ block content
 											});
 											document.getElementById('site-settings-form').addEventListener('submit', function() {
 												formDirty = false;
+											});
+
+									.tab-pane(role='tabpanel' id='service-api')
+										.row-spaced
+											h3 Service-to-Service API
+											p.small Enable API access for external services without browser sessions. All operations are performed as administrator with user context specified via headers.
+											
+											#service-api-settings(data-csrf=csrfToken)
+												.alert.alert-dismissible(style='display:none' id='service-api-alert')
+													button.close(type='button' onclick='document.getElementById("service-api-alert").style.display="none"')
+														span &times;
+													span#service-api-alert-message
+												
+												.form-group
+													.form-check
+														input#service-api-enabled.form-check-input(type='checkbox')
+														label.form-check-label(for='service-api-enabled') Enable Service API
+													p.small When enabled, external services can access Overleaf API via <code>/service/*</code> endpoints
+												
+												.form-group
+													label.form-label(for='service-api-password') Password
+													.input-group
+														input#service-api-password.form-control(
+															type='password'
+															placeholder='Enter password or generate one'
+														)
+														button.btn.btn-secondary(type='button' onclick='generateServiceApiPassword()') Generate
+													p.small Username is always <code>overleaf</code>. Store this password securely.
+												
+												.form-group
+													.form-check
+														input#service-api-localhost-only.form-check-input(type='checkbox')
+														label.form-check-label(for='service-api-localhost-only') Restrict to localhost only
+													p.small When enabled, Service API will only accept connections from localhost (127.0.0.1)
+												
+												button.btn.btn-primary(onclick='saveServiceApiSettings()') Save Settings
+												
+												hr
+												
+												h4 Usage Example
+												pre.
+													curl -u overleaf:YOUR_PASSWORD \\
+													  -H "X-Overleaf-User-Id: USER_ID" \\
+													  http://localhost/service/user/projects
+												
+												p.small 
+													| See 
+													a(href='/api_doc/SERVICE_TO_SERVICE_API.md' target='_blank') full documentation
+													|  for more details.
+										
+										script.
+											// Load Service API settings on page load
+											async function loadServiceApiSettings() {
+												try {
+													const response = await fetch('/admin/service-api/settings');
+													const data = await response.json();
+													document.getElementById('service-api-enabled').checked = data.enabled;
+													document.getElementById('service-api-localhost-only').checked = data.localhostOnly;
+													if (data.hasPassword) {
+														document.getElementById('service-api-password').placeholder = '••••••••';
+													}
+												} catch (err) {
+													console.error('Failed to load Service API settings:', err);
+												}
+											}
+											
+											// Generate random password
+											async function generateServiceApiPassword() {
+												try {
+													const csrf = document.getElementById('service-api-settings').dataset.csrf;
+													const response = await fetch('/admin/service-api/generate-password', {
+														method: 'POST',
+														headers: {
+															'X-CSRF-Token': csrf,
+															'Content-Type': 'application/json'
+														}
+													});
+													const data = await response.json();
+													document.getElementById('service-api-password').value = data.password;
+													document.getElementById('service-api-password').type = 'text';
+												} catch (err) {
+													showServiceApiAlert('Failed to generate password', 'danger');
+												}
+											}
+											
+											// Save Service API settings
+											async function saveServiceApiSettings() {
+												try {
+													const csrf = document.getElementById('service-api-settings').dataset.csrf;
+													const enabled = document.getElementById('service-api-enabled').checked;
+													const password = document.getElementById('service-api-password').value;
+													const localhostOnly = document.getElementById('service-api-localhost-only').checked;
+													
+													const body = { enabled, localhostOnly };
+													if (password && password !== '••••••••') {
+														body.password = password;
+													}
+													
+													const response = await fetch('/admin/service-api/settings', {
+														method: 'POST',
+														headers: {
+															'X-CSRF-Token': csrf,
+															'Content-Type': 'application/json'
+														},
+														body: JSON.stringify(body)
+													});
+													
+													if (response.ok) {
+														showServiceApiAlert('Settings saved successfully', 'success');
+														setTimeout(() => location.reload(), 1500);
+													} else {
+														showServiceApiAlert('Failed to save settings', 'danger');
+													}
+												} catch (err) {
+													showServiceApiAlert('Failed to save settings: ' + err.message, 'danger');
+												}
+											}
+											
+											// Show alert message
+											function showServiceApiAlert(message, type) {
+												const alert = document.getElementById('service-api-alert');
+												const messageSpan = document.getElementById('service-api-alert-message');
+												alert.className = 'alert alert-dismissible alert-' + type;
+												messageSpan.textContent = message;
+												alert.style.display = 'block';
+											}
+											
+											// Load settings when tab is shown
+											document.addEventListener('DOMContentLoaded', function() {
+												loadServiceApiSettings();
 											});
 
 									.tab-pane(role='tabpanel' id='open-sockets')

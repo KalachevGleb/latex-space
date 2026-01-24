@@ -147,8 +147,14 @@ services:
             # Optional: Custom header logo
             OVERLEAF_HEADER_IMAGE_URL: ${OVERLEAF_HEADER_IMAGE_URL:-}
 
-            # Security - session secret only (SECURE_COOKIE set via .env if needed)
+            # Security - session secret (both formats for compatibility)
+            SESSION_SECRET: ${OVERLEAF_SESSION_SECRET:-}
             OVERLEAF_SESSION_SECRET: ${OVERLEAF_SESSION_SECRET:-}
+
+            # Cookie settings for API access
+            COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+            OVERLEAF_SECURE_COOKIE: ${OVERLEAF_SECURE_COOKIE:-}
+            ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
 
             # Features
             ENABLED_LINKED_FILE_TYPES: 'project_file,project_output_file'

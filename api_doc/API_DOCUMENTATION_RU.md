@@ -42,7 +42,15 @@ http://localhost:3000
 
 ## Аутентификация
 
-### Вход (Login)
+### Типы API
+
+Overleaf предоставляет три типа API с разными методами аутентификации:
+
+1. **Web API** - для браузерных приложений (требует сессию и CSRF)
+2. **Service-to-Service API** - для интеграции с другими сервисами (Basic Auth)
+3. **Private API** - для внутренних операций (Basic Auth)
+
+### Web API - Вход (Login)
 ```http
 POST /login
 Content-Type: application/json
@@ -75,6 +83,36 @@ X-CSRF-Token: <token>
 ```http
 GET /dev/csrf
 ```
+
+### Service-to-Service API аутентификация (NEW!)
+
+Для интеграции с другими сервисами без браузерной сессии используйте Service API:
+
+```http
+GET /service/user/projects
+Authorization: Basic <base64(username:password)>
+X-Overleaf-User-Id: 507f1f77bcf86cd799439011
+```
+
+**Преимущества**:
+- ✅ Не требуется управление сессией
+- ✅ Не требуется CSRF токен
+- ✅ Все Web API endpoints доступны через `/service/` префикс
+- ✅ Идеально для backend-to-backend интеграции
+
+**Пример**:
+```bash
+# Web API (требует сессию и CSRF)
+curl -b cookies.txt -H "X-CSRF-Token: $CSRF" \
+  http://localhost:3000/user/projects
+
+# Service API (только Basic Auth + user ID)
+curl -u overleaf:password \
+  -H "X-Overleaf-User-Id: 507f1f77bcf86cd799439011" \
+  http://localhost:3000/service/user/projects
+```
+
+📖 **Подробная документация**: [SERVICE_TO_SERVICE_API.md](SERVICE_TO_SERVICE_API.md)
 
 ### Private API аутентификация
 
@@ -1835,10 +1873,16 @@ Content-Type: application/json
 - GitHub Issues: https://github.com/overleaf/overleaf
 - Community Edition Wiki: https://github.com/overleaf/overleaf/wiki
 
-**Версия документации**: 2.0
-**Дата**: 2025-10-29
+**Версия документации**: 2.1
+**Дата**: 2026-01-24
 **Overleaf CE Version**: Compatible with latest main branch
-**Новые возможности в v2.0:**
+
+**Новые возможности в v2.1:**
+- ✨ **Service-to-Service API** - интеграция без браузерной сессии
+- Все Web API endpoints доступны через `/service/` префикс
+- Аутентификация через HTTP Basic Auth + `X-Overleaf-User-Id`
+
+**Возможности v2.0:**
 - Защита проектов от удаления
 - Защищённые файлы (read-only)
 - Управление правами пользователей (full/basic)
