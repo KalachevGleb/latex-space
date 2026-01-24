@@ -90,12 +90,6 @@ export async function updateServiceApiSettings(req, res, next) {
     Settings.serviceApi.password = config.password
     Settings.serviceApi.localhostOnly = config.localhostOnly
 
-    // Update httpAuthUsers for backward compatibility
-    if (config.enabled && config.password) {
-      Settings.httpAuthUsers = Settings.httpAuthUsers || {}
-      Settings.httpAuthUsers.overleaf = config.password
-    }
-
     res.json({ success: true })
   } catch (err) {
     logger.error({ err }, 'Error updating service API config')
@@ -124,12 +118,6 @@ export async function initializeServiceApiConfig() {
     Settings.serviceApi.enabled = config.enabled
     Settings.serviceApi.password = config.password
     Settings.serviceApi.localhostOnly = config.localhostOnly
-
-    // Update httpAuthUsers
-    if (config.enabled && config.password) {
-      Settings.httpAuthUsers = Settings.httpAuthUsers || {}
-      Settings.httpAuthUsers.overleaf = config.password
-    }
 
     logger.info(
       { enabled: config.enabled, localhostOnly: config.localhostOnly },

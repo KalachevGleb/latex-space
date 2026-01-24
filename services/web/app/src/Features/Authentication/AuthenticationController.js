@@ -367,6 +367,20 @@ const AuthenticationController = {
       if (next == null) {
         next = function () {}
       }
+      if (req.isServiceAuth) {
+        if (req.user) {
+          if (req.session) {
+            req.session.user = req.user
+          }
+          req.logger?.addFields({ userId: req.user._id })
+          return next()
+        }
+        return res.status(401).json({
+          error: 'unauthorized',
+          error_description:
+            'Authentication required. Provide X-Overleaf-User-Id or X-Overleaf-User-Email header.',
+        })
+      }
       if (!SessionManager.isUserLoggedIn(req.session)) {
         if (acceptsJson(req)) return send401WithChallenge(res)
         return AuthenticationController._redirectToLoginOrRegisterPage(req, res)

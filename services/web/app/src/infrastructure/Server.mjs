@@ -238,7 +238,6 @@ Modules.hooks.fire('passportSetup', passport, err => {
 
 await Modules.applyNonCsrfRouter(webRouter, privateApiRouter, publicApiRouter)
 
-webRouter.use(ServiceAuthMiddleware.attachSessionUser)
 webRouter.csrf = new Csrf()
 webRouter.use(webRouter.csrf.middleware)
 webRouter.use(translations.i18nMiddleware)
@@ -371,32 +370,7 @@ if (Settings.enabledServices.includes('api')) {
 if (Settings.enabledServices.includes('web')) {
   logger.debug({}, 'providing web router')
   serviceRouter.use(ServiceAuthMiddleware.requireServiceAuth)
-  
-  // Middleware to convert redirects to JSON errors for Service API
-  serviceRouter.use((req, res, next) => {
-    const originalRedirect = res.redirect
-    res.redirect = function (statusOrUrl, url) {
-      const redirectUrl = typeof statusOrUrl === 'string' ? statusOrUrl : url
-      const status = typeof statusOrUrl === 'number' ? statusOrUrl : 302
-      
-      // Convert redirect to JSON error
-      if (redirectUrl && redirectUrl.includes('/login')) {
-        return res.status(401).json({
-          error: 'unauthorized',
-          error_description: 'Authentication required. Provide X-Overleaf-User-Id or X-Overleaf-User-Email header.',
-        })
-      }
-      
-      // For other redirects, return JSON with redirect info
-      return res.status(status === 302 ? 400 : status).json({
-        error: 'redirect_not_allowed',
-        error_description: 'Service API does not support redirects',
-        redirect_url: redirectUrl,
-      })
-    }
-    next()
-  })
-  
+  serviceRouter.use(ServiceAuthMiddleware.attachSessionUser)
   serviceRouter.use(webRouter)
   serviceRouter.use(Validation.errorMiddleware)
   serviceRouter.use(ErrorController.handleApiError)
