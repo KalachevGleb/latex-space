@@ -1,9 +1,14 @@
 # docker image build
 .dockerignore
 
+# build artifacts
+build/
+*.tar.gz
+
 # user defined files
 .env
 docker-compose.override.yml
+overleaf_config.json
 
 # backup files
 *.bak

@@ -250,7 +250,7 @@ module.exports = OutputCacheManager = {
     }
 
     // make the new cache directory
-    fs.mkdir(cacheDir, { recursive: true }, function (err) {
+    fs.mkdir(cacheDir, { recursive: true, mode: 0o777 }, function (err) {
       if (err) {
         logger.error(
           { err, directory: cacheDir },
@@ -258,67 +258,70 @@ module.exports = OutputCacheManager = {
         )
         callback(err)
       } else {
-        // copy all the output files into the new cache directory
-        const results = []
-        const dirCache = new Set()
-        dirCache.add(cacheDir)
-        async.mapSeries(
-          outputFiles,
-          function (file, cb) {
-            // don't send dot files as output, express doesn't serve them
-            if (OutputCacheManager._fileIsHidden(file.path)) {
-              logger.debug(
-                { compileDir, path: file.path },
-                'ignoring dotfile in output'
-              )
-              return cb()
-            }
-            // copy other files into cache directory if valid
-            const src = Path.join(compileDir, file.path)
-            const dst = Path.join(cacheDir, file.path)
-            OutputCacheManager._checkIfShouldCopy(
-              src,
-              function (err, shouldCopy) {
-                if (err) {
-                  return cb(err)
-                }
-                if (!shouldCopy) {
-                  return cb()
-                }
-                OutputCacheManager._copyFile(src, dst, dirCache, err => {
+        // Ensure directory is writable by texlive container (runs as user tex, UID 1000)
+        fs.chmod(cacheDir, 0o777, function () {
+          // copy all the output files into the new cache directory
+          const results = []
+          const dirCache = new Set()
+          dirCache.add(cacheDir)
+          async.mapSeries(
+            outputFiles,
+            function (file, cb) {
+              // don't send dot files as output, express doesn't serve them
+              if (OutputCacheManager._fileIsHidden(file.path)) {
+                logger.debug(
+                  { compileDir, path: file.path },
+                  'ignoring dotfile in output'
+                )
+                return cb()
+              }
+              // copy other files into cache directory if valid
+              const src = Path.join(compileDir, file.path)
+              const dst = Path.join(cacheDir, file.path)
+              OutputCacheManager._checkIfShouldCopy(
+                src,
+                function (err, shouldCopy) {
                   if (err) {
                     return cb(err)
                   }
-                  file.build = buildId
-                  results.push(file)
-                  cb()
-                })
-              }
-            )
-          },
-          function (err) {
-            if (err) {
-              callback(err)
-              // clean up the directory we just created
-              fs.rm(cacheDir, { force: true, recursive: true }, function (err) {
-                if (err) {
-                  return logger.error(
-                    { err, dir: cacheDir },
-                    'error removing cache dir after failure'
-                  )
+                  if (!shouldCopy) {
+                    return cb()
+                  }
+                  OutputCacheManager._copyFile(src, dst, dirCache, err => {
+                    if (err) {
+                      return cb(err)
+                    }
+                    file.build = buildId
+                    results.push(file)
+                    cb()
+                  })
                 }
-              })
-            } else {
-              // pass back the list of new files in the cache
-              callback(null, results)
-              // let file expiry run in the background, expire all previous files if per-user
-              cleanupDirectory(outputDir, {
-                keep: buildId,
-                limit: perUser ? 1 : null,
-              }).catch(() => {})
+              )
+            },
+            function (err) {
+              if (err) {
+                callback(err)
+                // clean up the directory we just created
+                fs.rm(cacheDir, { force: true, recursive: true }, function (err) {
+                  if (err) {
+                    return logger.error(
+                      { err, dir: cacheDir },
+                      'error removing cache dir after failure'
+                    )
+                  }
+                })
+              } else {
+                // pass back the list of new files in the cache
+                callback(null, results)
+                // let file expiry run in the background, expire all previous files if per-user
+                cleanupDirectory(outputDir, {
+                  keep: buildId,
+                  limit: perUser ? 1 : null,
+                }).catch(() => {})
+              }
             }
-          }
-        )
+          )
+        })
       }
     })
   },

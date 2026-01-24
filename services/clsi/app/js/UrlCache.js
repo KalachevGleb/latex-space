@@ -44,7 +44,10 @@ async function clearProject(projectId, options) {
 }
 
 async function createProjectDir(projectId) {
-  await fs.promises.mkdir(getProjectDir(projectId), { recursive: true })
+  const dir = getProjectDir(projectId)
+  await fs.promises.mkdir(dir, { recursive: true, mode: 0o777 })
+  // Ensure directory is writable by texlive container (runs as user tex, UID 1000)
+  await fs.promises.chmod(dir, 0o777)
 }
 
 async function downloadUrlToFile(

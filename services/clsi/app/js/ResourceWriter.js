@@ -169,7 +169,7 @@ module.exports = ResourceWriter = {
     if (callback == null) {
       callback = function () {}
     }
-    return fs.mkdir(basePath, function (err) {
+    return fs.mkdir(basePath, { mode: 0o777 }, function (err) {
       if (err != null) {
         if (err.code === 'EEXIST') {
           return callback()
@@ -178,7 +178,8 @@ module.exports = ResourceWriter = {
           return callback(err)
         }
       } else {
-        return callback()
+        // Ensure directory is writable by texlive container (runs as user tex, UID 1000)
+        return fs.chmod(basePath, 0o777, callback)
       }
     })
   },
@@ -323,41 +324,45 @@ module.exports = ResourceWriter = {
         if (error != null) {
           return callback(error)
         }
+        const dirPath = Path.dirname(path)
         return fs.mkdir(
-          Path.dirname(path),
-          { recursive: true },
+          dirPath,
+          { recursive: true, mode: 0o777 },
           function (error) {
             if (error != null) {
               return callback(error)
             }
-            // TODO: Don't overwrite file if it hasn't been modified
-            if (resource.url != null) {
-              return UrlCache.downloadUrlToFile(
-                projectId,
-                resource.url,
-                resource.fallbackURL,
-                path,
-                resource.modified,
-                function (err) {
-                  if (err != null) {
-                    logger.err(
-                      {
-                        err,
-                        projectId,
-                        path,
-                        resourceUrl: resource.url,
-                        modified: resource.modified,
-                      },
-                      'error downloading file for resources'
-                    )
-                    Metrics.inc('download-failed')
+            // Ensure directory is writable by texlive container (runs as user tex, UID 1000)
+            fs.chmod(dirPath, 0o777, function () {
+              // TODO: Don't overwrite file if it hasn't been modified
+              if (resource.url != null) {
+                return UrlCache.downloadUrlToFile(
+                  projectId,
+                  resource.url,
+                  resource.fallbackURL,
+                  path,
+                  resource.modified,
+                  function (err) {
+                    if (err != null) {
+                      logger.err(
+                        {
+                          err,
+                          projectId,
+                          path,
+                          resourceUrl: resource.url,
+                          modified: resource.modified,
+                        },
+                        'error downloading file for resources'
+                      )
+                      Metrics.inc('download-failed')
+                    }
+                    return callback()
                   }
-                  return callback()
-                }
-              ) // try and continue compiling even if http resource can not be downloaded at this time
-            } else {
-              fs.writeFile(path, resource.content, callback)
-            }
+                ) // try and continue compiling even if http resource can not be downloaded at this time
+              } else {
+                fs.writeFile(path, resource.content, callback)
+              }
+            })
           }
         )
       }

@@ -201,7 +201,9 @@ async function downloadOutputDotSynctexFromCompileCache(
     timer.done({ status: 'error' })
     throw err
   }
-  await fs.promises.mkdir(outputDir, { recursive: true })
+  await fs.promises.mkdir(outputDir, { recursive: true, mode: 0o777 })
+  // Ensure directory is writable by texlive container (runs as user tex, UID 1000)
+  await fs.promises.chmod(outputDir, 0o777)
   const dst = Path.join(outputDir, 'output.synctex.gz')
   const tmp = dst + crypto.randomUUID()
   try {
