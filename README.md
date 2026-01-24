@@ -23,6 +23,21 @@
 
 [Overleaf](https://www.overleaf.com) is an open-source online real-time collaborative LaTeX editor. We run a hosted version at [www.overleaf.com](https://www.overleaf.com), but you can also run your own local version, and contribute to the development of Overleaf.
 
+## Custom Edition Deployment
+
+This repository includes a simplified deployment system for custom Overleaf installations:
+
+**Quick Start:**
+```bash
+# 1. Prepare deployment package
+./scripts/prepare_install.sh
+
+# 2. Deploy on target server
+./scripts/install_overleaf.sh overleaf-custom.tar.gz config.json
+```
+
+See [README.deployment.md](README.deployment.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+
 > [!CAUTION]
 > Overleaf Community Edition is intended for use in environments where **all** users are trusted. Community Edition is **not** appropriate for scenarios where isolation of users is required due to Sandbox Compiles not being available. When not using Sandboxed Compiles, users have full read and write access to the `sharelatex` container resources (filesystem, network, environment variables) when running LaTeX compiles.
 

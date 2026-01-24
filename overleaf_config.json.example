@@ -1,0 +1,30 @@
+{
+  "siteUrl": "http://localhost",
+  "appName": "Overleaf",
+  "adminEmail": "admin@example.com",
+  "installDir": "/home/user/overleaf",
+  "port": 80,
+  "dataDir": "./data",
+  "email": {
+    "fromAddress": "noreply@example.com",
+    "replyTo": "support@example.com",
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "secure": false,
+      "user": "",
+      "pass": ""
+    }
+  },
+  "security": {
+    "secureCookie": false,
+    "sessionSecret": ""
+  },
+  "customization": {
+    "navTitle": "Overleaf",
+    "headerImageUrl": ""
+  },
+  "features": {
+    "emailConfirmationDisabled": true
+  }
+}
