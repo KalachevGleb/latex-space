@@ -6,12 +6,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Overleaf is an open-source online real-time collaborative LaTeX editor. This is the customized version of Overleaf Community Edition repository adopted for integration with peer-review system.
 
+### Custom Features
+
+This version includes several custom features:
+
+1. **Service-to-Service API** - All Web API endpoints are available via `/service/` prefix with HTTP Basic Authentication instead of browser sessions. This enables backend-to-backend integration without managing cookies and CSRF tokens.
+
+2. **Project and File Protection** - API endpoints to mark projects as protected (cannot be deleted) and files as read-only (cannot be modified/deleted).
+
+3. **User Permissions System** - Two-tier permission system (`full` and `basic`) to control what users can do with projects.
+
+4. **Extended Comments API** - JSON API to retrieve all comments with file positions and author information.
+
+5. **Review Panel Enhancements** - MathJax support in comments and improved UI for peer-review workflows.
+
 ## Repository Structure
 
 This is a **monorepo** containing multiple microservices and shared libraries managed via npm workspaces:
 
 - **`services/`** - Microservices that make up Overleaf
   - `web` - Main HTTP frontend (Express + React)
+    - Custom: Service-to-Service API middleware (`ServiceAuthMiddleware.mjs`)
+    - Custom: CSRF bypass for service requests
+    - Custom: Project/file protection endpoints
+    - Custom: User permissions management
   - `clsi` - LaTeX compilation service (Common LaTeX Service Interface)
   - `document-updater` - Real-time document update processing
   - `real-time` - WebSocket layer using socket.io
@@ -36,6 +54,26 @@ This is a **monorepo** containing multiple microservices and shared libraries ma
 
 - **`server-ce/`** - Docker build files for Community Edition
 - **`develop/`** - Development environment configuration
+
+## API Documentation
+
+This customized version includes extensive API documentation:
+
+- **[api_doc/SERVICE_TO_SERVICE_API.md](api_doc/SERVICE_TO_SERVICE_API.md)** - Service-to-Service API documentation
+- **[api_doc/API_DOCUMENTATION_RU.md](api_doc/API_DOCUMENTATION_RU.md)** - Complete API reference (Russian)
+- **[api_doc/API_README.md](api_doc/API_README.md)** - Quick start guide
+- **[api_doc/API_INDEX.md](api_doc/API_INDEX.md)** - Documentation index
+
+### Service-to-Service API Quick Example
+
+```bash
+# Create a project for a user (no browser session needed)
+curl -u overleaf:password \
+  -H "X-Overleaf-User-Id: 507f1f77bcf86cd799439011" \
+  -H "Content-Type: application/json" \
+  -d '{"projectName":"Test Project"}' \
+  http://localhost:3000/service/project/new
+```
 
 ## Development Commands
 

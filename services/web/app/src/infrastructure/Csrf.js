@@ -61,6 +61,15 @@ class Csrf {
     // the request, to get a new csrf token for any rendered forms. For excluded routes we'll then ignore a 'bad csrf
     // token' error from csurf and continue on...
 
+    if (req.isServiceAuth) {
+      return csrf(req, res, err => {
+        if (err && err.code !== 'EBADCSRFTOKEN') {
+          return next(err)
+        }
+        return next()
+      })
+    }
+
     // check whether the request method is excluded for the specified route
     if (
       (this.excluded_routes[req.path] != null

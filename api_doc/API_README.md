@@ -128,6 +128,23 @@ curl -b cookies.txt \
 1. Cookie с сессией (через `-c/-b cookies.txt`)
 2. CSRF Token в заголовке `X-CSRF-Token`
 
+### Service-to-Service API (NEW!)
+
+Для интеграции с другими сервисами без браузерной сессии:
+
+```bash
+curl -u username:password \
+  -H "X-Overleaf-User-Id: $USER_ID" \
+  http://localhost:3000/service/user/projects
+```
+
+**Преимущества**:
+- ✅ Нет необходимости в cookies и CSRF токенах
+- ✅ Все Web API endpoints доступны через `/service/` префикс
+- ✅ Идеально для backend-to-backend интеграции
+
+📖 **Подробнее**: [SERVICE_TO_SERVICE_API.md](SERVICE_TO_SERVICE_API.md)
+
 ### Private API
 
 Требуется HTTP Basic Authentication:
@@ -430,6 +447,7 @@ await AuthenticationManager.promises.setUserPassword(user, 'password123');
 
 - [Официальная документация Overleaf](https://github.com/overleaf/overleaf/wiki)
 - [Полная документация API](API_DOCUMENTATION_RU.md)
+- [Service-to-Service API](SERVICE_TO_SERVICE_API.md) - **NEW!** Интеграция с другими сервисами
 - [Краткий справочник](API_QUICK_REFERENCE.md)
 - [GitHub Issues](https://github.com/overleaf/overleaf/issues)
 
@@ -448,9 +466,14 @@ await AuthenticationManager.promises.setUserPassword(user, 'password123');
 
 ---
 
-**Версия**: 2.0
-**Дата**: 2024-10-29
+**Версия**: 2.1
+**Дата**: 2026-01-24
 **Совместимость**: Overleaf CE (latest main branch)
+
+**Изменения в v2.1:**
+- ✨ **Service-to-Service API** - новый способ интеграции без браузерной сессии
+- Все Web API endpoints доступны через `/service/` префикс
+- Аутентификация через HTTP Basic Auth + заголовок `X-Overleaf-User-Id`
 
 **Изменения в v2.0:**
 - Добавлена защита проектов и файлов
