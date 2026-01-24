@@ -16,6 +16,14 @@ function requireServiceAuth(req, res, next) {
     })
   }
 
+  if (!Settings.serviceApi?.password) {
+    logger.warn('Service API access attempted but no password configured')
+    return res.status(403).json({
+      error: 'service_api_not_configured',
+      error_description: 'Service API password is not configured',
+    })
+  }
+
   // Check localhost-only restriction
   if (Settings.serviceApi?.localhostOnly) {
     const ip = req.ip || req.connection.remoteAddress
@@ -34,7 +42,9 @@ function requireServiceAuth(req, res, next) {
     }
   }
 
-  const basicAuth = AuthenticationController.requirePrivateApiAuth()
+  const basicAuth = AuthenticationController.requireBasicAuth({
+    overleaf: Settings.serviceApi.password,
+  })
   return basicAuth(req, res, err => {
     if (err) {
       return next(err)
@@ -53,7 +63,7 @@ async function attachSessionUser(req, res, next) {
   if (!req.isServiceAuth) {
     return next()
   }
-  if (!req.session || !req.serviceUser) {
+  if (!req.serviceUser) {
     return next()
   }
   const { userId, userEmail } = req.serviceUser
@@ -71,7 +81,9 @@ async function attachSessionUser(req, res, next) {
       })
     }
     req.user = user
-    req.session.user = user
+    if (req.session) {
+      req.session.user = user
+    }
     req.logger?.addFields({ userId: user._id })
     return next()
   } catch (err) {
