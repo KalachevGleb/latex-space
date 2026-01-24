@@ -47,13 +47,14 @@ else
     ((ERRORS++))
 fi
 
-# Check jq
-echo -n "Checking jq... "
-if command -v jq &> /dev/null; then
-    echo -e "${GREEN}OK${NC}"
+# Check Python3 (required for JSON parsing)
+echo -n "Checking Python3... "
+if command -v python3 &> /dev/null; then
+    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    echo -e "${GREEN}OK${NC} (version $PYTHON_VERSION)"
 else
-    echo -e "${YELLOW}NOT FOUND${NC} (recommended for JSON parsing)"
-    ((WARNINGS++))
+    echo -e "${RED}NOT FOUND${NC} (required for config parsing)"
+    ((ERRORS++))
 fi
 
 # Check disk space

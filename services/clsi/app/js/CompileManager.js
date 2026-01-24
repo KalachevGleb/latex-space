@@ -55,7 +55,9 @@ function getOutputDir(projectId, userId) {
 async function doCompileWithLock(request, stats, timings) {
   const compileDir = getCompileDir(request.project_id, request.user_id)
   request.isInitialCompile =
-    (await fsPromises.mkdir(compileDir, { recursive: true })) === compileDir
+    (await fsPromises.mkdir(compileDir, { recursive: true, mode: 0o777 })) === compileDir
+  // Ensure directory is writable by texlive container (runs as user tex, UID 1000)
+  await fsPromises.chmod(compileDir, 0o777)
 
   // Calculate MD5 of all project files (simplified - using resources array)
   const filesMd5 = calculateFilesMd5(request.resources)
@@ -816,7 +818,9 @@ async function wordcount(projectId, userId, filename, image) {
   }
 
   try {
-    await fsPromises.mkdir(compileDir, { recursive: true })
+    await fsPromises.mkdir(compileDir, { recursive: true, mode: 0o777 })
+    // Ensure directory is writable by texlive container (runs as user tex, UID 1000)
+    await fsPromises.chmod(compileDir, 0o777)
   } catch (err) {
     throw OError.tag(err, 'error ensuring dir for wordcount', {
       projectId,

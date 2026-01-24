@@ -649,6 +649,11 @@
             "args": []
         },
         {
+            "name": "statx",
+            "action": "SCMP_ACT_ALLOW",
+            "args": []
+        },
+        {
             "name": "stat64",
             "action": "SCMP_ACT_ALLOW",
             "args": []

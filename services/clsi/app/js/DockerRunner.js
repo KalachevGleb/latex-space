@@ -285,8 +285,8 @@ const DockerRunner = {
             Hard: timeoutInSeconds + 10,
           },
         ],
-        CapDrop: 'ALL',
-        SecurityOpt: ['no-new-privileges'],
+        CapDrop: ['ALL'],
+        SecurityOpt: ['no-new-privileges:true'],
       },
     }
 
@@ -306,27 +306,26 @@ const DockerRunner = {
       options.HostConfig.Runtime = Settings.clsi.docker.runtime
     }
 
-    // Security: Always enable read-only root filesystem for sandboxed compilation
-    // This prevents LaTeX from modifying system files or installing malicious code
-    const enableReadonlyRootfs = 
-      Settings.clsi.docker.Readonly !== false // Allow explicit disable via config
-    
+    // Security: Read-only root filesystem for sandboxed compilation (optional)
+    // Disabled by default for maximum Docker compatibility
+    // Enable via Settings.clsi.docker.Readonly = true if your Docker supports it
+    const enableReadonlyRootfs = Settings.clsi.docker.Readonly === true
+
     if (enableReadonlyRootfs) {
       options.HostConfig.ReadonlyRootfs = true
-      // Allow writing to /tmp for temporary compilation files (with noexec for security)
+      // Allow writing to /tmp for temporary compilation files
       options.HostConfig.Tmpfs = {
         '/tmp': 'rw,noexec,nosuid,nodev,size=1048576k', // 1GB for temp files
       }
-      // Mark as volume
       if (!options.Volumes) {
         options.Volumes = {}
       }
       options.Volumes['/tmp'] = {}
-      
+
       // /home/tex handling:
       // - If texlive cache is configured: will be bind-mounted from host (persistent cache)
       // - If not configured: use tmpfs (temporary, lost between compilations)
-      const hasTexliveCacheMount = Object.keys(volumes).some(hostPath => 
+      const hasTexliveCacheMount = Object.keys(volumes).some(hostPath =>
         volumes[hostPath].includes('/home/tex')
       )
       if (!hasTexliveCacheMount) {

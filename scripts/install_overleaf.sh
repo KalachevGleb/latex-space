@@ -75,6 +75,36 @@ check_docker_compose() {
     info "Docker Compose is available: $(docker compose version)"
 }
 
+# Parse JSON config file using Python (available on most systems)
+parse_json() {
+    local config_file="$1"
+    local key_path="$2"
+    local default_value="$3"
+
+    python3 -c "
+import json, sys
+try:
+    with open('$config_file') as f:
+        data = json.load(f)
+    keys = '$key_path'.split('.')
+    value = data
+    for key in keys:
+        if isinstance(value, dict) and key in value:
+            value = value[key]
+        else:
+            value = None
+            break
+    if value is None or value == '':
+        print('$default_value')
+    elif isinstance(value, bool):
+        print(str(value).lower())
+    else:
+        print(value)
+except:
+    print('$default_value')
+" 2>/dev/null
+}
+
 # Parse JSON config file and export as environment variables
 parse_config() {
     local config_file="$1"
@@ -83,17 +113,16 @@ parse_config() {
         error "Configuration file not found: $config_file"
     fi
 
-    info "Parsing configuration file..."
-
-    # Check if jq is available
-    if ! command -v jq &> /dev/null; then
-        warn "jq is not installed. Using basic parsing (may not work with complex configs)."
-        return
+    # Check if Python3 is available
+    if ! command -v python3 &> /dev/null; then
+        error "Python3 is required but not installed."
     fi
+
+    info "Parsing configuration file..."
 
     # Read install directory from config if not set via command line
     if [ -z "$INSTALL_DIR" ]; then
-        INSTALL_DIR=$(jq -r '.installDir // ""' "$config_file")
+        INSTALL_DIR=$(parse_json "$config_file" "installDir" "")
         if [ -z "$INSTALL_DIR" ]; then
             warn "No installDir in config. Using default: $DEFAULT_INSTALL_DIR"
             INSTALL_DIR="$DEFAULT_INSTALL_DIR"
@@ -101,31 +130,34 @@ parse_config() {
     fi
 
     # Export configuration as environment variables
-    export OVERLEAF_SITE_URL=$(jq -r '.siteUrl // "http://localhost"' "$config_file")
-    export OVERLEAF_APP_NAME=$(jq -r '.appName // "Overleaf"' "$config_file")
-    export OVERLEAF_NAV_TITLE=$(jq -r '.customization.navTitle // .appName // "Overleaf"' "$config_file")
-    export OVERLEAF_ADMIN_EMAIL=$(jq -r '.adminEmail // "admin@example.com"' "$config_file")
-    export OVERLEAF_PORT=$(jq -r '.port // 80' "$config_file")
-    export OVERLEAF_DATA_DIR=$(jq -r '.dataDir // "./data"' "$config_file")
-
-    # Email configuration
-    export OVERLEAF_EMAIL_FROM_ADDRESS=$(jq -r '.email.fromAddress // ""' "$config_file")
-    export OVERLEAF_EMAIL_REPLY_TO=$(jq -r '.email.replyTo // ""' "$config_file")
-    export OVERLEAF_EMAIL_SMTP_HOST=$(jq -r '.email.smtp.host // ""' "$config_file")
-    export OVERLEAF_EMAIL_SMTP_PORT=$(jq -r '.email.smtp.port // 587' "$config_file")
-    export OVERLEAF_EMAIL_SMTP_SECURE=$(jq -r '.email.smtp.secure // false' "$config_file")
-    export OVERLEAF_EMAIL_SMTP_USER=$(jq -r '.email.smtp.user // ""' "$config_file")
-    export OVERLEAF_EMAIL_SMTP_PASS=$(jq -r '.email.smtp.pass // ""' "$config_file")
-
-    # Security
-    export OVERLEAF_SECURE_COOKIE=$(jq -r '.security.secureCookie // ""' "$config_file")
-    export OVERLEAF_SESSION_SECRET=$(jq -r '.security.sessionSecret // ""' "$config_file")
+    export OVERLEAF_SITE_URL=$(parse_json "$config_file" "siteUrl" "http://localhost")
+    export OVERLEAF_APP_NAME=$(parse_json "$config_file" "appName" "Overleaf")
+    export OVERLEAF_ADMIN_EMAIL=$(parse_json "$config_file" "adminEmail" "admin@example.com")
+    export OVERLEAF_PORT=$(parse_json "$config_file" "port" "80")
+    export OVERLEAF_DATA_DIR=$(parse_json "$config_file" "dataDir" "./data")
 
     # Customization
-    export OVERLEAF_HEADER_IMAGE_URL=$(jq -r '.customization.headerImageUrl // ""' "$config_file")
+    OVERLEAF_NAV_TITLE=$(parse_json "$config_file" "customization.navTitle" "")
+    [ -z "$OVERLEAF_NAV_TITLE" ] && OVERLEAF_NAV_TITLE="$OVERLEAF_APP_NAME"
+    export OVERLEAF_NAV_TITLE
+
+    export OVERLEAF_HEADER_IMAGE_URL=$(parse_json "$config_file" "customization.headerImageUrl" "")
+
+    # Email configuration
+    export OVERLEAF_EMAIL_FROM_ADDRESS=$(parse_json "$config_file" "email.fromAddress" "")
+    export OVERLEAF_EMAIL_REPLY_TO=$(parse_json "$config_file" "email.replyTo" "")
+    export OVERLEAF_EMAIL_SMTP_HOST=$(parse_json "$config_file" "email.smtp.host" "")
+    export OVERLEAF_EMAIL_SMTP_PORT=$(parse_json "$config_file" "email.smtp.port" "587")
+    export OVERLEAF_EMAIL_SMTP_SECURE=$(parse_json "$config_file" "email.smtp.secure" "false")
+    export OVERLEAF_EMAIL_SMTP_USER=$(parse_json "$config_file" "email.smtp.user" "")
+    export OVERLEAF_EMAIL_SMTP_PASS=$(parse_json "$config_file" "email.smtp.pass" "")
+
+    # Security
+    export OVERLEAF_SECURE_COOKIE=$(parse_json "$config_file" "security.secureCookie" "")
+    export OVERLEAF_SESSION_SECRET=$(parse_json "$config_file" "security.sessionSecret" "")
 
     # Features
-    export EMAIL_CONFIRMATION_DISABLED=$(jq -r '.features.emailConfirmationDisabled // true' "$config_file")
+    export EMAIL_CONFIRMATION_DISABLED=$(parse_json "$config_file" "features.emailConfirmationDisabled" "true")
 
     # Generate session secret if not provided
     if [ -z "$OVERLEAF_SESSION_SECRET" ]; then
@@ -238,6 +270,16 @@ info "Tagging Docker images..."
 OVERLEAF_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "overleaf-custom:" | grep -v "base" | head -n 1)
 docker tag "$OVERLEAF_IMAGE" "overleaf-custom:latest"
 
+# Verify texlive-full image is available (required for compilation)
+if ! docker image inspect texlive-full &>/dev/null; then
+    error "TexLive image failed to load. Installation incomplete."
+fi
+info "TexLive image is available"
+
+# Clean up tar files (no longer needed, images are loaded into Docker)
+info "Cleaning up installation files..."
+rm -f "$INSTALL_DIR"/*.tar
+
 # Create .env file
 info "Creating environment file..."
 cat > "$INSTALL_DIR/.env" << EOF
@@ -279,6 +321,13 @@ if [ "$START_SERVICES" = true ]; then
 
     info "Waiting for services to be ready..."
     sleep 10
+    
+    # Verify TexLive image is available for compilation
+    if docker image inspect texlive-full &>/dev/null; then
+        info "TexLive image ready for compilation (sibling container mode)"
+    else
+        error "TexLive image missing after installation!"
+    fi
 
     # Check if services are running
     if docker compose ps | grep -q "Up"; then
@@ -299,6 +348,9 @@ if [ "$START_SERVICES" = true ]; then
         echo "  Stop:    cd $INSTALL_DIR && docker compose down"
         echo "  Logs:    cd $INSTALL_DIR && docker compose logs -f"
         echo "  Restart: cd $INSTALL_DIR && docker compose restart"
+        echo ""
+        echo "Installed Docker images:"
+        docker images | grep -E "overleaf-custom|texlive-full|mongo|redis" | head -5
         echo "=========================================="
     else
         error "Some services failed to start. Check logs with: cd $INSTALL_DIR && docker compose logs"

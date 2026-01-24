@@ -154,20 +154,27 @@ if ((process.env.DOCKER_RUNNER || process.env.SANDBOXED_COMPILES) === 'true') {
     process.exit(1)
   }
 
-  let seccompProfilePath
-  try {
-    seccompProfilePath = Path.resolve(__dirname, '../seccomp/clsi-profile.json')
-    module.exports.clsi.docker.seccomp_profile =
-      process.env.SECCOMP_PROFILE ||
-      JSON.stringify(
+  // Seccomp profile for Docker sandboxed compiles
+  // Can be disabled with SECCOMP_DISABLED=true for compatibility with older Docker/kernels
+  if (process.env.SECCOMP_DISABLED === 'true') {
+    console.log('Seccomp profile disabled via SECCOMP_DISABLED=true')
+    module.exports.clsi.docker.seccomp_profile = null
+  } else if (process.env.SECCOMP_PROFILE) {
+    module.exports.clsi.docker.seccomp_profile = process.env.SECCOMP_PROFILE
+  } else {
+    let seccompProfilePath
+    try {
+      seccompProfilePath = Path.resolve(__dirname, '../seccomp/clsi-profile.json')
+      module.exports.clsi.docker.seccomp_profile = JSON.stringify(
         JSON.parse(require('node:fs').readFileSync(seccompProfilePath))
       )
-  } catch (error) {
-    console.error(
-      error,
-      `could not load seccomp profile from ${seccompProfilePath}`
-    )
-    process.exit(1)
+    } catch (error) {
+      console.error(
+        error,
+        `could not load seccomp profile from ${seccompProfilePath}`
+      )
+      process.exit(1)
+    }
   }
 
   if (process.env.APPARMOR_PROFILE) {

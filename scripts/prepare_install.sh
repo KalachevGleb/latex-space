@@ -51,7 +51,7 @@ make build-community
 # Build TexLive image for sandboxed compiles
 if [ "$SKIP_TEXLIVE" = "true" ]; then
     echo "Skipping TexLive build (SKIP_TEXLIVE=true)"
-    echo "WARNING: You must have texlive-full image already available!"
+    echo "NOTE: Using existing texlive-full image from previous build"
 else
     echo "Building TexLive image (this takes ~1 hour)..."
     cd "$PROJECT_ROOT/develop"
@@ -65,6 +65,7 @@ if [ "$SKIP_BASE_DEPS" != "true" ]; then
     docker pull redis:6.2
 else
     echo "Skipping MongoDB/Redis pull (SKIP_BASE_DEPS=true)"
+    echo "NOTE: Using existing images from previous build"
 fi
 
 # Save Docker images to tar files
@@ -72,13 +73,31 @@ echo "Saving Docker images..."
 docker save -o "$BUILD_DIR/deployment/overleaf-custom-base.tar" "overleaf-custom-base:$REVISION"
 docker save -o "$BUILD_DIR/deployment/overleaf-custom.tar" "overleaf-custom:$REVISION"
 
-if [ "$SKIP_TEXLIVE" != "true" ]; then
+# Save texlive-full (required for compilation)
+# SKIP_TEXLIVE only skips building, but image must exist from previous build
+if docker image inspect texlive-full &>/dev/null; then
     docker save -o "$BUILD_DIR/deployment/texlive-full.tar" texlive-full
+else
+    echo "ERROR: texlive-full image not found!"
+    echo "Cannot create deployment package without TexLive."
+    echo "Run without SKIP_TEXLIVE=true first to build the image."
+    exit 1
 fi
 
-if [ "$SKIP_BASE_DEPS" != "true" ]; then
+# Save mongo/redis (required)
+# SKIP_BASE_DEPS only skips pulling, but images must exist from previous build or registry
+if docker image inspect mongo:6.0 &>/dev/null; then
     docker save -o "$BUILD_DIR/deployment/mongo.tar" mongo:6.0
+else
+    echo "ERROR: mongo:6.0 image not found! Run without SKIP_BASE_DEPS=true first."
+    exit 1
+fi
+
+if docker image inspect redis:6.2 &>/dev/null; then
     docker save -o "$BUILD_DIR/deployment/redis.tar" redis:6.2
+else
+    echo "ERROR: redis:6.2 image not found! Run without SKIP_BASE_DEPS=true first."
+    exit 1
 fi
 
 # Copy deployment files
@@ -233,7 +252,9 @@ EOF
 # Package everything
 echo "Creating package archive..."
 cd "$BUILD_DIR"
-tar -czf "$PACKAGE_NAME" deployment/
+# Exclude macOS metadata files
+export COPYFILE_DISABLE=1
+tar --exclude='._*' --exclude='.DS_Store' -czf "$PACKAGE_NAME" deployment/
 mv "$PACKAGE_NAME" "$PROJECT_ROOT/"
 
 # Cleanup Docker images if requested
