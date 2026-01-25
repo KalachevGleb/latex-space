@@ -14,7 +14,6 @@ import TagsHandler from '../Tags/TagsHandler.js'
 import { expressify } from '@overleaf/promise-utils'
 import logger from '@overleaf/logger'
 import Features from '../../infrastructure/Features.js'
-import SubscriptionViewModelBuilder from '../Subscription/SubscriptionViewModelBuilder.mjs'
 import NotificationsHandler from '../Notifications/NotificationsHandler.js'
 import Modules from '../../infrastructure/Modules.js'
 import { OError, V1ConnectionError } from '../Errors/Errors.js'
@@ -26,7 +25,6 @@ import GeoIpLookup from '../../infrastructure/GeoIpLookup.js'
 import SplitTestHandler from '../SplitTests/SplitTestHandler.js'
 import SplitTestSessionHandler from '../SplitTests/SplitTestSessionHandler.js'
 import TutorialHandler from '../Tutorial/TutorialHandler.mjs'
-import SubscriptionHelper from '../Subscription/SubscriptionHelper.js'
 import PermissionsManager from '../Authorization/PermissionsManager.mjs'
 import AnalyticsManager from '../Analytics/AnalyticsManager.js'
 
@@ -111,45 +109,18 @@ function cleanupSession(req) {
 async function projectListPage(req, res, next) {
   cleanupSession(req)
 
-  // can have two values:
-  // - undefined - when there's no "saas" feature or couldn't get subscription data
-  // - object - the subscription data object
-  let usersBestSubscription
-  let usersIndividualSubscription
-  let usersGroupSubscriptions = []
+  const usersBestSubscription = null
+  const usersIndividualSubscription = null
+  const usersGroupSubscriptions = []
   let survey
-  let userIsMemberOfGroupSubscription = false
-  let groupSubscriptionsPendingEnrollment = []
+  const userIsMemberOfGroupSubscription = false
+  const groupSubscriptionsPendingEnrollment = []
 
-  const isSaas = Features.hasFeature('saas')
+  const isSaas = false
 
   const userId = SessionManager.getLoggedInUserId(req.session)
 
-  if (isSaas) {
-    const { variant: domainCaptureRedirect } =
-      await SplitTestHandler.promises.getAssignment(
-        req,
-        res,
-        'domain-capture-redirect'
-      )
-
-    if (domainCaptureRedirect === 'enabled') {
-      const subscription = (
-        await Modules.promises.hooks.fire(
-          'findDomainCaptureGroupUserCouldBePartOf',
-          userId
-        )
-      )?.[0]
-
-      if (subscription) {
-        if (subscription.managedUsersEnabled) {
-          return res.redirect('/domain-capture')
-        } else {
-          // TODO show notification or anything else
-        }
-      }
-    }
-  }
+  // no SaaS flows in the non-commercial build
 
   const projectsBlobPending = _getProjects(userId).catch(err => {
     logger.err({ err, userId }, 'projects listing in background failed')
@@ -170,58 +141,7 @@ async function projectListPage(req, res, next) {
 
   user.refProviders = _.mapValues(user.refProviders, Boolean)
 
-  if (isSaas) {
-    await SplitTestSessionHandler.promises.sessionMaintenance(req, user)
-
-    try {
-      ;({
-        bestSubscription: usersBestSubscription,
-        individualSubscription: usersIndividualSubscription,
-        memberGroupSubscriptions: usersGroupSubscriptions,
-      } = await SubscriptionViewModelBuilder.promises.getUsersSubscriptionDetails(
-        { _id: userId }
-      ))
-    } catch (error) {
-      logger.err(
-        { err: error, userId },
-        "Failed to get user's best subscription"
-      )
-    }
-    try {
-      userIsMemberOfGroupSubscription = usersGroupSubscriptions?.length > 0
-
-      // TODO use helper function
-      if (!user.enrollment?.managedBy) {
-        groupSubscriptionsPendingEnrollment = usersGroupSubscriptions.filter(
-          subscription =>
-            subscription.groupPlan && subscription.managedUsersEnabled
-        )
-      }
-    } catch (error) {
-      logger.error(
-        { err: error },
-        'Failed to check whether user is a member of group subscription'
-      )
-    }
-
-    try {
-      survey = await SurveyHandler.promises.getSurvey(userId)
-    } catch (error) {
-      logger.err({ err: error, userId }, 'Failed to load the active survey')
-    }
-
-    if (
-      user &&
-      UserPrimaryEmailCheckHandler.requiresPrimaryEmailCheck({
-        email: user.email,
-        emails: user.emails,
-        lastPrimaryEmailCheck: user.lastPrimaryEmailCheck,
-        signUpDate: user.signUpDate,
-      })
-    ) {
-      return res.redirect('/user/emails/primary-email-check')
-    }
-  }
+  // no SaaS subscription flows
 
   const tags = await TagsHandler.promises.getAllTags(userId)
 
@@ -413,50 +333,13 @@ async function projectListPage(req, res, next) {
 
   const { showUSGovBanner, usGovBannerVariant } = usGovBanner
 
-  const showGroupsAndEnterpriseBanner =
-    Features.hasFeature('saas') &&
-    !showUSGovBanner &&
-    !userIsMemberOfGroupSubscription &&
-    !hasPaidAffiliation
-
-  const groupsAndEnterpriseBannerVariant =
-    showGroupsAndEnterpriseBanner &&
-    _.sample(['on-premise', 'FOMO', 'FOMO', 'FOMO'])
-
-  let showInrGeoBanner = false
-  let showBrlGeoBanner = false
-  let showLATAMBanner = false
-  let recommendedCurrency
-
-  if (
-    usersBestSubscription?.type === 'free' ||
-    usersBestSubscription?.type === 'standalone-ai-add-on'
-  ) {
-    const { countryCode, currencyCode } =
-      await GeoIpLookup.promises.getCurrencyCode(req.ip)
-
-    if (countryCode === 'IN') {
-      showInrGeoBanner = true
-    }
-    showBrlGeoBanner = countryCode === 'BR'
-
-    showLATAMBanner = ['MX', 'CO', 'CL', 'PE'].includes(countryCode)
-    // LATAM Banner needs to know which currency to display
-    if (showLATAMBanner) {
-      recommendedCurrency = currencyCode
-    }
-  }
-
-  let hasIndividualPaidSubscription = false
-
-  try {
-    hasIndividualPaidSubscription =
-      SubscriptionHelper.isIndividualActivePaidSubscription(
-        usersIndividualSubscription
-      )
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to get individual subscription')
-  }
+  const showGroupsAndEnterpriseBanner = false
+  const groupsAndEnterpriseBannerVariant = null
+  const showInrGeoBanner = false
+  const showBrlGeoBanner = false
+  const showLATAMBanner = false
+  const recommendedCurrency = null
+  const hasIndividualPaidSubscription = false
 
   const affiliations = userAffiliations || []
   const inEnterpriseCommons = affiliations.some(
@@ -465,39 +348,9 @@ async function projectListPage(req, res, next) {
 
   // customer.io: Premium nudge experiment
   // Only do customer-io-trial-conversion assignment for users not in India/China and not in group/commons
-  let customerIoEnabled = false
+  const customerIoEnabled = false
   const aiBlocked = !(await _canUseAIAssist(user))
   const hasAiAssist = await _userHasAIAssist(user)
-  if (!userIsMemberOfGroupSubscription && !inEnterpriseCommons && isSaas) {
-    try {
-      const ip = req.ip
-      const { countryCode } = await GeoIpLookup.promises.getCurrencyCode(ip)
-      const excludedCountries = ['IN', 'CN']
-
-      if (!excludedCountries.includes(countryCode)) {
-        const cioAssignment =
-          await SplitTestHandler.promises.getAssignmentForUser(
-            userId,
-            'customer-io-trial-conversion'
-          )
-        if (cioAssignment.variant === 'enabled') {
-          customerIoEnabled = true
-          AnalyticsManager.setUserPropertyForUserInBackground(
-            userId,
-            'customer-io-integration',
-            true
-          )
-        }
-      }
-    } catch (err) {
-      logger.error(
-        { err },
-        'Error checking geo location for customer-io-trial-conversion'
-      )
-      // Fallback to not enabled if geoip fails
-      customerIoEnabled = false
-    }
-  }
 
   res.render('project/list-react', {
     title: 'your_projects',

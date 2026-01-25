@@ -259,23 +259,7 @@ async function tryDeleteUser(req, res, next) {
       message: 'error while deleting user account',
       info: { userId },
     }
-    if (err instanceof Errors.SubscriptionAdminDeletionError) {
-      // set info.public.error for JSON response so frontend can display
-      // a specific message
-      errorData.info.public = {
-        error: 'SubscriptionAdminDeletionError',
-      }
-      const error = OError.tag(err, errorData.message, errorData.info)
-      logger.warn({ error, req }, error.message)
-      return HttpErrorHandler.unprocessableEntity(
-        req,
-        res,
-        errorData.message,
-        errorData.info.public
-      )
-    } else {
-      throw OError.tag(err, errorData.message, errorData.info)
-    }
+    throw OError.tag(err, errorData.message, errorData.info)
   }
 
   await Modules.promises.hooks.fire('tryDeleteV1Account', user)
@@ -459,12 +443,6 @@ async function updateUserSettings(req, res, next) {
       first_name: user.first_name,
       last_name: user.last_name,
     })
-
-    try {
-      await UserHandler.promises.populateTeamInvites(user)
-    } catch (err) {
-      logger.error({ err }, 'error populateTeamInvites')
-    }
 
     res.sendStatus(200)
   }

@@ -12,9 +12,7 @@ const FeaturesHelper = require('../Subscription/FeaturesHelper')
 const UserGetter = require('../User/UserGetter')
 const NotificationsBuilder = require('../Notifications/NotificationsBuilder')
 const NotificationsHandler = require('../Notifications/NotificationsHandler')
-const SubscriptionLocator = require('../Subscription/SubscriptionLocator')
 const { Institution } = require('../../models/Institution')
-const { Subscription } = require('../../models/Subscription')
 const OError = require('@overleaf/o-error')
 
 const ASYNC_LIMIT = parseInt(process.env.ASYNC_LIMIT, 10) || 5
@@ -90,14 +88,9 @@ const InstitutionsManager = {
     const featuresUpgradedByAffiliation = await clear(
       `features-updated-by=${institutionId}`
     )
-    const redundantPersonalSubscription = await clear(
-      `redundant-personal-subscription-${institutionId}`
-    )
-
     return {
       ipMatcherAffiliation,
       featuresUpgradedByAffiliation,
-      redundantPersonalSubscription,
     }
   },
 
@@ -226,18 +219,6 @@ const InstitutionsManager = {
     return result
   },
 
-  async getInstitutionUsersSubscriptions(institutionId) {
-    const affiliations =
-      await InstitutionsAPI.promises.getInstitutionAffiliations(institutionId)
-
-    const userIds = affiliations.map(
-      affiliation => new ObjectId(affiliation.user_id)
-    )
-    return await Subscription.find({ admin_id: userIds })
-      .populate('admin_id', 'email')
-      .exec()
-  },
-
   async affiliateUsers(hostname) {
     const reversedHostname = hostname.trim().split('').reverse().join('')
 
@@ -301,30 +282,21 @@ async function refreshFeaturesAndNotify(affiliation) {
     userId,
     'refresh-institution-users'
   )
-  const { user, subscription } = await getUserInfo(userId)
-  return await notifyUser(user, affiliation, subscription, featuresChanged)
+  const user = await getUserInfo(userId)
+  return await notifyUser(user, affiliation, featuresChanged)
 }
 
 const getUserInfo = async userId => {
   const user = await UserGetter.promises.getUser(userId, { _id: 1 })
-  const subscription =
-    await SubscriptionLocator.promises.getUsersSubscription(user)
-  return { user, subscription }
+  return user
 }
 
-const notifyUser = async (user, affiliation, subscription, featuresChanged) => {
+const notifyUser = async (user, affiliation, featuresChanged) => {
   return await Promise.all([
     (async () => {
       if (featuresChanged) {
         return await NotificationsBuilder.promises
           .featuresUpgradedByAffiliation(affiliation, user)
-          .create()
-      }
-    })(),
-    (async () => {
-      if (subscription && !subscription.groupPlan) {
-        return await NotificationsBuilder.promises
-          .redundantPersonalSubscription(affiliation, user)
           .create()
       }
     })(),

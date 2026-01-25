@@ -20,7 +20,6 @@ import cookieParser from 'cookie-parser'
 import bearerTokenMiddleware from 'express-bearer-token'
 import passport from 'passport'
 import { Strategy as LocalStrategy } from 'passport-local'
-import ReferalConnect from '../Features/Referal/ReferalConnect.mjs'
 import RedirectManager from './RedirectManager.js'
 import translations from './Translations.js'
 import Views from './Views.js'
@@ -264,7 +263,6 @@ if (Settings.cookieRollingSession) {
   })
 }
 
-webRouter.use(ReferalConnect.use)
 expressLocals(webRouter, privateApiRouter, publicApiRouter)
 webRouter.use(SessionAutostartMiddleware.invokeCallbackMiddleware)
 

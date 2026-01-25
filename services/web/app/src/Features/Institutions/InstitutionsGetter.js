@@ -1,7 +1,5 @@
 const { promisify, callbackify } = require('util')
 const UserGetter = require('../User/UserGetter')
-const UserMembershipsHandler = require('../UserMembership/UserMembershipsHandler')
-const UserMembershipEntityConfigs = require('../UserMembership/UserMembershipEntityConfigs')
 
 async function getCurrentAffiliations(userId) {
   const fullEmails = await UserGetter.promises.getUserFullEmails(userId)
@@ -82,11 +80,7 @@ const InstitutionsGetter = {
   ),
 
   getManagedInstitutions(userId, callback) {
-    UserMembershipsHandler.getEntitiesByUser(
-      UserMembershipEntityConfigs.institution,
-      userId,
-      callback
-    )
+    callback(null, [])
   },
 }
 

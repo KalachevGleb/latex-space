@@ -2,9 +2,7 @@ const { ObjectId } = require('mongodb-legacy')
 const EmailHandler = require('../Email/EmailHandler')
 const Errors = require('../Errors/Errors')
 const InstitutionsAPI = require('../Institutions/InstitutionsAPI')
-const NotificationsBuilder = require('../Notifications/NotificationsBuilder')
 const OError = require('@overleaf/o-error')
-const SubscriptionLocator = require('../Subscription/SubscriptionLocator')
 const UserAuditLogHandler = require('../User/UserAuditLogHandler')
 const UserGetter = require('../User/UserGetter')
 const UserUpdater = require('../User/UserUpdater')
@@ -223,20 +221,7 @@ async function getUser(providerId, externalUserId, userIdAttribute) {
 }
 
 async function redundantSubscription(userId, providerId, providerName) {
-  const subscription =
-    await SubscriptionLocator.promises.getUserIndividualSubscription(userId)
-
-  if (subscription && !subscription.groupPlan) {
-    await NotificationsBuilder.promises
-      .redundantPersonalSubscription(
-        {
-          institutionId: providerId,
-          institutionName: providerName,
-        },
-        { _id: userId }
-      )
-      .create()
-  }
+  return
 }
 
 async function linkAccounts(userId, samlData, auditLog) {

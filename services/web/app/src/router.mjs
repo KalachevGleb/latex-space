@@ -10,10 +10,8 @@ import SpellingController from './Features/Spelling/SpellingController.mjs'
 import EditorRouter from './Features/Editor/EditorRouter.mjs'
 import Settings from '@overleaf/settings'
 import TpdsController from './Features/ThirdPartyDataStore/TpdsController.mjs'
-import SubscriptionRouter from './Features/Subscription/SubscriptionRouter.mjs'
 import UploadsRouter from './Features/Uploads/UploadsRouter.mjs'
 import metrics from '@overleaf/metrics'
-import ReferalController from './Features/Referal/ReferalController.mjs'
 import AuthenticationController from './Features/Authentication/AuthenticationController.js'
 import PermissionsController from './Features/Authorization/PermissionsController.mjs'
 import SessionManager from './Features/Authentication/SessionManager.js'
@@ -59,7 +57,6 @@ import TokenAccessController from './Features/TokenAccess/TokenAccessController.
 import TokenAccessRouter from './Features/TokenAccess/TokenAccessRouter.mjs'
 import LinkedFilesRouter from './Features/LinkedFiles/LinkedFilesRouter.mjs'
 import TemplatesRouter from './Features/Templates/TemplatesRouter.mjs'
-import UserMembershipRouter from './Features/UserMembership/UserMembershipRouter.mjs'
 import SystemMessageController from './Features/SystemMessages/SystemMessageController.mjs'
 import AnalyticsRegistrationSourceMiddleware from './Features/Analytics/AnalyticsRegistrationSourceMiddleware.mjs'
 import AnalyticsUTMTrackingMiddleware from './Features/Analytics/AnalyticsUTMTrackingMiddleware.mjs'
@@ -280,7 +277,6 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
 
   EditorRouter.apply(webRouter, privateApiRouter)
   CollaboratorsRouter.apply(webRouter, privateApiRouter)
-  SubscriptionRouter.apply(webRouter, privateApiRouter, publicApiRouter)
   UploadsRouter.apply(webRouter, privateApiRouter)
   PasswordResetRouter.apply(webRouter, privateApiRouter)
   StaticPagesRouter.apply(webRouter, privateApiRouter)
@@ -288,19 +284,11 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
   AnalyticsRouter.apply(webRouter, privateApiRouter, publicApiRouter)
   LinkedFilesRouter.apply(webRouter, privateApiRouter, publicApiRouter)
   TemplatesRouter.apply(webRouter)
-  UserMembershipRouter.apply(webRouter)
   TokenAccessRouter.apply(webRouter)
   HistoryRouter.apply(webRouter, privateApiRouter)
 
   await Modules.applyRouter(webRouter, privateApiRouter, publicApiRouter)
 
-  if (Settings.enableSubscriptions) {
-    webRouter.get(
-      '/user/bonus',
-      AuthenticationController.requireLogin(),
-      ReferalController.bonus
-    )
-  }
 
   // .getMessages will generate an empty response for anonymous users.
   webRouter.get('/system/messages', SystemMessageController.getMessages)

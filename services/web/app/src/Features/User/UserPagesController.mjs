@@ -6,7 +6,6 @@ import Settings from '@overleaf/settings'
 import AuthenticationController from '../Authentication/AuthenticationController.js'
 import SessionManager from '../Authentication/SessionManager.js'
 import NewsletterManager from '../Newsletter/NewsletterManager.js'
-import SubscriptionLocator from '../Subscription/SubscriptionLocator.js'
 import _ from 'lodash'
 import { expressify } from '@overleaf/promise-utils'
 import Features from '../../infrastructure/Features.js'
@@ -83,13 +82,7 @@ async function settingsPage(req, res) {
     logger.error({ err, userId }, err.message)
   }
 
-  let currentManagedUserAdminEmail
-  try {
-    currentManagedUserAdminEmail =
-      await SubscriptionLocator.promises.getAdminEmail(req.managedBy)
-  } catch (err) {
-    logger.error({ err }, 'error getting subscription admin email')
-  }
+  const currentManagedUserAdminEmail = null
 
   let memberOfSSOEnabledGroups = []
   try {

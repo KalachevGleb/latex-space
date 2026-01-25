@@ -13,8 +13,6 @@ import EditorController from '../Editor/EditorController.js'
 import ProjectHelper from './ProjectHelper.js'
 import metrics from '@overleaf/metrics'
 import { User } from '../../models/User.js'
-import SubscriptionLocator from '../Subscription/SubscriptionLocator.js'
-import { isPaidSubscription } from '../Subscription/SubscriptionHelper.js'
 import LimitationsManager from '../Subscription/LimitationsManager.js'
 import Settings from '@overleaf/settings'
 import AuthorizationManager from '../Authorization/AuthorizationManager.js'
@@ -47,9 +45,6 @@ import UserUpdater from '../User/UserUpdater.js'
 import Modules from '../../infrastructure/Modules.js'
 import { z, zz, validateReq } from '../../infrastructure/Validation.js'
 import UserGetter from '../User/UserGetter.js'
-import { isStandaloneAiAddOnPlanCode } from '../Subscription/AiHelper.js'
-import SubscriptionController from '../Subscription/SubscriptionController.mjs'
-import { formatCurrency } from '../../util/currency.js'
 
 const { ObjectId } = mongodb
 /**
@@ -543,8 +538,7 @@ const _ProjectController = {
               logger.error({ err, userId }, 'failed to get institution licence')
               return false
             }),
-          subscription:
-            SubscriptionLocator.promises.getUsersSubscription(userId),
+          subscription: null,
           isTokenMember: CollaboratorsGetter.promises.userIsTokenMember(
             userId,
             projectId
@@ -655,9 +649,7 @@ const _ProjectController = {
         return res.sendStatus(401)
       }
 
-      const allowedFreeTrial =
-        subscription == null ||
-        isStandaloneAiAddOnPlanCode(subscription.planCode)
+      const allowedFreeTrial = false
 
       let wsUrl = Settings.wsUrl
       let metricName = 'load-editor-ws'
@@ -757,19 +749,9 @@ const _ProjectController = {
         !Features.hasFeature('saas') ||
         (user.features && user.features.symbolPalette)
 
-      const userInNonIndividualSub =
-        userIsMemberOfGroupSubscription || userHasInstitutionLicence
-
-      const userHasPremiumSub =
-        subscription && !isStandaloneAiAddOnPlanCode(subscription.planCode)
-
-      // Persistent upgrade prompts
-      // in header & in share project modal
-      const showUpgradePrompt =
-        Features.hasFeature('saas') &&
-        userId &&
-        !userHasPremiumSub &&
-        !userInNonIndividualSub
+      const userInNonIndividualSub = false
+      const userHasPremiumSub = false
+      const showUpgradePrompt = false
 
       let aiFeaturesAllowed = false
       if (userId && Features.hasFeature('saas')) {
@@ -841,42 +823,24 @@ const _ProjectController = {
         capabilities.push('link-sharing')
       }
 
-      const isOverleafAssistBundleEnabled =
-        splitTestAssignments['overleaf-assist-bundle']?.variant === 'enabled'
+      const isOverleafAssistBundleEnabled = false
 
       let fullFeatureSet = user?.features
       if (!anonymous) {
         fullFeatureSet = await UserGetter.promises.getUserFeatures(userId)
       }
 
-      const hasPaidSubscription = isPaidSubscription(subscription)
-      const hasManuallyCollectedSubscription =
-        subscription?.collectionMethod === 'manual'
+      const hasPaidSubscription = false
+      const hasManuallyCollectedSubscription = false
       const assistantDisabled = user.aiErrorAssistant?.enabled === false // the assistant has been manually disabled by the user
-      const canUseErrorAssistant =
-        (!hasManuallyCollectedSubscription ||
-          fullFeatureSet?.aiErrorAssistant) &&
-        !assistantDisabled
+      const canUseErrorAssistant = !assistantDisabled
 
-      const customerIoEnabled =
-        await SplitTestHandler.promises.hasUserBeenAssignedToVariant(
-          req,
-          userId,
-          'customer-io-trial-conversion',
-          'enabled',
-          true
-        )
+      const customerIoEnabled = false
 
-      const addonPrices =
-        isOverleafAssistBundleEnabled &&
-        (await ProjectController._getAddonPrices(req, res))
+      const addonPrices = null
 
-      let planCode = subscription?.planCode
-      if (!planCode && !userInNonIndividualSub) {
-        planCode = 'personal'
-      }
-
-      const planDetails = Settings.plans.find(p => p.planCode === planCode)
+      const planCode = null
+      const planDetails = null
 
       res.render(template, {
         title: project.name,
@@ -985,62 +949,6 @@ const _ProjectController = {
       OError.tag(err, 'error getting details for project page')
       return next(err)
     }
-  },
-
-  async _getPaywallPlansPrices(
-    req,
-    res,
-    paywallPlans = ['collaborator', 'student']
-  ) {
-    const plansData = {}
-
-    const locale = req.i18n.language
-    const { currency } = await SubscriptionController.getRecommendedCurrency(
-      req,
-      res
-    )
-
-    paywallPlans.forEach(plan => {
-      const planPrice = Settings.localizedPlanPricing[currency][plan].monthly
-      const formattedPlanPrice = formatCurrency(
-        planPrice,
-        currency,
-        locale,
-        true
-      )
-      plansData[plan] = formattedPlanPrice
-    })
-    return plansData
-  },
-
-  async _getAddonPrices(req, res, addonPlans = ['assistant']) {
-    const plansData = {}
-
-    const locale = req.i18n.language
-    const { currency } = await SubscriptionController.getRecommendedCurrency(
-      req,
-      res
-    )
-
-    addonPlans.forEach(plan => {
-      const annualPrice = Settings.localizedAddOnsPricing[currency][plan].annual
-      const monthlyPrice =
-        Settings.localizedAddOnsPricing[currency][plan].monthly
-      const annualDividedByTwelve =
-        Settings.localizedAddOnsPricing[currency][plan].annualDividedByTwelve
-
-      plansData[plan] = {
-        annual: formatCurrency(annualPrice, currency, locale, true),
-        annualDividedByTwelve: formatCurrency(
-          annualDividedByTwelve,
-          currency,
-          locale,
-          true
-        ),
-        monthly: formatCurrency(monthlyPrice, currency, locale, true),
-      }
-    })
-    return plansData
   },
 
   async _refreshFeatures(req, user) {
@@ -1391,8 +1299,6 @@ const ProjectController = {
   _injectProjectUsers: _ProjectController._injectProjectUsers,
   _isInPercentageRollout: _ProjectController._isInPercentageRollout,
   _refreshFeatures: _ProjectController._refreshFeatures,
-  _getPaywallPlansPrices: _ProjectController._getPaywallPlansPrices,
-  _getAddonPrices: _ProjectController._getAddonPrices,
   _setWritefullTrialState: _ProjectController._setWritefullTrialState,
 }
 
