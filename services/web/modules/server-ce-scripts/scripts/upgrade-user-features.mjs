@@ -4,7 +4,7 @@ import { db } from '../../../app/src/infrastructure/mongodb.js'
 import {
   mergeFeatures,
   compareFeatures,
-} from '../../../app/src/Features/Subscription/FeaturesHelper.js'
+} from '../../../app/src/Features/UserFeatures/FeaturesHelper.js'
 import { fileURLToPath } from 'url'
 const DRY_RUN = !process.argv.includes('--dry-run=false')
 

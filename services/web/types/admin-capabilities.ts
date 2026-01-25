@@ -1,8 +1,6 @@
 export type AdminCapability =
   | 'clear-saml-data'
   | 'clear-session'
-  | 'create-recurly-account'
-  | 'create-subscription'
   | 'modify-feature-override'
   | 'modify-group'
   | 'modify-group-manager'
@@ -25,8 +23,6 @@ export type AdminCapability =
   | 'view-script-log'
   | 'view-split-test'
   | 'view-user-additional-info'
-  | 'create-stripe-account'
-  | 'update-stripe-customer-segment'
 
 export type AdminRole =
   | 'engagement'

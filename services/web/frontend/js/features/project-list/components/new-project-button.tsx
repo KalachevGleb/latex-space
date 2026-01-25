@@ -5,7 +5,6 @@ import getMeta from '../../../utils/meta'
 import NewProjectButtonModal, {
   NewProjectButtonModalVariant,
 } from './new-project-button/new-project-button-modal'
-import AddAffiliation, { useAddAffiliation } from './add-affiliation'
 import { Nullable } from '../../../../../types/utils'
 import { sendMB } from '../../../infrastructure/event-tracking'
 import importOverleafModules from '../../../../macros/import-overleaf-module.macro'
@@ -18,12 +17,10 @@ import {
   DropdownToggle,
 } from '@/shared/components/dropdown/dropdown-menu'
 import { useSendProjectListMB } from '@/features/project-list/components/project-list-events'
-import type { PortalTemplate } from '../../../../../types/portal-template'
 
 type SendTrackingEvent = {
   dropdownMenu: string
   dropdownOpen: boolean
-  institutionTemplateName?: string
 }
 
 type Segmentation = SendTrackingEvent & {
@@ -40,7 +37,6 @@ type NewProjectButtonProps = {
   buttonText?: string
   className?: string
   trackingKey?: string
-  showAddAffiliationWidget?: boolean
 }
 
 function NewProjectButton({
@@ -48,33 +44,19 @@ function NewProjectButton({
   buttonText,
   className,
   trackingKey,
-  showAddAffiliationWidget,
 }: NewProjectButtonProps) {
   const { t } = useTranslation()
   const { templateLinks, userHasFullPermissions } = getMeta('ol-ExposedSettings')
   const [modal, setModal] =
     useState<Nullable<NewProjectButtonModalVariant>>(null)
-  const portalTemplates = getMeta('ol-portalTemplates') || []
-  const { show: enableAddAffiliationWidget } = useAddAffiliation()
   const sendProjectListMB = useSendProjectListMB()
   const sendTrackingEvent = useCallback(
-    ({
-      dropdownMenu,
-      dropdownOpen,
-      institutionTemplateName,
-    }: SendTrackingEvent) => {
+    ({ dropdownMenu, dropdownOpen }: SendTrackingEvent) => {
       if (trackingKey) {
         let segmentation: Segmentation = {
           'welcome-page-redesign': 'default',
           dropdownMenu,
           dropdownOpen,
-        }
-
-        if (institutionTemplateName) {
-          segmentation = {
-            ...segmentation,
-            institutionTemplateName,
-          }
         }
 
         sendMB(trackingKey, segmentation)
@@ -108,24 +90,6 @@ function NewProjectButton({
       sendProjectListMB('new-project-click', { item: dropdownMenuEvent })
 
       setModal(modalVariant)
-    },
-    [sendProjectListMB, sendTrackingEvent]
-  )
-
-  const handlePortalTemplateClick = useCallback(
-    (e: React.MouseEvent, template: PortalTemplate) => {
-      // avoid invoking the "onClick" callback on the main dropdown button
-      e.stopPropagation()
-
-      sendTrackingEvent({
-        dropdownMenu: 'institution-template',
-        dropdownOpen: true,
-        institutionTemplateName: template.name,
-      })
-      sendProjectListMB('new-project-click', {
-        item: template.name,
-        destinationURL: template.url,
-      })
     },
     [sendProjectListMB, sendTrackingEvent]
   )
@@ -221,27 +185,6 @@ function NewProjectButton({
               />
             )}
           </li>
-          {portalTemplates.length > 0 ? (
-            <>
-              <DropdownDivider />
-              <DropdownHeader aria-hidden="true">
-                {`${t('institution')} ${t('templates')}`}
-              </DropdownHeader>
-              {portalTemplates.map((portalTemplate, index) => (
-                <li role="none" key={`portal-template-${index}`}>
-                  <DropdownItem
-                    key={`portal-template-${index}`}
-                    href={`${portalTemplate.url}#templates`}
-                    onClick={e => handlePortalTemplateClick(e, portalTemplate)}
-                    aria-label={`${portalTemplate.name} ${t('template')}`}
-                  >
-                    {portalTemplate.name}
-                  </DropdownItem>
-                </li>
-              ))}
-            </>
-          ) : null}
-
           {templateLinks && templateLinks.length > 0 && (
             <>
               <DropdownDivider />
@@ -263,14 +206,6 @@ function NewProjectButton({
               </DropdownItem>
             </li>
           ))}
-          {showAddAffiliationWidget && enableAddAffiliationWidget ? (
-            <>
-              <DropdownDivider />
-              <li className="add-affiliation-mobile-wrapper">
-                <AddAffiliation className="is-mobile" />
-              </li>
-            </>
-          ) : null}
         </DropdownMenu>
       </Dropdown>
       <NewProjectButtonModal modal={modal} onHide={() => setModal(null)} />

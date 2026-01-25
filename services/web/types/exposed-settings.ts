@@ -10,15 +10,11 @@ export type ExposedSettings = {
   cookieDomain: string
   dropboxAppName: string
   emailConfirmationDisabled: boolean
-  enableSubscriptions: boolean
   gaToken?: string
   gaTokenV4?: string
-  hasAffiliationsFeature: boolean
   hasLinkUrlFeature: boolean
   hasLinkedProjectFileFeature: boolean
   hasLinkedProjectOutputFileFeature: boolean
-  hasSamlBeta?: boolean
-  hasSamlFeature: boolean
   hotjarId?: string
   hotjarVersion?: string
   ieeeBrandId: number
@@ -36,7 +32,6 @@ export type ExposedSettings = {
   }
   recaptchaSiteKeyV3?: string
   recaptchaSiteKey?: string
-  samlInitPath?: string
   sentryAllowedOriginRegex: string
   sentryDsn?: string
   sentryEnvironment?: string

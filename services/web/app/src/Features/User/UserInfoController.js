@@ -13,8 +13,6 @@ function getLoggedInUsersPersonalInfo(req, res, next) {
     {
       first_name: true,
       last_name: true,
-      role: true,
-      institution: true,
       email: true,
       signUpDate: true,
     },
@@ -69,8 +67,6 @@ function formatPersonalInfo(user) {
     'last_name',
     'email',
     'signUpDate',
-    'role',
-    'institution',
   ]) {
     if (user[key]) {
       formattedUser[key] = user[key]

@@ -1,6 +1,5 @@
 import { useProjectListContext } from '../context/project-list-context'
 import { useTranslation } from 'react-i18next'
-import CurrentPlanWidget from './current-plan-widget/current-plan-widget'
 import NewProjectButton from './new-project-button'
 import ProjectListTable from './table/project-list-table'
 import UserNotifications from './notifications/user-notifications'
@@ -42,7 +41,6 @@ export function ProjectListDsNav() {
     <div className="pt-2 pb-3 d-md-none d-flex gap-2">
       <NewProjectButton
         id="new-project-button-projects-table"
-        showAddAffiliationWidget
       />
       <SearchForm
         inputValue={searchText}
@@ -79,14 +77,7 @@ export function ProjectListDsNav() {
                   />
                   <div className="project-tools">
                     <div className="d-none d-md-block">
-                      {selectedProjects.length === 0 ? (
-                        <CurrentPlanWidget />
-                      ) : (
-                        <ProjectTools />
-                      )}
-                    </div>
-                    <div className="d-md-none">
-                      <CurrentPlanWidget />
+                      {selectedProjects.length === 0 ? null : <ProjectTools />}
                     </div>
                   </div>
                 </div>

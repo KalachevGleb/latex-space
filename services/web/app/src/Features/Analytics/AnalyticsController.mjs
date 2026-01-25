@@ -6,7 +6,7 @@ import Features from '../../infrastructure/Features.js'
 import { expressify } from '@overleaf/promise-utils'
 
 async function registerSalesforceMapping(req, res, next) {
-  return res.sendStatus(202)
+    return res.sendStatus(202)
 }
 
 async function updateEditingSession(req, res, next) {

@@ -19,12 +19,10 @@ const trackChangesModuleAvailable =
  * @property {boolean | undefined} enableGithubSync
  * @property {boolean | undefined} enableGitBridge
  * @property {boolean | undefined} enableHomepage
- * @property {boolean | undefined} enableSaml
  * @property {boolean | undefined} ldap
  * @property {boolean | undefined} oauth
  * @property {Object | undefined} overleaf
  * @property {Object | undefined} overleaf.oauth
- * @property {boolean | undefined} saml
  */
 
 const Features = {
@@ -34,7 +32,6 @@ const Features = {
   externalAuthenticationSystemUsed() {
     return (
       (Boolean(Settings.ldap) && Boolean(Settings.ldap.enable)) ||
-      (Boolean(Settings.saml) && Boolean(Settings.saml.enable)) ||
       Boolean(Settings.overleaf)
     )
   },
@@ -74,8 +71,6 @@ const Features = {
         return Boolean(_.get(Settings, ['apis', 'v1', 'url']))
       case 'references':
         return Boolean(_.get(Settings, ['apis', 'references', 'url']))
-      case 'saml':
-        return Boolean(Settings.enableSaml)
       case 'linked-project-file':
         return Boolean(Settings.enabledLinkedFileTypes.includes('project_file'))
       case 'linked-project-output-file':

@@ -24,7 +24,7 @@
  * capability will be removed. A policy can remove more than one capability, and
  * more than one policy could apply to a user.
  *
- * Validator: a function that takes an object with user and subscription properties
+ * Validator: a function that takes an object with user and group policy properties
  * and returns a boolean indicating whether the user satisfies the policy or not.
  * For example, a validator for the `userCannotHaveSecondaryEmail` policy would
  * check whether the user has more than one email address.
@@ -370,18 +370,17 @@ function hasPermission(groupPolicy, capability) {
 /**
  * Asynchronously checks which policies a user complies with using the
  * applicable validators. Each validator is an async function that takes an object
- * with user, groupPolicy, and subscription properties and returns a boolean.
+ * with user and groupPolicy properties and returns a boolean.
  *
  * @param {Object} options - The options object.
  * @param {Object} options.user - The user object to check.
  * @param {Object} options.groupPolicy - The group policy object to check.
- * @param {Object} options.subscription - The subscription object for the group policy.
  * @returns {Promise<Map>} A promise that resolves with a Map object containing
  *   the validation status for each enforced policy. The keys of the Map are the
  *   enforced policy names, and the values are booleans indicating whether the
  *   user complies with the policy.
  */
-async function getUserValidationStatus({ user, groupPolicy, subscription }) {
+async function getUserValidationStatus({ user, groupPolicy }) {
   // find all the enforced policies for the user
   const enforcedPolicyNames = getEnforcedPolicyNames(groupPolicy)
   // for each enforced policy, we have a list of capabilities with expected values
@@ -393,7 +392,7 @@ async function getUserValidationStatus({ user, groupPolicy, subscription }) {
     if (validator) {
       userValidationStatus.set(
         enforcedPolicyName,
-        await validator({ user, subscription })
+        await validator({ user, groupPolicy })
       )
     }
   }
@@ -402,7 +401,6 @@ async function getUserValidationStatus({ user, groupPolicy, subscription }) {
 
 /**
  * asserts that a user has permission for a given set of capabilities
- *    as set out in both their current group subscription, and any institutions they are affiliated with,
  *    throwing an ForbiddenError if they do not
  *
  * @param {Object} user - The user object to retrieve the group policy for.
@@ -425,7 +423,6 @@ async function assertUserPermissions(user, requiredCapabilities) {
 
 /**
  * Checks if a user has permission for a given set of capabilities
- *  as set out in both their current group subscription, and any institutions they are affiliated with
  *
  * @param {Object} user - The user object to retrieve the group policy for.
  *   Only the user's _id is required

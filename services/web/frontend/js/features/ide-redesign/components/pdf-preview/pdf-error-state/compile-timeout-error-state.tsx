@@ -1,130 +1,22 @@
 import OLButton from '@/shared/components/ol/ol-button'
 import MaterialIcon from '@/shared/components/material-icon'
 import { Trans, useTranslation } from 'react-i18next'
-import { useDetachCompileContext as useCompileContext } from '@/shared/context/detach-compile-context'
 import { useStopOnFirstError } from '@/shared/hooks/use-stop-on-first-error'
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import ErrorState from './error-state'
-import StartFreeTrialButton from '@/shared/components/start-free-trial-button'
-import getMeta from '@/utils/meta'
-import {
-  populateEditorRedesignSegmentation,
-  useEditorAnalytics,
-} from '@/shared/hooks/use-editor-analytics'
-import {
-  isNewUser,
-  useIsNewEditorEnabled,
-} from '@/features/ide-redesign/utils/new-editor-utils'
-import { getSplitTestVariant } from '@/utils/splitTestUtils'
 
 export const ShortCompileTimeoutErrorState = () => {
   const { t } = useTranslation()
-  const { isProjectOwner } = useCompileContext()
-  const { sendEvent } = useEditorAnalytics()
-  const newEditor = useIsNewEditorEnabled()
-
-  const { compileTimeout } = getMeta('ol-compileSettings')
-  const segmentation = useMemo(
-    () =>
-      populateEditorRedesignSegmentation(
-        {
-          'is-owner': isProjectOwner,
-          compileTime: compileTimeout,
-          location: 'error-state',
-        },
-        newEditor
-      ),
-    [isProjectOwner, compileTimeout, newEditor]
-  )
-
-  const sendInfoClickEvent = useCallback(() => {
-    sendEvent('paywall-info-click', {
-      ...segmentation,
-      'paywall-type': 'compile-timeout',
-      content: 'blog',
-    })
-  }, [segmentation, sendEvent])
-
-  const extraSearchParams = useMemo(() => {
-    if (!isNewUser()) {
-      return undefined
-    }
-
-    const variant = getSplitTestVariant('editor-redesign-new-users')
-
-    if (!variant) {
-      return undefined
-    }
-
-    return {
-      itm_content: variant,
-    }
-  }, [])
 
   return (
     <ErrorState
       title={t('your_compile_timed_out')}
-      description={
-        <>
-          <p>
-            {isProjectOwner
-              ? t('your_project_exceeded_compile_timeout_limit_on_free_plan')
-              : t('this_project_exceeded_compile_timeout_limit_on_free_plan')}
-          </p>
-          {isProjectOwner ? (
-            <p>
-              <strong>{t('upgrade_for_more_compile_time')}</strong>{' '}
-              {t(
-                'plus_additional_collaborators_document_history_track_changes_and_more'
-              )}
-            </p>
-          ) : (
-            <Trans
-              i18nKey="tell_the_project_owner_and_ask_them_to_upgrade"
-              components={[
-                // eslint-disable-next-line react/jsx-key
-                <strong />,
-              ]}
-            />
-          )}
-        </>
-      }
+      description={t('project_timed_out_intro_short')}
       iconType="running_with_errors"
       extraContent={
         <div className="pdf-error-state-info-box">
-          <p>
-            <em>
-              <Trans
-                i18nKey="weve_reduced_compile_timeout"
-                components={[
-                  /* eslint-disable-next-line jsx-a11y/anchor-has-content, react/jsx-key */
-                  <a
-                    aria-label={t(
-                      'read_more_about_free_compile_timeouts_servers'
-                    )}
-                    href="/blog/changes-to-free-compile-timeout"
-                    rel="noopener noreferrer"
-                    target="_blank"
-                    onClick={sendInfoClickEvent}
-                  />,
-                ]}
-              />
-            </em>
-          </p>
           <ReasonsForTimeoutInfo />
         </div>
-      }
-      actions={
-        isProjectOwner && (
-          <StartFreeTrialButton
-            source="compile-timeout"
-            buttonProps={{ variant: 'premium', size: 'sm' }}
-            segmentation={segmentation}
-            extraSearchParams={extraSearchParams}
-          >
-            {t('start_a_free_trial')}
-          </StartFreeTrialButton>
-        )
       }
     />
   )

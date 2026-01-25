@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { sendMB } from '@/infrastructure/event-tracking'
 import { useTranslation } from 'react-i18next'
-import { Button, Container, Nav, Navbar } from 'react-bootstrap'
+import { Container, Nav, Navbar } from 'react-bootstrap'
 import useWaitForI18n from '@/shared/hooks/use-wait-for-i18n'
 import AdminMenu from '@/shared/components/navbar/admin-menu'
 import type { DefaultNavbarMetadata } from '@/shared/components/types/default-navbar-metadata'
@@ -29,11 +28,9 @@ function DefaultNavbar(
     canDisplaySplitTestMenu,
     canDisplaySurveyMenu,
     canDisplayScriptLogMenu,
-    enableUpgradeButton,
     suppressNavbarRight,
     suppressNavContentLinks,
     showCloseIcon = false,
-    showSubscriptionLink,
     showSignUpLink,
     sessionUser,
     adminUrl,
@@ -70,23 +67,6 @@ function DefaultNavbar(
               overleafLogo={overleafLogo}
               customLogo={customLogo}
             />
-            {enableUpgradeButton ? (
-              <Button
-                as="a"
-                href="/user/subscription/plans"
-                className="me-2 d-md-none"
-                onClick={() => {
-                  sendMB('upgrade-button-click', {
-                    source: 'dashboard-top',
-                    'project-dashboard-react': 'enabled',
-                    'is-dashboard-sidebar-hidden': 'true',
-                    'is-screen-width-less-than-768px': 'true',
-                  })
-                }}
-              >
-                {t('upgrade')}
-              </Button>
-            ) : null}
           </div>
           {suppressNavbarRight ? null : (
             <>
@@ -136,10 +116,7 @@ function DefaultNavbar(
                     ) : null
                   })}
                   {sessionUser ? (
-                    <LoggedInItems
-                      sessionUser={sessionUser}
-                      showSubscriptionLink={showSubscriptionLink}
-                    />
+                    <LoggedInItems sessionUser={sessionUser} />
                   ) : (
                     <LoggedOutItems showSignUpLink={showSignUpLink} />
                   )}

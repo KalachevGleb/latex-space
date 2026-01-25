@@ -1,6 +1,5 @@
 const Queues = require('../../infrastructure/Queues')
 const UserGetter = require('./UserGetter')
-const AnalyticsManager = require('../Analytics/AnalyticsManager')
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
@@ -17,15 +16,6 @@ async function postRegistrationAnalytics(userId) {
   if (!user) {
     return
   }
-  await checkAffiliations(userId)
-}
-
-async function checkAffiliations(userId) {
-  await AnalyticsManager.setUserPropertyForUser(
-    userId,
-    'registered-from-commons-account',
-    false
-  )
 }
 
 module.exports = {

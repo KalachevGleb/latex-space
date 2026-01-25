@@ -3,7 +3,7 @@ if(customerIoEnabled && ExposedSettings.cioWriteKey && ExposedSettings.cioSiteId
 		function boolAttr(value) {
 			return value !== undefined ? String(value) : null;
 		}
-	script(type="text/javascript", id="cio-loader", nonce=scriptNonce, data-best-subscription=(usersBestSubscription && usersBestSubscription.type), data-ai-blocked=boolAttr(aiBlocked), data-has-ai-assist=boolAttr(hasAiAssist), data-cio-write-key=ExposedSettings.cioWriteKey, data-cio-site-id=ExposedSettings.cioSiteId, data-session-analytics-id=getSessionAnalyticsId(), data-user-id=getLoggedInUserId(), data-last-active=lastActive, data-sign-up-date=signUpDate).
+	script(type="text/javascript", id="cio-loader", nonce=scriptNonce, data-ai-blocked=boolAttr(aiBlocked), data-has-ai-assist=boolAttr(hasAiAssist), data-cio-write-key=ExposedSettings.cioWriteKey, data-cio-site-id=ExposedSettings.cioSiteId, data-session-analytics-id=getSessionAnalyticsId(), data-user-id=getLoggedInUserId(), data-last-active=lastActive, data-sign-up-date=signUpDate).
 		
 		function parseBool(value) {
 			return value === 'true' ? true : value === 'false' ? false : undefined;
@@ -14,7 +14,6 @@ if(customerIoEnabled && ExposedSettings.cioWriteKey && ExposedSettings.cioSiteId
 		var siteId = cioSettings.cioSiteId;
 		var writeKey = cioSettings.cioWriteKey;
 		var userId = cioSettings.userId;
-		var usersBestSubscription = cioSettings.bestSubscription;
 		var aiBlocked = parseBool(cioSettings.aiBlocked);
 		var hasAiAssist = parseBool(cioSettings.hasAiAssist);
 		var lastActive = cioSettings.lastActive;
@@ -42,7 +41,6 @@ if(customerIoEnabled && ExposedSettings.cioWriteKey && ExposedSettings.cioSiteId
 			}
 			
 			var identifyData = {overleafId: userId, lastActive, signUpDate};
-			addIfDefined(identifyData, 'best-subscription-type', usersBestSubscription);
 			addIfDefined(identifyData, 'aiBlocked', aiBlocked);
 			addIfDefined(identifyData, 'hasAiAssist', hasAiAssist);
 			

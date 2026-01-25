@@ -308,14 +308,6 @@
   }
 }
 
-.toolbar-header-upgrade-prompt {
-  margin-left: var(--spacing-05);
-
-  @include media-breakpoint-down(lg) {
-    display: none !important;
-  }
-}
-
 .toolbar-filetree {
   @include toolbar-sm-height;
 

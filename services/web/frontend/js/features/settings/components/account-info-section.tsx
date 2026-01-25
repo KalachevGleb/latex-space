@@ -16,7 +16,6 @@ import OLFormText from '@/shared/components/ol/ol-form-text'
 
 function AccountInfoSection() {
   const { t } = useTranslation()
-  const { hasAffiliationsFeature } = getMeta('ol-ExposedSettings')
   const isExternalAuthenticationSystemUsed = getMeta(
     'ol-isExternalAuthenticationSystemUsed'
   )
@@ -48,8 +47,7 @@ function AccountInfoSection() {
     setLastName(event.target.value)
   }
 
-  const canUpdateEmail =
-    !hasAffiliationsFeature && !isExternalAuthenticationSystemUsed
+  const canUpdateEmail = !isExternalAuthenticationSystemUsed
   const canUpdateNames = shouldAllowEditingDetails
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -72,17 +70,15 @@ function AccountInfoSection() {
     <>
       <h3 id="update-account-info">{t('update_account_info')}</h3>
       <form id="account-info-form" onSubmit={handleSubmit}>
-        {hasAffiliationsFeature ? null : (
-          <ReadOrWriteFormGroup
-            id="email-input"
-            type="email"
-            label={t('email')}
-            value={email}
-            handleChange={handleEmailChange}
-            canEdit={canUpdateEmail}
-            required
-          />
-        )}
+        <ReadOrWriteFormGroup
+          id="email-input"
+          type="email"
+          label={t('email')}
+          value={email}
+          handleChange={handleEmailChange}
+          canEdit={canUpdateEmail}
+          required
+        />
         <ReadOrWriteFormGroup
           id="first-name-input"
           type="text"

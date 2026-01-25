@@ -40,24 +40,9 @@ const QUEUES_JOB_OPTIONS = {
     removeOnFail: MAX_FAILED_JOBS_RETAINED,
     attempts: 1,
   },
-  'confirm-institution-domain': {
-    removeOnFail: MAX_FAILED_JOBS_RETAINED,
-    attempts: 3,
-  },
-
-  'group-sso-reminder': {
-    removeOnFail: MAX_FAILED_JOBS_RETAINED,
-    attempts: 3,
-  },
 }
 
 const QUEUE_OPTIONS = {
-  'confirm-institution-domain': {
-    limiter: {
-      max: 1,
-      duration: 60 * 1000,
-    },
-  },
 }
 
 const ANALYTICS_QUEUES = [

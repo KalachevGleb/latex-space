@@ -1,5 +1,5 @@
 /**
- * Hook to subscribe to compilation updates via WebSocket
+ * Hook to listen for compilation updates via WebSocket
  */
 import { useEffect } from 'react'
 import { useConnectionContext } from '../context/connection-context'
@@ -20,7 +20,7 @@ export interface CompilationUpdate {
 }
 
 /**
- * Subscribe to compilation updates for the current project
+ * Listen for compilation updates for the current project
  * 
  * @param handler - Function to call when compilation update is received
  */
@@ -41,7 +41,7 @@ export function useCompilationUpdates(handler: CompilationUpdateHandler) {
     socket.on('compilationUpdate', handleCompilationUpdate)
 
     return () => {
-      // Cleanup subscription
+      // Cleanup listener
       socket.off('compilationUpdate', handleCompilationUpdate)
     }
   }, [socket, handler])

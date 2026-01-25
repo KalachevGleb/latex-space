@@ -3,7 +3,6 @@ import { memo } from 'react'
 import classnames from 'classnames'
 import PdfValidationIssue from './pdf-validation-issue'
 import StopOnFirstErrorPrompt from './stop-on-first-error-prompt'
-import TimeoutUpgradePromptNew from './timeout-upgrade-prompt-new'
 import PdfPreviewError from './pdf-preview-error'
 import PdfClearCacheButton from './pdf-clear-cache-button'
 import PdfDownloadFilesButton from './pdf-download-files-button'
@@ -14,7 +13,6 @@ import PdfCodeCheckFailedNotice from './pdf-code-check-failed-notice'
 import { useDetachCompileContext as useCompileContext } from '../../../shared/context/detach-compile-context'
 import PdfLogEntry from './pdf-log-entry'
 import { usePdfPreviewContext } from '@/features/pdf-preview/components/pdf-preview-provider'
-import getMeta from '@/utils/meta'
 
 function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
   const {
@@ -28,8 +26,6 @@ function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
   } = useCompileContext()
 
   const { loadingError } = usePdfPreviewContext()
-
-  const { compileTimeout } = getMeta('ol-compileSettings')
 
   const { t } = useTranslation()
 
@@ -47,11 +43,7 @@ function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
 
         {loadingError && <PdfPreviewError error="pdf-viewer-loading-error" />}
 
-        {compileTimeout < 60 && error === 'timedout' ? (
-          <TimeoutUpgradePromptNew />
-        ) : (
-          <>{error && <PdfPreviewError error={error} />}</>
-        )}
+        {error && <PdfPreviewError error={error} />}
 
         {validationIssues &&
           Object.entries(validationIssues).map(([name, issue]) => (

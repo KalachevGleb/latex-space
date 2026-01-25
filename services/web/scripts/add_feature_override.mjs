@@ -15,7 +15,7 @@
 // --commit   do the update, remove this option for dry-run testing
 // --note     text description [optional]
 // --expires  expiry date for override [optional]
-// --skip-existing   don't create the override for users who already have the feature (e.g. via a subscription)
+// --skip-existing   don't create the override for users who already have the feature via another grant
 //
 // IDFILE: file containing list of user ids, one per line
 // JSONFILE:  file containing JSON of the desired feature overrides e.g. {"symbolPalette": true}
@@ -28,9 +28,9 @@ import minimist from 'minimist'
 import fs from 'node:fs'
 import { ObjectId } from '../app/src/infrastructure/mongodb.js'
 import pLimit from 'p-limit'
-import FeaturesUpdater from '../app/src/Features/Subscription/FeaturesUpdater.js'
-import FeaturesHelper from '../app/src/Features/Subscription/FeaturesHelper.js'
-import UserFeaturesUpdater from '../app/src/Features/Subscription/UserFeaturesUpdater.js'
+import FeaturesUpdater from '../app/src/Features/UserFeatures/FeaturesUpdater.js'
+import FeaturesHelper from '../app/src/Features/UserFeatures/FeaturesHelper.js'
+import UserFeaturesUpdater from '../app/src/Features/UserFeatures/UserFeaturesUpdater.js'
 import UserGetter from '../app/src/Features/User/UserGetter.js'
 
 const processLogger = {

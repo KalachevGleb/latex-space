@@ -2,7 +2,7 @@ const Features = require('./Features')
 const Queues = require('./Queues')
 const UserOnboardingEmailManager = require('../Features/User/UserOnboardingEmailManager')
 const UserPostRegistrationAnalyticsManager = require('../Features/User/UserPostRegistrationAnalyticsManager')
-const FeaturesUpdater = require('../Features/Subscription/FeaturesUpdater')
+const FeaturesUpdater = require('../Features/UserFeatures/FeaturesUpdater')
 const {
   addOptionalCleanupHandlerBeforeStoppingTraffic,
   addRequiredCleanupHandlerBeforeDrainingConnections,
@@ -71,23 +71,6 @@ function start() {
     }
   })
 
-  registerQueue('group-sso-reminder', async job => {
-    const { userId, subscriptionId } = job.data
-    try {
-      await Modules.promises.hooks.fire(
-        'sendGroupSSOReminder',
-        userId,
-        subscriptionId
-      )
-    } catch (e) {
-      const error = OError.tag(
-        e,
-        'failed to send scheduled Group SSO account linking reminder'
-      )
-      logger.warn({ error, userId, subscriptionId }, error.message)
-      throw error
-    }
-  })
 }
 
 function registerCleanup(queue) {

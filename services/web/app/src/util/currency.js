@@ -3,12 +3,8 @@
  */
 
 /**
- * @import { CurrencyCode } from '../../../types/subscription/currency'
- */
-
-/**
  * @param {number} amount
- * @param {CurrencyCode} currency
+ * @param {string} currency
  * @param {string} locale
  * @param {boolean} stripIfInteger
  * @returns {string}

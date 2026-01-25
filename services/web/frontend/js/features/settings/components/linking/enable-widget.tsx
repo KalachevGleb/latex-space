@@ -1,12 +1,7 @@
 import { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { sendMB } from '@/infrastructure/event-tracking'
 import OLBadge from '@/shared/components/ol/ol-badge'
 import OLButton from '@/shared/components/ol/ol-button'
-
-function trackUpgradeClick() {
-  sendMB('settings-upgrade-click')
-}
 
 type EnableWidgetProps = {
   logo: ReactNode
@@ -97,15 +92,7 @@ export function ActionButton({
   const linkingText = linkText || t('turn_on')
   const unlinkingText = unlinkText || t('turn_off')
   if (!hasFeature) {
-    return (
-      <OLButton
-        variant="primary"
-        href="/user/subscription/plans"
-        onClick={trackUpgradeClick}
-      >
-        <span>{t('upgrade')}</span>
-      </OLButton>
-    )
+    return null
   } else if (linked) {
     return (
       <OLButton

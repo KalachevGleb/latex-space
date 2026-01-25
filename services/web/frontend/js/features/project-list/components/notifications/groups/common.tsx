@@ -8,7 +8,6 @@ import {
   NotificationProjectInvite,
   Notification as NotificationType,
 } from '../../../../../../../types/project/dashboard/notification'
-import GroupInvitationNotification from './group-invitation/group-invitation'
 import { debugConsole } from '@/utils/debugging'
 import OLButton from '@/shared/components/ol/ol-button'
 
@@ -33,8 +32,6 @@ type CommonNotificationProps = {
 
 function CommonNotification({ notification }: CommonNotificationProps) {
   const { t } = useTranslation()
-  const { samlInitPath } = getMeta('ol-ExposedSettings')
-  const user = getMeta('ol-user')
   const { isLoading, isSuccess, error, runAsync } = useAsync<
     never,
     FetchError
@@ -105,91 +102,6 @@ function CommonNotification({ notification }: CommonNotificationProps) {
             )
           }
         />
-      ) : templateKey === 'wfh_2020_upgrade_offer' ? (
-        <Notification
-          type="info"
-          onDismiss={() => id && handleDismiss(id)}
-          content={
-            <>
-              Important notice: Your free WFH2020 upgrade came to an end on June
-              30th 2020. We're still providing a number of special initiatives
-              to help you continue collaborating throughout 2020.
-            </>
-          }
-          action={
-            <OLButton
-              variant="secondary"
-              href="https://www.overleaf.com/events/wfh2020"
-            >
-              View
-            </OLButton>
-          }
-        />
-      ) : templateKey === 'notification_ip_matched_affiliation' ? (
-        <Notification
-          type="info"
-          onDismiss={() => id && handleDismiss(id)}
-          content={
-            <>
-              <Trans
-                i18nKey="looks_like_youre_at"
-                components={[<b />]} // eslint-disable-line react/jsx-key
-                values={{
-                  institutionName: notification.messageOpts.university_name,
-                }}
-                shouldUnescape
-                tOptions={{ interpolation: { escapeValue: true } }}
-              />
-              <br />
-              {notification.messageOpts.ssoEnabled ? (
-                <>
-                  <Trans
-                    i18nKey="you_can_now_log_in_sso"
-                    components={[<b />]} // eslint-disable-line react/jsx-key
-                  />
-                  <br />
-                  {t('link_institutional_email_get_started')}{' '}
-                  <a
-                    href={
-                      notification.messageOpts.portalPath ||
-                      'https://www.overleaf.com/learn/how-to/Institutional_Login'
-                    }
-                  >
-                    {t('find_out_more_nt')}
-                  </a>
-                </>
-              ) : (
-                <>
-                  <Trans
-                    i18nKey="did_you_know_institution_providing_professional"
-                    components={[<b />]} // eslint-disable-line react/jsx-key
-                    values={{
-                      institutionName: notification.messageOpts.university_name,
-                    }}
-                    shouldUnescape
-                    tOptions={{ interpolation: { escapeValue: true } }}
-                  />
-                  <br />
-                  {t('add_email_to_claim_features')}
-                </>
-              )}
-            </>
-          }
-          action={
-            <OLButton
-              variant="secondary"
-              href={
-                notification.messageOpts.ssoEnabled
-                  ? `${samlInitPath}?university_id=${notification.messageOpts.institutionId}&auto=/project`
-                  : '/user/settings'
-              }
-            >
-              {notification.messageOpts.ssoEnabled
-                ? t('link_account')
-                : t('add_affiliation')}
-            </OLButton>
-          }
-        />
       ) : templateKey === 'notification_tpds_file_limit' ? (
         <Notification
           type="error"
@@ -242,49 +154,6 @@ function CommonNotification({ notification }: CommonNotificationProps) {
                 .
               </p>
             </>
-          }
-        />
-      ) : templateKey ===
-        'notification_dropbox_unlinked_due_to_lapsed_reconfirmation' ? (
-        <Notification
-          type="info"
-          onDismiss={() => id && handleDismiss(id)}
-          content={
-            <>
-              <Trans
-                i18nKey="dropbox_unlinked_premium_feature"
-                components={[<b />]} // eslint-disable-line react/jsx-key
-              />{' '}
-              {user.features?.dropbox ? (
-                <Trans
-                  i18nKey="can_now_relink_dropbox"
-                  /* eslint-disable-next-line jsx-a11y/anchor-has-content, react/jsx-key */
-                  components={[<a href="/user/settings#project-sync" />]}
-                />
-              ) : (
-                t('confirm_affiliation_to_relink_dropbox')
-              )}{' '}
-              <a
-                href="/learn/how-to/Institutional_Email_Reconfirmation"
-                target="_blank"
-              >
-                {t('learn_more')}
-              </a>
-            </>
-          }
-        />
-      ) : templateKey === 'notification_group_invitation' ? (
-        <GroupInvitationNotification notification={notification} />
-      ) : templateKey === 'notification_personal_and_group_subscriptions' ? (
-        <Notification
-          type="warning"
-          onDismiss={() => id && handleDismiss(id)}
-          content={
-            <Trans
-              i18nKey="notification_personal_and_group_subscriptions"
-              /* eslint-disable-next-line jsx-a11y/anchor-has-content, react/jsx-key */
-              components={[<strong />, <a href="/user/subscription" />]}
-            />
           }
         />
       ) : (

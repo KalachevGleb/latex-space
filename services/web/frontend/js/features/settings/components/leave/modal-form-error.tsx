@@ -24,8 +24,6 @@ function LeaveModalFormError({ error }: LeaveModalFormErrorProps) {
         />
       )
     }
-  } else if (error.data?.error === 'SubscriptionAdminDeletionError') {
-    errorMessage = t('subscription_admins_cannot_be_deleted')
   } else {
     errorMessage = t('user_deletion_error')
   }

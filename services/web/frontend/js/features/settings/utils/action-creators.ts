@@ -4,12 +4,8 @@ import {
   ActionSetLoading,
   ActionMakePrimary,
   ActionDeleteEmail,
-  ActionSetEmailAffiliationBeingEdited,
-  ActionUpdateAffiliation,
 } from '../context/user-email-context'
 import { UserEmailData } from '../../../../../types/user-email'
-import { Nullable } from '../../../../../types/utils'
-import { Affiliation } from '../../../../../types/affiliation'
 
 export const setData = (data: UserEmailData[]): ActionSetData => ({
   type: Actions.SET_DATA,
@@ -35,18 +31,3 @@ export const deleteEmail = (
   payload: email,
 })
 
-export const setEmailAffiliationBeingEdited = (
-  email: Nullable<UserEmailData['email']>
-): ActionSetEmailAffiliationBeingEdited => ({
-  type: Actions.SET_EMAIL_AFFILIATION_BEING_EDITED,
-  payload: email,
-})
-
-export const updateAffiliation = (
-  email: UserEmailData['email'],
-  role: Affiliation['role'],
-  department: Affiliation['department']
-): ActionUpdateAffiliation => ({
-  type: Actions.UPDATE_AFFILIATION,
-  payload: { email, role, department },
-})

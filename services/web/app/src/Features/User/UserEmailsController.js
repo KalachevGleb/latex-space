@@ -16,9 +16,7 @@ const AnalyticsManager = require('../Analytics/AnalyticsManager')
 const UserPrimaryEmailCheckHandler = require('../User/UserPrimaryEmailCheckHandler')
 const UserAuditLogHandler = require('./UserAuditLogHandler')
 const { RateLimiter } = require('../../infrastructure/RateLimiter')
-const Features = require('../../infrastructure/Features')
 const tsscmp = require('tsscmp')
-const Modules = require('../../infrastructure/Modules')
 
 const AUDIT_LOG_TOKEN_PREFIX_LENGTH = 10
 
@@ -78,12 +76,6 @@ async function addWithConfirmationCode(req, res) {
 
   const userId = SessionManager.getLoggedInUserId(req.session)
   const email = EmailHelper.parseEmail(req.body.email)
-  const affiliationOptions = {
-    university: req.body.university,
-    role: req.body.role,
-    department: req.body.department,
-  }
-
   if (!email) {
     return res.sendStatus(422)
   }
@@ -114,12 +106,7 @@ async function addWithConfirmationCode(req, res) {
       }
     )
 
-    await sendCodeAndStoreInSession(
-      req,
-      'pendingSecondaryEmail',
-      email,
-      affiliationOptions
-    )
+    await sendCodeAndStoreInSession(req, 'pendingSecondaryEmail', email)
 
     return res.sendStatus(200)
   } catch (err) {
@@ -152,14 +139,12 @@ async function addWithConfirmationCode(req, res) {
  * @param {import('express').Request} req
  * @param {string} sessionKey
  * @param {string} email
- * @param affiliationOptions
  * @returns {Promise<void>}
  */
 async function sendCodeAndStoreInSession(
   req,
   sessionKey,
-  email,
-  affiliationOptions
+  email
 ) {
   const { confirmCode, confirmCodeExpiresTimestamp } =
     await UserEmailsConfirmationHandler.promises.sendConfirmationCode(
@@ -170,13 +155,12 @@ async function sendCodeAndStoreInSession(
     email,
     confirmCode,
     confirmCodeExpiresTimestamp,
-    affiliationOptions,
   }
 }
 
 /**
  * @param {string} sessionKey
- * @param {(req: import('express').Request, user: any, email: string, affiliationOptions: any) => Promise<void>} beforeConfirmEmail
+ * @param {(req: import('express').Request, user: any, email: string) => Promise<void>} beforeConfirmEmail
  * @returns {Promise<*>}
  */
 const _checkConfirmationCode =
@@ -231,18 +215,9 @@ const _checkConfirmationCode =
     }
 
     try {
-      await beforeConfirmEmail(
-        req,
-        user,
-        emailToCheck,
-        sessionData.affiliationOptions
-      )
+      await beforeConfirmEmail(req, user, emailToCheck)
 
-      await UserUpdater.promises.confirmEmail(
-        userId,
-        emailToCheck,
-        sessionData.affiliationOptions
-      )
+      await UserUpdater.promises.confirmEmail(userId, emailToCheck)
 
       delete req.session[sessionKey]
 
@@ -272,14 +247,6 @@ const _checkConfirmationCode =
         })
       }
 
-      if (error.name === 'InvalidInstitutionalEmailError') {
-        return res.status(422).json({
-          message: {
-            key: 'email_does_not_belong_to_university',
-          },
-        })
-      }
-
       logger.err({ error }, 'failed to check confirmation code')
 
       return res.status(500).json({
@@ -292,7 +259,7 @@ const _checkConfirmationCode =
 
 const checkNewSecondaryEmailConfirmationCode = _checkConfirmationCode(
   'pendingSecondaryEmail',
-  async (req, user, email, affiliationOptions) => {
+  async (req, user, email) => {
     await UserAuditLogHandler.promises.addEntry(
       user._id,
       'add-email-via-code',
@@ -300,15 +267,10 @@ const checkNewSecondaryEmailConfirmationCode = _checkConfirmationCode(
       req.ip,
       { newSecondaryEmail: email }
     )
-    await UserUpdater.promises.addEmailAddress(
-      user._id,
-      email,
-      affiliationOptions,
-      {
-        initiatorId: user._id,
-        ipAddress: req.ip,
-      }
-    )
+    await UserUpdater.promises.addEmailAddress(user._id, email, {}, {
+      initiatorId: user._id,
+      ipAddress: req.ip,
+    })
     await _sendSecurityAlertEmail(user, email)
   }
 )
@@ -459,29 +421,6 @@ async function primaryEmailCheck(req, res) {
     userId,
     'primary-email-check-done'
   )
-
-  // We want to redirect to prompt a user to add a secondary email if their primary
-  // is an institutional email and they dont' already have a secondary.
-  if (Features.hasFeature('saas') && req.capabilitySet.has('add-affiliation')) {
-    const confirmedEmails =
-      await UserGetter.promises.getUserConfirmedEmails(userId)
-
-    if (confirmedEmails.length < 2) {
-      const { email: primaryEmail } = SessionManager.getSessionUser(req.session)
-      const primaryEmailDomain = EmailHelper.getDomain(primaryEmail)
-
-      const institution = (
-        await Modules.promises.hooks.fire(
-          'getInstitutionViaDomain',
-          primaryEmailDomain
-        )
-      )?.[0]
-
-      if (institution) {
-        return AsyncFormHelper.redirect(req, res, '/user/emails/add-secondary')
-      }
-    }
-  }
 
   AsyncFormHelper.redirect(req, res, '/project')
 }

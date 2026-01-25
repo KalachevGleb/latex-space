@@ -13,7 +13,6 @@ import EditorController from '../Editor/EditorController.js'
 import ProjectHelper from './ProjectHelper.js'
 import metrics from '@overleaf/metrics'
 import { User } from '../../models/User.js'
-import LimitationsManager from '../Subscription/LimitationsManager.js'
 import Settings from '@overleaf/settings'
 import AuthorizationManager from '../Authorization/AuthorizationManager.js'
 import InactiveProjectManager from '../InactiveData/InactiveProjectManager.mjs'
@@ -32,7 +31,7 @@ import UserController from '../User/UserController.mjs'
 import AnalyticsManager from '../Analytics/AnalyticsManager.js'
 import SplitTestHandler from '../SplitTests/SplitTestHandler.js'
 import SplitTestSessionHandler from '../SplitTests/SplitTestSessionHandler.js'
-import FeaturesUpdater from '../Subscription/FeaturesUpdater.js'
+import FeaturesUpdater from '../UserFeatures/FeaturesUpdater.js'
 import SpellingHandler from '../Spelling/SpellingHandler.mjs'
 import { hasAdminAccess } from '../Helpers/AdminAuthorizationHelper.js'
 import ProjectAuditLogHandler from './ProjectAuditLogHandler.mjs'
@@ -438,32 +437,6 @@ const _ProjectController = {
       userId = null
     }
 
-    if (Features.hasFeature('saas') && userId) {
-      const { variant: domainCaptureRedirect } =
-        await SplitTestHandler.promises.getAssignment(
-          req,
-          res,
-          'domain-capture-redirect'
-        )
-
-      if (domainCaptureRedirect === 'enabled') {
-        const subscription = (
-          await Modules.promises.hooks.fire(
-            'findDomainCaptureGroupUserCouldBePartOf',
-            userId
-          )
-        )?.[0]
-
-        if (subscription) {
-          if (subscription.managedUsersEnabled) {
-            return res.redirect('/domain-capture')
-          } else {
-            // TODO show notification or anything else
-          }
-        }
-      }
-    }
-
     const projectId = req.params.Project_id
 
     // should not be used in place of split tests query param overrides (?my-split-test-name=my-variant)
@@ -524,9 +497,6 @@ const _ProjectController = {
             userId,
             projectId
           ),
-          userHasInstitutionLicence: false,
-          affiliations: [],
-          subscription: null,
           isTokenMember: CollaboratorsGetter.promises.userIsTokenMember(
             userId,
             projectId
@@ -562,14 +532,6 @@ const _ProjectController = {
           pendingEditor_refs: 1, // used for link sharing analytics
           reviewer_refs: 1,
         }),
-        userIsMemberOfGroupSubscription: sessionUser
-          ? (async () =>
-              (
-                await LimitationsManager.promises.userIsMemberOfGroupSubscription(
-                  sessionUser
-                )
-              ).isMember)()
-          : false,
         _flushToTpds:
           TpdsProjectFlusher.promises.flushProjectToTpdsIfNeeded(projectId),
         _activate:
@@ -578,14 +540,12 @@ const _ProjectController = {
           ),
       })
 
-      const { project, userValues, userIsMemberOfGroupSubscription } = responses
+      const { project, userValues } = responses
 
       const {
         user,
         learnedWords,
         projectTags,
-        userHasInstitutionLicence,
-        subscription,
         isTokenMember,
         isInvitedMember,
       } = userValues
@@ -740,6 +700,7 @@ const _ProjectController = {
       const userInNonIndividualSub = false
       const userHasPremiumSub = false
       const showUpgradePrompt = false
+      const addonPrices = null
 
       let aiFeaturesAllowed = false
       if (userId && Features.hasFeature('saas')) {
@@ -787,7 +748,6 @@ const _ProjectController = {
         userValues,
         userId,
         aiFeaturesAllowed,
-        userIsMemberOfGroupSubscription
       )
 
       const template =
@@ -811,24 +771,15 @@ const _ProjectController = {
         capabilities.push('link-sharing')
       }
 
-      const isOverleafAssistBundleEnabled = false
-
       let fullFeatureSet = user?.features
       if (!anonymous) {
         fullFeatureSet = await UserGetter.promises.getUserFeatures(userId)
       }
 
-      const hasPaidSubscription = false
-      const hasManuallyCollectedSubscription = false
       const assistantDisabled = user.aiErrorAssistant?.enabled === false // the assistant has been manually disabled by the user
       const canUseErrorAssistant = !assistantDisabled
 
       const customerIoEnabled = false
-
-      const addonPrices = null
-
-      const planCode = null
-      const planDetails = null
 
       res.render(template, {
         title: project.name,
@@ -845,8 +796,6 @@ const _ProjectController = {
           last_name: user.last_name,
           referal_id: user.referal_id,
           signUpDate: user.signUpDate,
-          allowedFreeTrial,
-          hasPaidSubscription,
           featureSwitches: user.featureSwitches,
           features: fullFeatureSet,
           featureUsage,
@@ -861,11 +810,6 @@ const _ProjectController = {
           labsProgram: user.labsProgram,
           inactiveTutorials: TutorialHandler.getInactiveTutorials(user),
           isAdmin: hasAdminAccess(user),
-          planCode,
-          planName: planDetails?.name,
-          isAnnualPlan: planCode && planDetails?.annual,
-          isMemberOfGroupSubscription: userIsMemberOfGroupSubscription,
-          hasInstitutionLicence: userHasInstitutionLicence,
         },
         userSettings: {
           mode: user.ace.mode,
@@ -925,9 +869,7 @@ const _ProjectController = {
         projectTags,
         isSaas: Features.hasFeature('saas'),
         shouldLoadHotjar: splitTestAssignments.hotjar?.variant === 'enabled',
-        isOverleafAssistBundleEnabled,
         customerIoEnabled,
-        addonPrices,
         compileSettings: {
           compileTimeout: ownerFeatures?.compileTimeout,
         },
@@ -1111,55 +1053,14 @@ const _ProjectController = {
     }
     return model
   },
-  _buildPortalTemplatesList(affiliations) {
-    if (affiliations == null) {
-      affiliations = []
-    }
-    const portalTemplates = []
-    for (const aff of affiliations) {
-      if (
-        aff.portal &&
-        aff.portal.slug &&
-        aff.portal.templates_count &&
-        aff.portal.templates_count > 0
-      ) {
-        const portalPath = aff.institution.isUniversity ? '/edu/' : '/org/'
-        portalTemplates.push({
-          name: aff.institution.name,
-          url: Settings.siteUrl + portalPath + aff.portal.slug,
-        })
-      }
-    }
-    return portalTemplates
-  },
-
-  async _setWritefullTrialState(
-    user,
-    userValues,
-    userId,
-    aiFeaturesAllowed,
-    userIsMemberOfGroupSubscription
-  ) {
-    let inEnterpriseCommons = false
-    const affiliations = userValues.affiliations || []
-    for (const affiliation of affiliations) {
-      inEnterpriseCommons =
-        inEnterpriseCommons || affiliation.institution?.enterpriseCommons
-    }
-
+  async _setWritefullTrialState(user, userValues, userId, aiFeaturesAllowed) {
     // check if a user has never tried writefull before (writefull.enabled will be null)
     //  if they previously accepted writefull, or are have been already assigned to a trial, user.writefull will be true,
     //  if they explicitly disabled it, user.writefull will be false
     const shouldPushWritefull =
-      aiFeaturesAllowed &&
-      user.writefull?.enabled === null &&
-      !userIsMemberOfGroupSubscription
+      aiFeaturesAllowed && user.writefull?.enabled === null
 
-    // we dont have legal approval to push enterprise commons into WF auto-account-create, but we are able to auto-load it into the toolbar
-    const shouldAutoCreateAccount = shouldPushWritefull && !inEnterpriseCommons
-    const shouldAutoLoad = shouldPushWritefull && inEnterpriseCommons
-
-    if (shouldAutoCreateAccount) {
+    if (shouldPushWritefull) {
       await UserUpdater.promises.updateUser(userId, {
         $set: {
           writefull: { enabled: true, autoCreatedAccount: true },
@@ -1167,14 +1068,6 @@ const _ProjectController = {
       })
       user.writefull.enabled = true
       user.writefull.autoCreatedAccount = true
-    } else if (shouldAutoLoad) {
-      await UserUpdater.promises.updateUser(userId, {
-        $set: {
-          writefull: { enabled: true, autoCreatedAccount: false },
-        },
-      })
-      user.writefull.enabled = true
-      user.writefull.autoCreatedAccount = false
     }
   },
 }
@@ -1190,11 +1083,6 @@ const defaultSettingsForAnonymousUser = userId => ({
     pdfViewer: '',
     syntaxValidation: true,
   },
-  subscription: {
-    freeTrial: {
-      allowed: true,
-    },
-  },
   featureSwitches: {
     github: false,
   },
@@ -1209,9 +1097,6 @@ const defaultUserValues = () => ({
   user: defaultSettingsForAnonymousUser(null),
   learnedWords: [],
   projectTags: [],
-  userHasInstitutionLicence: false,
-  affiliations: [],
-  subscription: undefined,
   isTokenMember: false,
   isInvitedMember: false,
 })

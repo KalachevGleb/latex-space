@@ -1,5 +1,4 @@
 import ProjectGetter from '../Project/ProjectGetter.js'
-import LimitationsManager from '../Subscription/LimitationsManager.js'
 import UserGetter from '../User/UserGetter.js'
 import CollaboratorsGetter from './CollaboratorsGetter.js'
 import CollaboratorsInviteHandler from './CollaboratorsInviteHandler.mjs'
@@ -55,16 +54,7 @@ async function _checkShouldInviteEmail(email) {
 }
 
 async function _checkRateLimit(userId) {
-  let collabLimit =
-    await LimitationsManager.promises.allowedNumberOfCollaboratorsForUser(
-      userId
-    )
-
-  if (collabLimit == null || collabLimit === 0) {
-    collabLimit = 1
-  } else if (collabLimit < 0 || collabLimit > 20) {
-    collabLimit = 20
-  }
+  const collabLimit = 20
 
   // Consume enough points to hit the rate limit at 10 * collabLimit
   const maxRequests = 10 * collabLimit
@@ -115,25 +105,6 @@ async function inviteToProject(req, res) {
 
   logger.debug({ projectId, email, sendingUserId }, 'inviting to project')
 
-  let allowed = false
-  // can always invite read-only collaborators
-  if (privileges === PrivilegeLevels.READ_ONLY) {
-    allowed = true
-  } else {
-    // Reviewers (including anonymous reviewers) and editors count as edit collaborators
-    allowed = await LimitationsManager.promises.canAddXEditCollaborators(
-      projectId,
-      1
-    )
-  }
-
-  if (!allowed) {
-    logger.debug(
-      { projectId, email, sendingUserId },
-      'not allowed to invite more users to project'
-    )
-    return res.json({ invite: null })
-  }
 
   email = EmailHelper.parseEmail(email, true)
   if (email == null || email === '') {

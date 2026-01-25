@@ -19,7 +19,6 @@ import { canRedirectToAdminDomain } from '../Helpers/AdminAuthorizationHelper.js
 import { getSafeAdminDomainRedirect } from '../Helpers/UrlHelper.js'
 import UserGetter from '../User/UserGetter.js'
 import Settings from '@overleaf/settings'
-import LimitationsManager from '../Subscription/LimitationsManager.js'
 
 const orderedPrivilegeLevels = [
   PrivilegeLevels.NONE,
@@ -324,10 +323,7 @@ async function grantTokenAccessReadAndWrite(req, res, next) {
       })
     }
 
-    const pendingEditor =
-      !(await LimitationsManager.promises.canAcceptEditCollaboratorInvite(
-        project._id
-      ))
+    const pendingEditor = false
     await ProjectAuditLogHandler.promises.addEntry(
       project._id,
       'accept-via-link-sharing',
@@ -516,10 +512,7 @@ async function moveReadWriteToCollaborators(req, res, next) {
       userId,
       projectId
     )
-  const pendingEditor =
-    !(await LimitationsManager.promises.canAcceptEditCollaboratorInvite(
-      project._id
-    ))
+  const pendingEditor = false
   await ProjectAuditLogHandler.promises.addEntry(
     projectId,
     'accept-via-link-sharing',

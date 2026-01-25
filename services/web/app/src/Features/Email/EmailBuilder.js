@@ -331,238 +331,6 @@ templates.reconfirmEmail = ctaTemplate({
   },
 })
 
-templates.verifyEmailToJoinTeam = ctaTemplate({
-  subject(opts) {
-    return `${opts.reminder ? 'Reminder: ' : ''}${_.escape(
-      _formatUserNameAndEmail(opts.inviter, 'A collaborator')
-    )} has invited you to join a group subscription on ${settings.appName}`
-  },
-  title(opts) {
-    return `${opts.reminder ? 'Reminder: ' : ''}${_.escape(
-      _formatUserNameAndEmail(opts.inviter, 'A collaborator')
-    )} has invited you to join a group subscription on ${settings.appName}`
-  },
-  message(opts) {
-    return [
-      `Please click the button below to join the group subscription and enjoy the benefits of an upgraded ${settings.appName} account.`,
-    ]
-  },
-  ctaText(opts) {
-    return 'Join now'
-  },
-  ctaURL(opts) {
-    return opts.acceptInviteUrl
-  },
-})
-
-templates.verifyEmailToJoinManagedUsers = ctaTemplate({
-  subject(opts) {
-    return `${
-      opts.reminder ? 'Reminder: ' : ''
-    }You’ve been invited by ${_.escape(
-      _formatUserNameAndEmail(opts.inviter, 'a collaborator')
-    )} to join an ${settings.appName} group subscription.`
-  },
-  title(opts) {
-    return `${
-      opts.reminder ? 'Reminder: ' : ''
-    }You’ve been invited by ${_.escape(
-      _formatUserNameAndEmail(opts.inviter, 'a collaborator')
-    )} to join an ${settings.appName} group subscription.`
-  },
-  message(opts) {
-    return [
-      `By joining this group, you'll have access to ${settings.appName} premium features such as additional collaborators, greater maximum compile time, and real-time track changes.`,
-    ]
-  },
-  secondaryMessage(opts, isPlainText) {
-    const changeProjectOwnerLink = EmailMessageHelper.displayLink(
-      'change project owner',
-      `${settings.siteUrl}/learn/how-to/How_to_Transfer_Project_Ownership`,
-      isPlainText
-    )
-
-    return [
-      `<b>User accounts in this group are managed by ${_.escape(
-        _formatUserNameAndEmail(opts.admin, 'an admin')
-      )}</b>`,
-      `If you accept, you’ll transfer the management of your ${settings.appName} account to the owner of the group subscription, who will then have admin rights over your account and control over your stuff.`,
-      `If you have personal projects in your ${settings.appName} account that you want to keep separate, that’s not a problem. You can set up another account under a personal email address and change the ownership of your personal projects to the new account. Find out how to ${changeProjectOwnerLink}.`,
-    ]
-  },
-  ctaURL(opts) {
-    return opts.acceptInviteUrl
-  },
-  ctaText(opts) {
-    return 'Accept invitation'
-  },
-  greeting() {
-    return ''
-  },
-})
-
-templates.inviteNewUserToJoinManagedUsers = ctaTemplate({
-  subject(opts) {
-    return `${
-      opts.reminder ? 'Reminder: ' : ''
-    }You’ve been invited by ${_.escape(
-      _formatUserNameAndEmail(opts.inviter, 'a collaborator')
-    )} to join an ${settings.appName} group subscription.`
-  },
-  title(opts) {
-    return `${
-      opts.reminder ? 'Reminder: ' : ''
-    }You’ve been invited by ${_.escape(
-      _formatUserNameAndEmail(opts.inviter, 'a collaborator')
-    )} to join an ${settings.appName} group subscription.`
-  },
-  message(opts) {
-    return ['']
-  },
-  secondaryMessage(opts) {
-    return [
-      `<b>User accounts in this group are managed by ${_.escape(
-        _formatUserNameAndEmail(opts.admin, 'an admin')
-      )}.</b>`,
-      `If you accept, the owner of the group subscription will have admin rights over your account and control over your stuff.`,
-      `<b>What is ${settings.appName}?</b>`,
-      `${settings.appName} is the collaborative online LaTeX editor loved by researchers and technical writers. With thousands of ready-to-use templates and an array of LaTeX learning resources you’ll be up and running in no time.`,
-    ]
-  },
-  ctaURL(opts) {
-    return opts.acceptInviteUrl
-  },
-  ctaText(opts) {
-    return 'Accept invitation'
-  },
-  greeting() {
-    return ''
-  },
-})
-
-templates.groupSSOLinkingInvite = ctaTemplate({
-  subject(opts) {
-    const subjectPrefix = opts.reminder ? 'Reminder: ' : 'Action required: '
-    return `${subjectPrefix}Authenticate your Overleaf account`
-  },
-  title(opts) {
-    const titlePrefix = opts.reminder ? 'Reminder: ' : ''
-    return `${titlePrefix}Single sign-on enabled`
-  },
-  message(opts) {
-    return [
-      `Hi,
-      <div>
-        Your group administrator has enabled single sign-on for your group.
-      </div>
-      </br>
-      <div>
-        <strong>What does this mean for you?</strong>
-      </div>
-      </br>
-      <div>
-        You won't need to remember a separate email address and password to sign in to Overleaf.
-        All you need to do is authenticate your existing Overleaf account with your SSO provider.
-      </div>
-      `,
-    ]
-  },
-  secondaryMessage(opts) {
-    return [``]
-  },
-  ctaURL(opts) {
-    return opts.authenticateWithSSO
-  },
-  ctaText(opts) {
-    return 'Authenticate with SSO'
-  },
-  greeting() {
-    return ''
-  },
-})
-
-templates.groupSSOReauthenticate = ctaTemplate({
-  subject(opts) {
-    return 'Action required: Reauthenticate your Overleaf account'
-  },
-  title(opts) {
-    return 'Action required: Reauthenticate SSO'
-  },
-  message(opts) {
-    return [
-      `Hi,
-      <div>
-      Single sign-on for your Overleaf group has been updated.
-      This means you need to reauthenticate your Overleaf account with your group’s SSO provider.
-      </div>
-      `,
-    ]
-  },
-  secondaryMessage(opts) {
-    if (!opts.isManagedUser) {
-      return ['']
-    } else {
-      const passwordResetUrl = `${settings.siteUrl}/user/password/reset`
-      return [
-        `If you’re not currently logged in to Overleaf, you'll need to <a href="${passwordResetUrl}">set a new password</a> to reauthenticate.`,
-      ]
-    }
-  },
-  ctaURL(opts) {
-    return opts.authenticateWithSSO
-  },
-  ctaText(opts) {
-    return 'Reauthenticate now'
-  },
-  greeting() {
-    return ''
-  },
-})
-
-templates.groupSSODisabled = ctaTemplate({
-  subject(opts) {
-    if (opts.userIsManaged) {
-      return `Action required: Set your Overleaf password`
-    } else {
-      return 'A change to your Overleaf login options'
-    }
-  },
-  title(opts) {
-    return `Single sign-on disabled`
-  },
-  message(opts, isPlainText) {
-    const loginUrl = `${settings.siteUrl}/login`
-    let whatDoesThisMeanExplanation = [
-      `You can still log in to Overleaf using one of our other <a href="${loginUrl}" style="color: #0F7A06; text-decoration: none;">login options</a> or with your email address and password.`,
-      `If you don't have a password, you can set one now.`,
-    ]
-    if (opts.userIsManaged) {
-      whatDoesThisMeanExplanation = [
-        'You now need an email address and password to sign in to your Overleaf account.',
-      ]
-    }
-
-    const message = [
-      'Your group administrator has disabled single sign-on for your group.',
-      '<br/>',
-      '<b>What does this mean for you?</b>',
-      ...whatDoesThisMeanExplanation,
-    ]
-
-    return message.map(m => {
-      return EmailMessageHelper.cleanHTML(m, isPlainText)
-    })
-  },
-  secondaryMessage(opts) {
-    return [``]
-  },
-  ctaURL(opts) {
-    return opts.setNewPasswordUrl
-  },
-  ctaText(opts) {
-    return 'Set your new password'
-  },
-})
 
 templates.surrenderAccountForManagedUsers = ctaTemplate({
   subject(opts) {
@@ -611,7 +379,7 @@ templates.surrenderAccountForManagedUsers = ctaTemplate({
 
     return [
       `<b>What does this mean for you?</b>`,
-      `If you accept, you’ll transfer the management of your ${settings.appName} account to the owner of the group subscription, who will then have admin rights over your account and control over your stuff.`,
+      `If you accept, you’ll transfer the management of your ${settings.appName} account to the group owner, who will then have admin rights over your account and control over your stuff.`,
       `If you have personal projects in your ${settings.appName} account that you want to keep separate, that’s not a problem. You can set up another account under a personal email address and change the ownership of your personal projects to the new account. Find out how to ${transferProjectOwnershipLink}.`,
       `If you think this invitation has been sent in error please contact your group administrator.`,
     ]
@@ -803,33 +571,6 @@ templates.securityAlert = NoCTAEmailTemplate({
   },
 })
 
-templates.SAMLDataCleared = ctaTemplate({
-  subject(opts) {
-    return `Institutional Login No Longer Linked - ${settings.appName}`
-  },
-  title(opts) {
-    return 'Institutional Login No Longer Linked'
-  },
-  message(opts, isPlainText) {
-    return [
-      `We're writing to let you know that due to a bug on our end, we've had to temporarily disable logging into your ${settings.appName} through your institution.`,
-      `To get it going again, you'll need to relink your institutional email address to your ${settings.appName} account via your settings.`,
-    ]
-  },
-  secondaryMessage() {
-    return [
-      `If you ordinarily log in to your ${settings.appName} account through your institution, you may need to set or reset your password to regain access to your account first.`,
-      'This bug did not affect the security of any accounts, but it may have affected license entitlements for a small number of users. We are sorry for any inconvenience that this may cause for you.',
-      `If you have any questions, please get in touch with our support team at ${settings.adminEmail} or by replying to this email.`,
-    ]
-  },
-  ctaText(opts) {
-    return 'Update my email settings'
-  },
-  ctaURL(opts) {
-    return `${settings.siteUrl}/user/settings`
-  },
-})
 
 templates.welcome = ctaTemplate({
   subject() {
@@ -930,8 +671,7 @@ templates.removeGroupMember = NoCTAEmailTemplate({
       '<ul>' +
         `<li>Your account will have reverted to a free ${settings.appName} plan.</li>`,
       `<li>Any project collaborators have been set to read-only (you can invite one collaborator per project on the free plan).</li>`,
-      `<li>If you previously logged in via SSO, you’ll need to <a href="${passwordResetUrl}">set a password</a> to access your account.</li>` +
-        '</ul>',
+      '</ul>',
       `If you think this has been done in error, please contact your group admin.`,
       `Thanks!`,
       `Team ${settings.appName}`,

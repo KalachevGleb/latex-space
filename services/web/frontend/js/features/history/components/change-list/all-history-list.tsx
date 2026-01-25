@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import HistoryVersion from './history-version'
 import LoadingSpinner from '../../../../shared/components/loading-spinner'
-import { OwnerPaywallPrompt } from './owner-paywall-prompt'
-import { NonOwnerPaywallPrompt } from './non-owner-paywall-prompt'
 import { isVersionSelected } from '../../utils/history-details'
 import { useUserContext } from '../../../../shared/context/user-context'
 import useDropdownActiveItem from '../../hooks/use-dropdown-active-item'
@@ -37,10 +35,6 @@ function AllHistoryList() {
   const [bottomVisible, setBottomVisible] = useState(false)
   const { activeDropdownItem, setActiveDropdownItem, closeDropdownForItem } =
     useDropdownActiveItem()
-  const showPaywall =
-    updatesLoadingState === 'ready' && updatesInfo.freeHistoryLimitHit
-  const showOwnerPaywall = showPaywall && currentUserIsOwner
-  const showNonOwnerPaywall = showPaywall && !currentUserIsOwner
   const visibleUpdates =
     visibleUpdateCount === null ? updates : updates.slice(0, visibleUpdateCount)
 
@@ -104,11 +98,7 @@ function AllHistoryList() {
   const isMoreThanOneVersion = visibleUpdates.length > 1
   const [layoutSettled, setLayoutSettled] = useState(false)
 
-  // When there is a paywall and only two version's to compare,
-  // they are not comparable because the one that has a paywall will not have the compare button
-  // so we should not display on-boarding popover in that case
-  const isPaywallAndNonComparable =
-    visibleUpdates.length === 2 && updatesInfo.freeHistoryLimitHit
+  const isPaywallAndNonComparable = false
 
   useEffect(() => {
     const hasCompletedHistoryTutorial = inactiveTutorials.includes(
@@ -264,8 +254,6 @@ function AllHistoryList() {
           )
         })}
       </div>
-      {showOwnerPaywall ? <OwnerPaywallPrompt /> : null}
-      {showNonOwnerPaywall ? <NonOwnerPaywallPrompt /> : null}
       {updatesLoadingState === 'loadingInitial' ||
       updatesLoadingState === 'loadingUpdates' ? (
         <div className="history-all-versions-loading">

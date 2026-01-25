@@ -17,17 +17,6 @@ nav.navbar.navbar-default.navbar-main.navbar-expand-lg(
 				if !nav.title && !settings.nav.custom_logo
 					.navbar-logo
 
-			- var enableUpgradeButton = projectDashboardReact && usersBestSubscription && (usersBestSubscription.type === 'free' || usersBestSubscription.type === 'standalone-ai-add-on')
-			if enableUpgradeButton
-				a.btn.btn-primary.me-2.d-md-none(
-					href='/user/subscription/plans'
-					event-tracking='upgrade-button-click'
-					event-tracking-mb='true'
-					event-tracking-label='upgrade'
-					event-tracking-trigger='click'
-					event-segmentation={source: 'dashboard-top', projectDashboardReact: 'enabled', isDashboardSidebarHidden: 'true', isScreenWidthLessThan768px: 'true'}
-				) #{translate("upgrade")}
-
 		- var canDisplayAdminMenu = hasAdminAccess()
 		- var canDisplayAdminRedirect = canRedirectToAdminDomain()
 		- var canDisplaySplitTestMenu = hasFeature('saas') && ((canDisplayAdminMenu && hasAdminCapability('view-split-test')) || (getSessionUser() && getSessionUser().staffAccess && (getSessionUser().staffAccess.splitTestMetrics || getSessionUser().staffAccess.splitTestManagement)))
@@ -190,8 +179,6 @@ nav.navbar.navbar-default.navbar-main.navbar-expand-lg(
 									.disabled.dropdown-item #{getSessionUser().email}
 								+dropdown-menu-divider
 								+dropdown-menu-link-item(href='/user/settings') #{translate('account_settings')}
-								if nav.showSubscriptionLink
-									+dropdown-menu-link-item(href='/user/subscription') #{translate('subscription')}
 								+dropdown-menu-divider
 								+dropdown-menu-item
 									//-
