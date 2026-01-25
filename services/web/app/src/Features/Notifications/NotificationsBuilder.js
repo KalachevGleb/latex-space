@@ -1,7 +1,5 @@
 const NotificationsHandler = require('./NotificationsHandler')
 const { promisifyAll } = require('@overleaf/promise-utils')
-const request = require('request')
-const settings = require('@overleaf/settings')
 
 function dropboxDuplicateProjectNames(userId) {
   return {
@@ -49,33 +47,6 @@ function dropboxUnlinkedDueToLapsedReconfirmation(userId) {
   }
 }
 
-function featuresUpgradedByAffiliation(affiliation, user) {
-  return {
-    key: `features-updated-by=${affiliation.institutionId}`,
-    create(callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      const messageOpts = { institutionName: affiliation.institutionName }
-      NotificationsHandler.createNotification(
-        user._id,
-        this.key,
-        'notification_features_upgraded_by_affiliation',
-        messageOpts,
-        null,
-        false,
-        callback
-      )
-    },
-    read(callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      NotificationsHandler.markAsReadWithKey(user._id, this.key, callback)
-    },
-  }
-}
-
 function projectInvite(invite, project, sendingUser, user) {
   return {
     key: `project-invite-${invite._id}`,
@@ -103,66 +74,6 @@ function projectInvite(invite, project, sendingUser, user) {
         callback = function () {}
       }
       NotificationsHandler.markAsReadByKeyOnly(this.key, callback)
-    },
-  }
-}
-
-function ipMatcherAffiliation(userId) {
-  return {
-    create(ip, callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      if (!settings.apis.v1.url) {
-        // service is not configured
-        return callback()
-      }
-      request(
-        {
-          method: 'GET',
-          url: `${settings.apis.v1.url}/api/v2/users/${userId}/ip_matcher`,
-          auth: { user: settings.apis.v1.user, pass: settings.apis.v1.pass },
-          body: { ip },
-          json: true,
-          timeout: settings.apis.v1.timeout,
-        },
-        function (error, response, body) {
-          if (error != null) {
-            return callback(error)
-          }
-          if (response.statusCode !== 200) {
-            return callback()
-          }
-
-          const key = `ip-matched-affiliation-${body.id}`
-          const portalPath = body.portal_slug
-            ? `/${body.is_university ? 'edu' : 'org'}/${body.portal_slug}`
-            : undefined
-          const messageOpts = {
-            university_name: body.name,
-            institutionId: body.id,
-            portalPath,
-            ssoEnabled: body.sso_enabled,
-          }
-          NotificationsHandler.createNotification(
-            userId,
-            key,
-            'notification_ip_matched_affiliation',
-            messageOpts,
-            null,
-            false,
-            callback
-          )
-        }
-      )
-    },
-
-    read(universityId, callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      const key = `ip-matched-affiliation-${universityId}`
-      NotificationsHandler.markAsReadWithKey(userId, key, callback)
     },
   }
 }
@@ -201,9 +112,7 @@ const NotificationsBuilder = {
   // Note: notification keys should be url-safe
   dropboxUnlinkedDueToLapsedReconfirmation,
   dropboxDuplicateProjectNames,
-  featuresUpgradedByAffiliation,
   projectInvite,
-  ipMatcherAffiliation,
   tpdsFileLimit,
 }
 
@@ -213,12 +122,6 @@ NotificationsBuilder.promises = {
   },
   dropboxDuplicateProjectNames(userId) {
     return promisifyAll(dropboxDuplicateProjectNames(userId))
-  },
-  featuresUpgradedByAffiliation: function (affiliation, user) {
-    return promisifyAll(featuresUpgradedByAffiliation(affiliation, user))
-  },
-  ipMatcherAffiliation: function (userId) {
-    return promisifyAll(ipMatcherAffiliation(userId))
   },
   projectInvite(invite, project, sendingUser, user) {
     return promisifyAll(projectInvite(invite, project, sendingUser, user))

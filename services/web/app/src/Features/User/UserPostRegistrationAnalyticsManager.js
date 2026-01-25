@@ -1,8 +1,5 @@
 const Queues = require('../../infrastructure/Queues')
 const UserGetter = require('./UserGetter')
-const {
-  promises: InstitutionsAPIPromises,
-} = require('../Institutions/InstitutionsAPI')
 const AnalyticsManager = require('../Analytics/AnalyticsManager')
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
@@ -24,20 +21,11 @@ async function postRegistrationAnalytics(userId) {
 }
 
 async function checkAffiliations(userId) {
-  const affiliationsData =
-    await InstitutionsAPIPromises.getUserAffiliations(userId)
-  const hasCommonsAccountAffiliation = affiliationsData.some(
-    affiliationData =>
-      affiliationData.institution && affiliationData.institution.commonsAccount
+  await AnalyticsManager.setUserPropertyForUser(
+    userId,
+    'registered-from-commons-account',
+    false
   )
-
-  if (hasCommonsAccountAffiliation) {
-    await AnalyticsManager.setUserPropertyForUser(
-      userId,
-      'registered-from-commons-account',
-      true
-    )
-  }
 }
 
 module.exports = {
