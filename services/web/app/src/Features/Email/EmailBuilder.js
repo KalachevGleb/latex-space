@@ -161,41 +161,6 @@ templates.registered = ctaTemplate({
   },
 })
 
-templates.canceledSubscription = ctaTemplate({
-  subject() {
-    return `${settings.appName} thoughts`
-  },
-  message() {
-    return [
-      `We are sorry to see you cancelled your ${settings.appName} premium subscription. Would you mind giving us some feedback on what the site is lacking at the moment via this quick survey?`,
-    ]
-  },
-  secondaryMessage() {
-    return ['Thank you in advance!']
-  },
-  ctaText() {
-    return 'Leave Feedback'
-  },
-  ctaURL(opts) {
-    return 'https://docs.google.com/forms/d/e/1FAIpQLSfa7z_s-cucRRXm70N4jEcSbFsZeb0yuKThHGQL8ySEaQzF0Q/viewform?usp=sf_link'
-  },
-})
-
-templates.reactivatedSubscription = ctaTemplate({
-  subject() {
-    return `Subscription Reactivated - ${settings.appName}`
-  },
-  message(opts) {
-    return ['Your subscription was reactivated successfully.']
-  },
-  ctaText() {
-    return 'View Subscription Dashboard'
-  },
-  ctaURL(opts) {
-    return `${settings.siteUrl}/user/subscription`
-  },
-})
-
 templates.passwordResetRequested = ctaTemplate({
   subject() {
     return `Password Reset - ${settings.appName}`

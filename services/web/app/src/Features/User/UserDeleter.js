@@ -7,10 +7,6 @@ const { UserAuditLogEntry } = require('../../models/UserAuditLogEntry')
 const { Feedback } = require('../../models/Feedback')
 const NewsletterManager = require('../Newsletter/NewsletterManager')
 const ProjectDeleter = require('../Project/ProjectDeleter')
-const SubscriptionHandler = require('../Subscription/SubscriptionHandler')
-const SubscriptionUpdater = require('../Subscription/SubscriptionUpdater')
-const SubscriptionLocator = require('../Subscription/SubscriptionLocator')
-const UserMembershipsHandler = require('../UserMembership/UserMembershipsHandler')
 const UserSessionsManager = require('./UserSessionsManager')
 const UserAuditLogHandler = require('./UserAuditLogHandler')
 const InstitutionsAPI = require('../Institutions/InstitutionsAPI')
@@ -152,11 +148,7 @@ async function expireDeletedUsersAfterDuration() {
 }
 
 async function ensureCanDeleteUser(user) {
-  const subscription =
-    await SubscriptionLocator.promises.getUsersSubscription(user)
-  if (subscription) {
-    throw new Errors.SubscriptionAdminDeletionError({})
-  }
+  return
 }
 
 async function _sendDeleteEmail(user, force) {
@@ -209,14 +201,8 @@ async function _cleanupUser(user) {
   await UserSessionsManager.promises.removeSessionsFromRedis(user)
   logger.info({ userId }, '[cleanupUser] unsubscribing from newsletters')
   await NewsletterManager.promises.unsubscribe(user, { delete: true })
-  logger.info({ userId }, '[cleanupUser] cancelling subscription')
-  await SubscriptionHandler.promises.cancelSubscription(user)
   logger.info({ userId }, '[cleanupUser] deleting affiliations')
   await InstitutionsAPI.promises.deleteAffiliations(userId)
-  logger.info({ userId }, '[cleanupUser] removing user from groups')
-  await SubscriptionUpdater.promises.removeUserFromAllGroups(userId)
-  logger.info({ userId }, '[cleanupUser] removing user from memberships')
-  await UserMembershipsHandler.promises.removeUserFromAllEntities(userId)
   logger.info({ userId }, '[cleanupUser] removing personal access tokens')
   await Modules.promises.hooks.fire('cleanupPersonalAccessTokens', userId, [
     'collabratec',

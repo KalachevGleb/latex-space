@@ -76,33 +76,6 @@ function featuresUpgradedByAffiliation(affiliation, user) {
   }
 }
 
-function redundantPersonalSubscription(affiliation, user) {
-  return {
-    key: `redundant-personal-subscription-${affiliation.institutionId}`,
-    create(callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      const messageOpts = { institutionName: affiliation.institutionName }
-      NotificationsHandler.createNotification(
-        user._id,
-        this.key,
-        'notification_personal_subscription_not_required_due_to_affiliation',
-        messageOpts,
-        null,
-        false,
-        callback
-      )
-    },
-    read(callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      NotificationsHandler.markAsReadWithKey(user._id, this.key, callback)
-    },
-  }
-}
-
 function projectInvite(invite, project, sendingUser, user) {
   return {
     key: `project-invite-${invite._id}`,
@@ -224,82 +197,19 @@ function tpdsFileLimit(userId) {
   }
 }
 
-function groupInvitation(userId, subscriptionId, managedUsersEnabled) {
-  return {
-    key: `groupInvitation-${subscriptionId}-${userId}`,
-    create(invite, callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      const messageOpts = {
-        token: invite.token,
-        inviterName: invite.inviterName,
-        managedUsersEnabled,
-      }
-      NotificationsHandler.createNotification(
-        userId,
-        this.key,
-        'notification_group_invitation',
-        messageOpts,
-        null,
-        true,
-        callback
-      )
-    },
-    read(callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      NotificationsHandler.markAsReadByKeyOnly(this.key, callback)
-    },
-  }
-}
-
-function personalAndGroupSubscriptions(userId) {
-  return {
-    key: 'personal-and-group-subscriptions',
-    create(callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      NotificationsHandler.createNotification(
-        userId,
-        this.key,
-        'notification_personal_and_group_subscriptions',
-        {},
-        null,
-        false,
-        callback
-      )
-    },
-    read(callback) {
-      if (callback == null) {
-        callback = function () {}
-      }
-      NotificationsHandler.markAsReadByKeyOnly(this.key, callback)
-    },
-  }
-}
-
 const NotificationsBuilder = {
   // Note: notification keys should be url-safe
   dropboxUnlinkedDueToLapsedReconfirmation,
   dropboxDuplicateProjectNames,
   featuresUpgradedByAffiliation,
-  redundantPersonalSubscription,
   projectInvite,
   ipMatcherAffiliation,
   tpdsFileLimit,
-  groupInvitation,
-  personalAndGroupSubscriptions,
 }
 
 NotificationsBuilder.promises = {
   dropboxUnlinkedDueToLapsedReconfirmation: function (userId) {
     return promisifyAll(dropboxUnlinkedDueToLapsedReconfirmation(userId))
-  },
-  redundantPersonalSubscription: function (affiliation, user) {
-    return promisifyAll(redundantPersonalSubscription(affiliation, user))
   },
   dropboxDuplicateProjectNames(userId) {
     return promisifyAll(dropboxDuplicateProjectNames(userId))
@@ -310,14 +220,8 @@ NotificationsBuilder.promises = {
   ipMatcherAffiliation: function (userId) {
     return promisifyAll(ipMatcherAffiliation(userId))
   },
-  groupInvitation: function (userId, groupId, managedUsersEnabled) {
-    return promisifyAll(groupInvitation(userId, groupId, managedUsersEnabled))
-  },
   projectInvite(invite, project, sendingUser, user) {
     return promisifyAll(projectInvite(invite, project, sendingUser, user))
-  },
-  personalAndGroupSubscriptions(userId) {
-    return promisifyAll(personalAndGroupSubscriptions(userId))
   },
 }
 

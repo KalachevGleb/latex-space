@@ -14,8 +14,6 @@ const NewsletterManager = require('../Newsletter/NewsletterManager')
 const UserAuditLogHandler = require('./UserAuditLogHandler')
 const AnalyticsManager = require('../Analytics/AnalyticsManager')
 const EmailChangeHelper = require('../Analytics/EmailChangeHelper')
-const SubscriptionLocator = require('../Subscription/SubscriptionLocator')
-const NotificationsBuilder = require('../Notifications/NotificationsBuilder')
 const _ = require('lodash')
 const Modules = require('../../infrastructure/Modules')
 const UserSessionsManager = require('./UserSessionsManager')
@@ -436,39 +434,6 @@ async function confirmEmail(userId, email, affiliationOptions) {
     )
   }
 
-  try {
-    await maybeCreateRedundantSubscriptionNotification(userId, email)
-  } catch (error) {
-    logger.err(
-      { err: error },
-      'error checking redundant subscription on email confirmation'
-    )
-  }
-}
-
-async function maybeCreateRedundantSubscriptionNotification(userId, email) {
-  const subscription =
-    await SubscriptionLocator.promises.getUserIndividualSubscription(userId)
-  if (!subscription || subscription.groupPlan) {
-    return
-  }
-
-  const affiliations =
-    await InstitutionsAPI.promises.getUserAffiliations(userId)
-  const confirmedAffiliation = affiliations.find(a => a.email === email)
-  if (!confirmedAffiliation || confirmedAffiliation.licence === 'free') {
-    return
-  }
-
-  await NotificationsBuilder.promises
-    .redundantPersonalSubscription(
-      {
-        institutionId: confirmedAffiliation.institution.id,
-        institutionName: confirmedAffiliation.institution.name,
-      },
-      { _id: userId }
-    )
-    .create()
 }
 
 async function removeEmailAddress(

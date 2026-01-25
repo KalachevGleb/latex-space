@@ -1,13 +1,9 @@
 const { callbackifyAll } = require('@overleaf/promise-utils')
 const UserGetter = require('../User/UserGetter')
-const PlansLocator = require('../Subscription/PlansLocator')
 const Settings = require('@overleaf/settings')
 
 async function getInstitutionsFeatures(userId) {
-  const planCode = await getInstitutionsPlan(userId)
-  const plan = planCode && PlansLocator.findLocalPlanInSettings(planCode)
-  const features = plan && plan.features
-  return features || {}
+  return {}
 }
 
 async function getInstitutionsPlan(userId) {

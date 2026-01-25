@@ -2,7 +2,6 @@
 import crypto from 'node:crypto'
 
 import SurveyCache from './SurveyCache.mjs'
-import SubscriptionLocator from '../Subscription/SubscriptionLocator.js'
 import { callbackify } from '@overleaf/promise-utils'
 import UserGetter from '../User/UserGetter.js'
 
@@ -19,14 +18,6 @@ import UserGetter from '../User/UserGetter.js'
 async function getSurvey(userId) {
   const survey = await SurveyCache.get(true)
   if (survey) {
-    if (survey.options?.hasRecurlyGroupSubscription) {
-      const hasRecurlyGroupSubscription =
-        await SubscriptionLocator.promises.hasRecurlyGroupSubscription(userId)
-      if (!hasRecurlyGroupSubscription) {
-        return
-      }
-    }
-
     const { name, title, text, cta, url, options } = survey?.toObject() || {}
     // default to full rollout for backwards compatibility
     const rolloutPercentage = options?.rolloutPercentage || 100

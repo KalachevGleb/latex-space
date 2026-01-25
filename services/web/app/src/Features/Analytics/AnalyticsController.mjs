@@ -4,17 +4,9 @@ import SessionManager from '../Authentication/SessionManager.js'
 import GeoIpLookup from '../../infrastructure/GeoIpLookup.js'
 import Features from '../../infrastructure/Features.js'
 import { expressify } from '@overleaf/promise-utils'
-import AccountMappingHelper from './AccountMappingHelper.js'
 
 async function registerSalesforceMapping(req, res, next) {
-  if (!Features.hasFeature('analytics')) {
-    return res.sendStatus(202)
-  }
-  const { createdAt, salesforceId, v1Id } = req.body
-  AnalyticsManager.registerAccountMapping(
-    AccountMappingHelper.generateV1Mapping(v1Id, salesforceId, createdAt)
-  )
-  res.sendStatus(202)
+  return res.sendStatus(202)
 }
 
 async function updateEditingSession(req, res, next) {

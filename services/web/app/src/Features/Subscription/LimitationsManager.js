@@ -1,9 +1,7 @@
 // @ts-check
 
-const logger = require('@overleaf/logger')
 const ProjectGetter = require('../Project/ProjectGetter')
 const UserGetter = require('../User/UserGetter')
-const SubscriptionLocator = require('./SubscriptionLocator')
 const Settings = require('@overleaf/settings')
 const CollaboratorsGetter = require('../Collaborators/CollaboratorsGetter')
 const CollaboratorsInvitesGetter = require('../Collaborators/CollaboratorsInviteGetter')
@@ -22,11 +20,10 @@ async function allowedNumberOfCollaboratorsInProject(projectId) {
 
 async function allowedNumberOfCollaboratorsForUser(userId) {
   const user = await UserGetter.promises.getUser(userId, { features: 1 })
-  if (user.features && user.features.collaborators) {
+  if (user?.features?.collaborators !== undefined) {
     return user.features.collaborators
-  } else {
-    return Settings.defaultFeatures.collaborators
   }
+  return Settings.defaultFeatures.collaborators
 }
 
 async function canAcceptEditCollaboratorInvite(projectId) {
@@ -108,64 +105,35 @@ async function canChangeCollaboratorPrivilegeLevel(
   return slotsTaken + inviteCount < allowedNumber
 }
 
-async function hasPaidSubscription(user) {
-  const { hasSubscription, subscription } = await userHasSubscription(user)
-  const { isMember } = await userIsMemberOfGroupSubscription(user)
+async function hasPaidSubscription() {
   return {
-    hasPaidSubscription: hasSubscription || isMember,
-    subscription,
+    hasPaidSubscription: false,
+    subscription: null,
   }
 }
 
-// alias for backward-compatibility with modules. Use `haspaidsubscription` instead
-async function userHasSubscriptionOrIsGroupMember(user) {
-  return await hasPaidSubscription(user)
+// alias for backward-compatibility with modules.
+async function userHasSubscriptionOrIsGroupMember() {
+  return await hasPaidSubscription()
 }
 
-async function userHasSubscription(user) {
-  const subscription = await SubscriptionLocator.promises.getUsersSubscription(
-    user._id
-  )
-  let hasValidSubscription = false
-  if (subscription) {
-    if (
-      subscription.recurlySubscription_id ||
-      subscription.paymentProvider?.subscriptionId ||
-      subscription.customAccount
-    ) {
-      hasValidSubscription = true
-    }
-  }
+async function userHasSubscription() {
   return {
-    hasSubscription: hasValidSubscription,
-    subscription,
+    hasSubscription: false,
+    subscription: null,
   }
 }
 
-async function userIsMemberOfGroupSubscription(user) {
-  const subscriptions =
-    (await SubscriptionLocator.promises.getMemberSubscriptions(user._id)) || []
-  return { isMember: subscriptions.length > 0, subscriptions }
+async function userIsMemberOfGroupSubscription() {
+  return { isMember: false, subscriptions: [] }
 }
 
-function teamHasReachedMemberLimit(subscription) {
-  const currentTotal =
-    (subscription.member_ids || []).length +
-    (subscription.teamInvites || []).length +
-    (subscription.invited_emails || []).length
-
-  return currentTotal >= subscription.membersLimit
+function teamHasReachedMemberLimit() {
+  return false
 }
 
-async function hasGroupMembersLimitReached(subscriptionId, callback) {
-  const subscription =
-    await SubscriptionLocator.promises.getSubscription(subscriptionId)
-  if (!subscription) {
-    logger.warn({ subscriptionId }, 'no subscription found')
-    throw new Error('no subscription found')
-  }
-  const limitReached = teamHasReachedMemberLimit(subscription)
-  return { limitReached, subscription }
+async function hasGroupMembersLimitReached() {
+  return { limitReached: false, subscription: null }
 }
 
 const LimitationsManager = {
