@@ -8,7 +8,6 @@ const UserSessionsManager = require('./UserSessionsManager')
 const EmailHandler = require('../Email/EmailHandler')
 const EmailHelper = require('../Helpers/EmailHelper')
 const UserEmailsConfirmationHandler = require('./UserEmailsConfirmationHandler')
-const { endorseAffiliation } = require('../Institutions/InstitutionsAPI')
 const Errors = require('../Errors/Errors')
 const HttpErrorHandler = require('../Errors/HttpErrorHandler')
 const { expressify } = require('@overleaf/promise-utils')
@@ -607,27 +606,6 @@ const UserEmailsController = {
   remove: expressify(remove),
 
   setDefault: expressify(setDefault),
-
-  endorse(req, res, next) {
-    const userId = SessionManager.getLoggedInUserId(req.session)
-    const email = EmailHelper.parseEmail(req.body.email)
-    if (!email) {
-      return res.sendStatus(422)
-    }
-
-    endorseAffiliation(
-      userId,
-      email,
-      req.body.role,
-      req.body.department,
-      function (error) {
-        if (error) {
-          return next(error)
-        }
-        res.sendStatus(204)
-      }
-    )
-  },
 
   sendExistingEmailConfirmationCode: expressify(
     sendExistingEmailConfirmationCode

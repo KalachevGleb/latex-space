@@ -13,15 +13,12 @@ import SurveyHandler from '../Survey/SurveyHandler.mjs'
 import TagsHandler from '../Tags/TagsHandler.js'
 import { expressify } from '@overleaf/promise-utils'
 import logger from '@overleaf/logger'
-import Features from '../../infrastructure/Features.js'
 import NotificationsHandler from '../Notifications/NotificationsHandler.js'
 import Modules from '../../infrastructure/Modules.js'
 import { OError, V1ConnectionError } from '../Errors/Errors.js'
 import { User } from '../../models/User.js'
 import UserPrimaryEmailCheckHandler from '../User/UserPrimaryEmailCheckHandler.js'
 import UserController from '../User/UserController.mjs'
-import NotificationsBuilder from '../Notifications/NotificationsBuilder.js'
-import GeoIpLookup from '../../infrastructure/GeoIpLookup.js'
 import SplitTestHandler from '../SplitTests/SplitTestHandler.js'
 import SplitTestSessionHandler from '../SplitTests/SplitTestSessionHandler.js'
 import TutorialHandler from '../Tutorial/TutorialHandler.mjs'
@@ -31,63 +28,8 @@ import AnalyticsManager from '../Analytics/AnalyticsManager.js'
 /**
  * @import { GetProjectsRequest, GetProjectsResponse, AllUsersProjects, MongoProject, FormattedProject, MongoTag } from "./types"
  * @import { Project, ProjectApi, ProjectAccessLevel, Filters, Page, Sort, UserRef } from "../../../../types/project/dashboard/api"
- * @import { Affiliation } from "../../../../types/affiliation"
  * @import { Source } from "../Authorization/types"
  */
-
-/**
- * @param {Affiliation} affiliation
- * @param session
- * @param linkedInstitutionIds
- * @returns {boolean}
- * @private
- */
-const _ssoAvailable = (affiliation, session, linkedInstitutionIds) => {
-  if (!affiliation.institution) return false
-
-  // institution.confirmed is for the domain being confirmed, not the email
-  // Do not show SSO UI for unconfirmed domains
-  if (!affiliation.institution.confirmed) return false
-
-  // Could have multiple emails at the same institution, and if any are
-  // linked to the institution then do not show notification for others
-  if (
-    linkedInstitutionIds.indexOf(affiliation.institution.id.toString()) === -1
-  ) {
-    if (affiliation.institution.ssoEnabled) return true
-    if (affiliation.institution.ssoBeta && session.samlBeta) return true
-    return false
-  }
-  return false
-}
-
-/**
- * @param {Affiliation[]} affiliations
- * @returns {Array<{ name: string, url: string }>}
- */
-const _buildPortalTemplatesList = affiliations => {
-  if (affiliations == null) {
-    affiliations = []
-  }
-
-  const portalTemplates = []
-  const uniqueAffiliations = _.uniqBy(affiliations, 'institution.id')
-  for (const aff of uniqueAffiliations) {
-    const hasSlug = aff.portal?.slug
-    const hasTemplates = (aff.portal?.templates_count || 0) > 0
-
-    if (hasSlug && hasTemplates) {
-      const portalPath = aff.institution.isUniversity ? '/edu/' : '/org/'
-      const portalTemplateURL = Settings.siteUrl + portalPath + aff.portal?.slug
-
-      portalTemplates.push({
-        name: aff.institution.name,
-        url: portalTemplateURL,
-      })
-    }
-  }
-  return portalTemplates
-}
 
 function cleanupSession(req) {
   // cleanup redirects at the end of the redirect chain
@@ -152,26 +94,7 @@ async function projectListPage(req, res, next) {
 
   try {
     const fullEmails = await UserGetter.promises.getUserFullEmails(userId)
-
-    if (!Features.hasFeature('affiliations')) {
-      userEmailsData.list = fullEmails
-    } else {
-      try {
-        const results = await Modules.promises.hooks.fire(
-          'allInReconfirmNotificationPeriodsForUser',
-          fullEmails
-        )
-
-        const allInReconfirmNotificationPeriods = (results && results[0]) || []
-
-        userEmailsData = {
-          list: fullEmails,
-          allInReconfirmNotificationPeriods,
-        }
-      } catch (error) {
-        userEmailsData.error = error
-      }
-    }
+    userEmailsData.list = fullEmails
   } catch (error) {
     if (!(error instanceof V1ConnectionError)) {
       logger.error({ err: error, userId }, 'Failed to get user full emails')
@@ -180,15 +103,8 @@ async function projectListPage(req, res, next) {
 
   const userEmails = userEmailsData.list || []
 
-  const userAffiliations = userEmails
-    .filter(emailData => !!emailData.affiliation)
-    .map(emailData => {
-      const result = emailData.affiliation
-      result.email = emailData.email
-      return result
-    })
-
-  const portalTemplates = _buildPortalTemplatesList(userAffiliations)
+  const userAffiliations = []
+  const portalTemplates = []
 
   const { allInReconfirmNotificationPeriods } = userEmailsData
 
@@ -203,118 +119,17 @@ async function projectListPage(req, res, next) {
   }
 
   const notificationsInstitution = []
-  // Institution and group SSO Notifications
-  let groupSsoSetupSuccess
-  let viaDomainCapture
-  let joinedGroupName = ''
-  let reconfirmedViaSAML
-  if (Features.hasFeature('saml')) {
-    reconfirmedViaSAML = _.get(req.session, ['saml', 'reconfirmed'])
-    const samlSession = req.session.saml
-    // Notification: SSO Available
-    const linkedInstitutionIds = []
-    userEmails.forEach(email => {
-      if (email.samlProviderId) {
-        linkedInstitutionIds.push(email.samlProviderId)
-      }
-    })
-    if (Array.isArray(userAffiliations)) {
-      userAffiliations.forEach(affiliation => {
-        if (_ssoAvailable(affiliation, req.session, linkedInstitutionIds)) {
-          notificationsInstitution.push({
-            email: affiliation.email,
-            institutionId: affiliation.institution.id,
-            institutionName: affiliation.institution.name,
-            templateKey: 'notification_institution_sso_available',
-          })
-        }
-      })
-    }
-
-    if (samlSession) {
-      // Notification institution SSO: After SSO Linked
-      if (samlSession.linked) {
-        notificationsInstitution.push({
-          email: samlSession.institutionEmail,
-          institutionName:
-            samlSession.linked.universityName ||
-            samlSession.linked.providerName,
-          templateKey: samlSession.domainCaptureEnabled
-            ? 'notification_group_sso_linked'
-            : 'notification_institution_sso_linked',
-        })
-      }
-
-      // Notification group SSO: After SSO Linked
-      if (samlSession.linkedGroup) {
-        groupSsoSetupSuccess = true
-        viaDomainCapture = samlSession.domainCaptureJoin
-        joinedGroupName = samlSession.universityName
-      }
-
-      // Notification institution SSO: After SSO Linked or Logging in
-      // The requested email does not match primary email returned from
-      // the institution
-      if (
-        samlSession.requestedEmail &&
-        samlSession.emailNonCanonical &&
-        !samlSession.error
-      ) {
-        notificationsInstitution.push({
-          institutionEmail: samlSession.emailNonCanonical,
-          requestedEmail: samlSession.requestedEmail,
-          templateKey: 'notification_institution_sso_non_canonical',
-        })
-      }
-
-      // Notification institution SSO: Tried to register, but account already existed
-      // registerIntercept is set before the institution callback.
-      // institutionEmail is set after institution callback.
-      // Check for both in case SSO flow was abandoned
-      if (
-        samlSession.registerIntercept &&
-        samlSession.institutionEmail &&
-        !samlSession.error
-      ) {
-        notificationsInstitution.push({
-          email: samlSession.institutionEmail,
-          templateKey: 'notification_institution_sso_already_registered',
-        })
-      }
-
-      // Notification: When there is a session error
-      if (samlSession.error) {
-        notificationsInstitution.push({
-          templateKey: 'notification_institution_sso_error',
-          error: samlSession.error,
-        })
-      }
-    }
-    delete req.session.saml
-  }
+  const groupSsoSetupSuccess = undefined
+  const viaDomainCapture = undefined
+  const joinedGroupName = undefined
+  const reconfirmedViaSAML = undefined
 
   const prefetchedProjectsBlob = await projectsBlobPending
   Metrics.inc('project-list-prefetch-projects', 1, {
     status: prefetchedProjectsBlob ? 'success' : 'error',
   })
 
-  // in v2 add notifications for matching university IPs
-  if (Settings.overleaf != null && req.ip !== user.lastLoginIp) {
-    try {
-      await NotificationsBuilder.promises
-        .ipMatcherAffiliation(user._id)
-        .create(req.ip)
-    } catch (err) {
-      logger.error(
-        { err },
-        'failed to create institutional IP match notification'
-      )
-    }
-  }
-
-  const hasPaidAffiliation = userAffiliations.some(
-    affiliation => affiliation.licence && affiliation.licence !== 'free'
-  )
+  const hasPaidAffiliation = false
 
   const inactiveTutorials = TutorialHandler.getInactiveTutorials(user)
 
@@ -341,10 +156,7 @@ async function projectListPage(req, res, next) {
   const recommendedCurrency = null
   const hasIndividualPaidSubscription = false
 
-  const affiliations = userAffiliations || []
-  const inEnterpriseCommons = affiliations.some(
-    affiliation => affiliation.institution?.enterpriseCommons
-  )
+  const inEnterpriseCommons = false
 
   // customer.io: Premium nudge experiment
   // Only do customer-io-trial-conversion assignment for users not in India/China and not in group/commons

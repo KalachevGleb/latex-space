@@ -28,28 +28,7 @@ async function settingsPage(req, res) {
   if (projectSyncSuccessMessage) {
     delete req.session.projectSyncSuccessMessage
   }
-  // Institution SSO
-  let institutionLinked = _.get(req.session, ['saml', 'linked'])
-  if (institutionLinked) {
-    // copy object if exists because _.get does not
-    institutionLinked = Object.assign(
-      {
-        hasEntitlement: _.get(req.session, ['saml', 'hasEntitlement']),
-      },
-      institutionLinked
-    )
-  }
   const samlError = _.get(req.session, ['saml', 'error'])
-  const institutionEmailNonCanonical = _.get(req.session, [
-    'saml',
-    'emailNonCanonical',
-  ])
-  const institutionRequestedEmail = _.get(req.session, [
-    'saml',
-    'requestedEmail',
-  ])
-
-  const reconfirmedViaSAML = _.get(req.session, ['saml', 'reconfirmed'])
   delete req.session.saml
   let shouldAllowEditingDetails = true
   if (Settings.ldap && Settings.ldap.updateUserDetailsOnLogin) {
@@ -152,13 +131,7 @@ async function settingsPage(req, res) {
       oauthProviders,
       req
     ),
-    institutionLinked,
     samlError,
-    institutionEmailNonCanonical:
-      institutionEmailNonCanonical && institutionRequestedEmail
-        ? institutionEmailNonCanonical
-        : undefined,
-    reconfirmedViaSAML,
     reconfirmationRemoveEmail,
     samlBeta: req.session.samlBeta,
     ssoErrorMessage,

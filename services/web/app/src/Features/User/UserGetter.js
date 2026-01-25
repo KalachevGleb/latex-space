@@ -2,12 +2,7 @@ const { callbackify } = require('util')
 const { db } = require('../../infrastructure/mongodb')
 const moment = require('moment')
 const settings = require('@overleaf/settings')
-const {
-  promises: InstitutionsAPIPromises,
-} = require('../Institutions/InstitutionsAPI')
-const InstitutionsHelper = require('../Institutions/InstitutionsHelper')
 const Errors = require('../Errors/Errors')
-const Features = require('../../infrastructure/Features')
 const { User } = require('../../models/User')
 const { normalizeQuery, normalizeMultiQuery } = require('../Helpers/Mongo')
 const Modules = require('../../infrastructure/Modules')
@@ -86,17 +81,10 @@ async function getUserFullEmails(userId) {
     throw new Error('User not Found')
   }
 
-  if (!Features.hasFeature('affiliations')) {
-    return decorateFullEmails(user.email, user.emails, [], [])
-  }
-
-  const affiliationsData =
-    await InstitutionsAPIPromises.getUserAffiliations(userId)
-
   const fullEmails = decorateFullEmails(
     user.email,
     user.emails || [],
-    affiliationsData,
+    [],
     user.samlIdentifiers || []
   )
 
@@ -336,8 +324,7 @@ const decorateFullEmails = (
       )
     }
 
-    emailData.emailHasInstitutionLicence =
-      InstitutionsHelper.emailHasLicence(emailData)
+    emailData.emailHasInstitutionLicence = false
 
     const lastConfirmedAtStr = emailData.reconfirmedAt || emailData.confirmedAt
     emailData.lastConfirmedAt = lastConfirmedAtStr

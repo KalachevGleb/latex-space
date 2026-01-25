@@ -35,8 +35,6 @@ import SplitTestSessionHandler from '../SplitTests/SplitTestSessionHandler.js'
 import FeaturesUpdater from '../Subscription/FeaturesUpdater.js'
 import SpellingHandler from '../Spelling/SpellingHandler.mjs'
 import { hasAdminAccess } from '../Helpers/AdminAuthorizationHelper.js'
-import InstitutionsFeatures from '../Institutions/InstitutionsFeatures.js'
-import InstitutionsGetter from '../Institutions/InstitutionsGetter.js'
 import ProjectAuditLogHandler from './ProjectAuditLogHandler.mjs'
 import PublicAccessLevels from '../Authorization/PublicAccessLevels.js'
 import TagsHandler from '../Tags/TagsHandler.js'
@@ -526,18 +524,8 @@ const _ProjectController = {
             userId,
             projectId
           ),
-          userHasInstitutionLicence: InstitutionsFeatures.promises
-            .hasLicence(userId)
-            .catch(err => {
-              logger.error({ err, userId }, 'failed to get institution licence')
-              return false
-            }),
-          affiliations: InstitutionsGetter.promises
-            .getCurrentAffiliations(userId)
-            .catch(err => {
-              logger.error({ err, userId }, 'failed to get institution licence')
-              return false
-            }),
+          userHasInstitutionLicence: false,
+          affiliations: [],
           subscription: null,
           isTokenMember: CollaboratorsGetter.promises.userIsTokenMember(
             userId,
@@ -1222,6 +1210,7 @@ const defaultUserValues = () => ({
   learnedWords: [],
   projectTags: [],
   userHasInstitutionLicence: false,
+  affiliations: [],
   subscription: undefined,
   isTokenMember: false,
   isInvitedMember: false,

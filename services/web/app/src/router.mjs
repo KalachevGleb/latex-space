@@ -316,7 +316,6 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     AuthenticationController.requireLogin(),
     AsyncLocalStorage.middleware,
     PermissionsController.useCapabilities(),
-    UserController.ensureAffiliationMiddleware,
     UserEmailsController.list
   )
   webRouter.get(
@@ -366,27 +365,18 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     UserEmailsController.primaryEmailCheck
   )
 
-  if (Features.hasFeature('affiliations')) {
-    webRouter.post(
-      '/user/emails/delete',
-      AuthenticationController.requireLogin(),
-      RateLimiterMiddleware.rateLimit(rateLimiters.deleteEmail),
-      await Modules.middleware('userDeleteEmail'),
-      UserEmailsController.remove
-    )
-    webRouter.post(
-      '/user/emails/default',
-      AuthenticationController.requireLogin(),
-      UserEmailsController.setDefault
-    )
-    webRouter.post(
-      '/user/emails/endorse',
-      AuthenticationController.requireLogin(),
-      PermissionsController.requirePermission('endorse-email'),
-      RateLimiterMiddleware.rateLimit(rateLimiters.endorseEmail),
-      UserEmailsController.endorse
-    )
-  }
+  webRouter.post(
+    '/user/emails/delete',
+    AuthenticationController.requireLogin(),
+    RateLimiterMiddleware.rateLimit(rateLimiters.deleteEmail),
+    await Modules.middleware('userDeleteEmail'),
+    UserEmailsController.remove
+  )
+  webRouter.post(
+    '/user/emails/default',
+    AuthenticationController.requireLogin(),
+    UserEmailsController.setDefault
+  )
 
   if (Features.hasFeature('saas')) {
     webRouter.get(

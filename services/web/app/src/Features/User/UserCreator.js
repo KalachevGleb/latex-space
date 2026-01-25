@@ -1,39 +1,11 @@
 const logger = require('@overleaf/logger')
 const util = require('util')
-const { AffiliationError } = require('../Errors/Errors')
 const Features = require('../../infrastructure/Features')
 const { User } = require('../../models/User')
-const UserDeleter = require('./UserDeleter')
-const UserGetter = require('./UserGetter')
-const UserUpdater = require('./UserUpdater')
 const Analytics = require('../Analytics/AnalyticsManager')
 const UserOnboardingEmailManager = require('./UserOnboardingEmailManager')
 const UserPostRegistrationAnalyticsManager = require('./UserPostRegistrationAnalyticsManager')
 const OError = require('@overleaf/o-error')
-
-async function _addAffiliation(user, affiliationOptions) {
-  try {
-    await UserUpdater.promises.addAffiliationForNewUser(
-      user._id,
-      user.email,
-      affiliationOptions
-    )
-  } catch (error) {
-    throw new AffiliationError('add affiliation failed').withCause(error)
-  }
-
-  try {
-    user = await UserGetter.promises.getUser(user._id)
-  } catch (error) {
-    logger.error(
-      OError.tag(error, 'could not get fresh user data', {
-        userId: user._id,
-        email: user.email,
-      })
-    )
-  }
-  return user
-}
 
 async function recordRegistrationEvent(user) {
   try {
@@ -71,9 +43,6 @@ async function createNewUser(attributes, options = {}) {
     createdAt: new Date(),
     reversedHostname,
   }
-  if (Features.hasFeature('affiliations')) {
-    emailData.affiliationUnchecked = true
-  }
   if (
     attributes.samlIdentifiers &&
     attributes.samlIdentifiers[0] &&
@@ -82,11 +51,8 @@ async function createNewUser(attributes, options = {}) {
     emailData.samlProviderId = attributes.samlIdentifiers[0].providerId
   }
 
-  const affiliationOptions = options.affiliationOptions || {}
-
   if (options.confirmedAt) {
     emailData.confirmedAt = options.confirmedAt
-    affiliationOptions.confirmedAt = options.confirmedAt
   }
   user.emails = [emailData]
 
@@ -103,20 +69,6 @@ async function createNewUser(attributes, options = {}) {
   }
 
   user = await user.save()
-
-  if (Features.hasFeature('affiliations')) {
-    try {
-      user = await _addAffiliation(user, affiliationOptions)
-    } catch (error) {
-      if (options.requireAffiliation) {
-        await UserDeleter.promises.deleteMongoUser(user._id)
-        throw OError.tag(error)
-      } else {
-        const err = OError.tag(error, 'adding affiliations failed')
-        logger.error({ err, userId: user._id }, err.message)
-      }
-    }
-  }
 
   await recordRegistrationEvent(user)
   await Analytics.setUserPropertyForUser(user._id, 'created-at', new Date())

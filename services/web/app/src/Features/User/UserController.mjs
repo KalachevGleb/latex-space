@@ -7,7 +7,6 @@ import logger from '@overleaf/logger'
 import metrics from '@overleaf/metrics'
 import AuthenticationManager from '../Authentication/AuthenticationManager.js'
 import SessionManager from '../Authentication/SessionManager.js'
-import Features from '../../infrastructure/Features.js'
 import { z, validateReq } from '../../infrastructure/Validation.js'
 import UserAuditLogHandler from './UserAuditLogHandler.js'
 import UserSessionsManager from './UserSessionsManager.js'
@@ -55,14 +54,6 @@ function _sendSecurityAlertPasswordChanged(user) {
         'could not send security alert email when password changed'
       )
     })
-}
-
-async function _ensureAffiliation(userId, emailData) {
-  if (emailData.samlProviderId) {
-    await UserUpdater.promises.confirmEmail(userId, emailData.email)
-  } else {
-    await UserUpdater.promises.addAffiliationForNewUser(userId, emailData.email)
-  }
 }
 
 async function changePassword(req, res, next) {
@@ -170,49 +161,6 @@ async function clearSessions(req, res, next) {
   await _sendSecurityAlertClearedSessions(user)
 
   res.sendStatus(201)
-}
-
-async function ensureAffiliation(user) {
-  if (!Features.hasFeature('affiliations')) {
-    return
-  }
-
-  const flaggedEmails = user.emails.filter(email => email.affiliationUnchecked)
-  if (flaggedEmails.length === 0) {
-    return
-  }
-
-  if (flaggedEmails.length > 1) {
-    logger.error(
-      { userId: user._id },
-      `Unexpected number of flagged emails: ${flaggedEmails.length}`
-    )
-  }
-
-  await _ensureAffiliation(user._id, flaggedEmails[0])
-}
-
-async function ensureAffiliationMiddleware(req, res, next) {
-  let user
-  if (!Features.hasFeature('affiliations') || !req.query.ensureAffiliation) {
-    return next()
-  }
-  const userId = SessionManager.getLoggedInUserId(req.session)
-  try {
-    user = await UserGetter.promises.getUser(userId)
-  } catch (error) {
-    throw new Errors.UserNotFoundError({ info: { userId } })
-  }
-  // if the user does not have permission to add an affiliation, we skip this middleware
-  try {
-    req.assertPermission('add-affiliation')
-  } catch (error) {
-    if (error instanceof Errors.ForbiddenError) {
-      return next()
-    }
-  }
-  await ensureAffiliation(user)
-  return next()
 }
 
 async function tryDeleteUser(req, res, next) {
@@ -506,6 +454,4 @@ export default {
   logout: expressify(logout),
   expireDeletedUser: expressify(expireDeletedUser),
   expireDeletedUsersAfterDuration: expressify(expireDeletedUsersAfterDuration),
-  ensureAffiliationMiddleware: expressify(ensureAffiliationMiddleware),
-  ensureAffiliation,
 }

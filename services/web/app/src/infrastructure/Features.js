@@ -70,7 +70,6 @@ const Features = {
         return Boolean(Settings.oauth)
       case 'templates-server-pro':
         return Boolean(Settings.templates?.user_id)
-      case 'affiliations':
       case 'analytics':
         return Boolean(_.get(Settings, ['apis', 'v1', 'url']))
       case 'references':

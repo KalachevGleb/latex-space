@@ -824,7 +824,7 @@ templates.SAMLDataCleared = ctaTemplate({
     ]
   },
   ctaText(opts) {
-    return 'Update my Emails and affiliations'
+    return 'Update my email settings'
   },
   ctaURL(opts) {
     return `${settings.siteUrl}/user/settings`

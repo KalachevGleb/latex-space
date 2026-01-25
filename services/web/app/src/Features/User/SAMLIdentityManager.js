@@ -1,7 +1,6 @@
 const { ObjectId } = require('mongodb-legacy')
 const EmailHandler = require('../Email/EmailHandler')
 const Errors = require('../Errors/Errors')
-const InstitutionsAPI = require('../Institutions/InstitutionsAPI')
 const OError = require('@overleaf/o-error')
 const UserAuditLogHandler = require('../User/UserAuditLogHandler')
 const UserGetter = require('../User/UserGetter')
@@ -55,23 +54,7 @@ async function _ensureCanAddIdentifier(userId, institutionEmail, providerId) {
     throw new Errors.EmailExistsError()
   }
 
-  // email belongs to user. Make sure it's already affiliated with the provider
-  const fullEmails = await UserGetter.promises.getUserFullEmails(
-    userWithEmail._id
-  )
-  const existingFullEmailData = fullEmails.find(
-    emailData => emailData.email === institutionEmail
-  )
-
-  if (!existingFullEmailData.affiliation) {
-    throw new Errors.SAMLEmailNotAffiliatedError()
-  }
-
-  if (
-    existingFullEmailData.affiliation.institution.id.toString() !== providerId
-  ) {
-    throw new Errors.SAMLEmailAffiliatedWithAnotherInstitutionError()
-  }
+  // email belongs to user; allow linking without institution affiliation checks
 }
 
 async function _addIdentifier(
@@ -279,8 +262,6 @@ async function unlinkAccounts(
   })
   // update v2 user
   await _removeIdentifier(userId, providerId)
-  // update v1 affiliations record
-  await InstitutionsAPI.promises.removeEntitlement(userId, institutionEmail)
   // send email
   _sendUnlinkedEmail(primaryEmail, providerName, institutionEmail)
 }
@@ -437,9 +418,7 @@ async function unlinkNotMigrated(userId, providerId, providerName, auditLog) {
     auditLogInfo
   )
 
-  await promiseMapWithLimit(10, linkedEmails, async emailData => {
-    await InstitutionsAPI.promises.removeEntitlement(userId, emailData.email)
-  })
+  await promiseMapWithLimit(10, linkedEmails, async () => {})
 }
 
 const SAMLIdentityManager = {

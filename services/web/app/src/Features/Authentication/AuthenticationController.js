@@ -13,7 +13,6 @@ const UserHandler = require('../User/UserHandler')
 const UserSessionsManager = require('../User/UserSessionsManager')
 const Analytics = require('../Analytics/AnalyticsManager')
 const passport = require('passport')
-const NotificationsBuilder = require('../Notifications/NotificationsBuilder')
 const UrlHelper = require('../Helpers/UrlHelper')
 const AsyncFormHelper = require('../Helpers/AsyncFormHelper')
 const _ = require('lodash')
@@ -347,12 +346,6 @@ const AuthenticationController = {
   },
 
   ipMatchCheck(req, user) {
-    if (req.ip !== user.lastLoginIp) {
-      NotificationsBuilder.ipMatcherAffiliation(user._id).create(
-        req.ip,
-        () => {}
-      )
-    }
     return UserUpdater.updateUser(
       user._id.toString(),
       {

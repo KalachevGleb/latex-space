@@ -4,8 +4,6 @@ const { db } = require('../../infrastructure/mongodb')
 const { normalizeQuery } = require('../Helpers/Mongo')
 const { callbackify } = require('util')
 const UserGetter = require('./UserGetter')
-const InstitutionsAPI = require('../Institutions/InstitutionsAPI')
-const Features = require('../../infrastructure/Features')
 const FeaturesUpdater = require('../Subscription/FeaturesUpdater')
 const EmailHandler = require('../Email/EmailHandler')
 const EmailHelper = require('../Helpers/EmailHelper')
@@ -103,16 +101,6 @@ async function addEmailAddress(userId, newEmail, affiliationOptions, auditLog) {
     }
   )
 
-  try {
-    await InstitutionsAPI.promises.addAffiliation(
-      userId,
-      newEmail,
-      affiliationOptions
-    )
-  } catch (error) {
-    throw OError.tag(error, 'problem adding affiliation while adding email')
-  }
-
   const createdAt = new Date()
   let res
   try {
@@ -170,10 +158,6 @@ async function clearSAMLData(userId, auditLog, sendEmail) {
   }
 
   await updateUser(userId, update)
-
-  for (const emailData of user.emails) {
-    await InstitutionsAPI.promises.removeEntitlement(userId, emailData.email)
-  }
 
   await FeaturesUpdater.promises.refreshFeatures(
     userId,
@@ -381,17 +365,8 @@ async function confirmEmail(userId, email, affiliationOptions) {
   }
   logger.debug({ userId, email }, 'confirming user email')
 
-  try {
-    affiliationOptions = affiliationOptions || {}
-    affiliationOptions.confirmedAt = confirmedAt
-    await InstitutionsAPI.promises.addAffiliation(
-      userId,
-      email,
-      affiliationOptions
-    )
-  } catch (error) {
-    throw OError.tag(error, 'problem adding affiliation while confirming email')
-  }
+  affiliationOptions = affiliationOptions || {}
+  affiliationOptions.confirmedAt = confirmedAt
 
   const query = {
     _id: userId,
@@ -408,11 +383,6 @@ async function confirmEmail(userId, email, affiliationOptions) {
     },
   }
 
-  if (Features.hasFeature('affiliations')) {
-    update.$unset = {
-      'emails.$.affiliationUnchecked': 1,
-    }
-  }
 
   const res = await updateUser(query, update)
 
@@ -474,13 +444,6 @@ async function removeEmailAddress(
     }
   )
 
-  try {
-    await InstitutionsAPI.promises.removeAffiliation(userId, email)
-  } catch (error) {
-    OError.tag(error, 'problem removing affiliation')
-    throw error
-  }
-
   const query = { _id: userId, email: { $ne: email } }
   const update = { $pull: { emails: { email } } }
 
@@ -509,36 +472,6 @@ async function removeEmailAddress(
   }
 
   await FeaturesUpdater.promises.refreshFeatures(userId, 'remove-email')
-}
-
-async function addAffiliationForNewUser(
-  userId,
-  email,
-  affiliationOptions = {}
-) {
-  AsyncLocalStorage.removeItem('userFullEmails')
-  await InstitutionsAPI.promises.addAffiliation(
-    userId,
-    email,
-    affiliationOptions
-  )
-  try {
-    await updateUser(
-      { _id: userId, 'emails.email': email },
-      { $unset: { 'emails.$.affiliationUnchecked': 1 } }
-    )
-  } catch (error) {
-    logger.error(
-      OError.tag(
-        error,
-        'could not remove affiliationUnchecked flag for user on create',
-        {
-          userId,
-          email,
-        }
-      )
-    )
-  }
 }
 
 async function updateUser(query, update) {
@@ -649,7 +582,6 @@ function _securityAlertPrimaryEmailChangedExtraRecipients(
 }
 
 module.exports = {
-  addAffiliationForNewUser: callbackify(addAffiliationForNewUser),
   addEmailAddress: callbackify(addEmailAddress),
   changeEmailAddress: callbackify(changeEmailAddress),
   clearSAMLData: callbackify(clearSAMLData),
@@ -661,7 +593,6 @@ module.exports = {
   updateUser: callbackify(updateUser),
   suspendUser: callbackify(suspendUser),
   promises: {
-    addAffiliationForNewUser,
     addEmailAddress,
     changeEmailAddress,
     clearSAMLData,

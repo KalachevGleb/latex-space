@@ -9,7 +9,6 @@ const NewsletterManager = require('../Newsletter/NewsletterManager')
 const ProjectDeleter = require('../Project/ProjectDeleter')
 const UserSessionsManager = require('./UserSessionsManager')
 const UserAuditLogHandler = require('./UserAuditLogHandler')
-const InstitutionsAPI = require('../Institutions/InstitutionsAPI')
 const Modules = require('../../infrastructure/Modules')
 const Errors = require('../Errors/Errors')
 const OnboardingDataCollectionManager = require('../OnboardingDataCollection/OnboardingDataCollectionManager')
@@ -201,8 +200,6 @@ async function _cleanupUser(user) {
   await UserSessionsManager.promises.removeSessionsFromRedis(user)
   logger.info({ userId }, '[cleanupUser] unsubscribing from newsletters')
   await NewsletterManager.promises.unsubscribe(user, { delete: true })
-  logger.info({ userId }, '[cleanupUser] deleting affiliations')
-  await InstitutionsAPI.promises.deleteAffiliations(userId)
   logger.info({ userId }, '[cleanupUser] removing personal access tokens')
   await Modules.promises.hooks.fire('cleanupPersonalAccessTokens', userId, [
     'collabratec',
