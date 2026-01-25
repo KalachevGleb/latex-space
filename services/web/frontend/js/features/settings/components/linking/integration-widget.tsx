@@ -12,10 +12,6 @@ import {
   OLModalTitle,
 } from '@/shared/components/ol/ol-modal'
 
-function trackUpgradeClick(integration: string) {
-  sendMB('settings-upgrade-click', { integration })
-}
-
 function trackLinkingClick(integration: string) {
   sendMB('link-integration-click', { integration, location: 'Settings' })
 }
@@ -122,21 +118,11 @@ function ActionButton({
   titleId,
 }: ActionButtonProps) {
   const { t } = useTranslation()
-  const upgradeTextId = `${titleId}-upgrade`
   const linkTextId = `${titleId}-link`
   const unlinkTextId = `${titleId}-unlink`
 
   if (!hasFeature) {
-    return (
-      <OLButton
-        variant="primary"
-        href="/user/subscription/plans"
-        onClick={() => trackUpgradeClick(integration)}
-        aria-labelledby={`${titleId} ${upgradeTextId}`}
-      >
-        <span id={upgradeTextId}>{t('upgrade')}</span>
-      </OLButton>
-    )
+    return null
   } else if (linked) {
     return (
       <OLButton

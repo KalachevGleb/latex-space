@@ -13,7 +13,6 @@ import { expressify } from '@overleaf/promise-utils'
 import { hasAdminAccess } from '../Helpers/AdminAuthorizationHelper.js'
 import TokenAccessHandler from '../TokenAccess/TokenAccessHandler.js'
 import ProjectAuditLogHandler from '../Project/ProjectAuditLogHandler.mjs'
-import LimitationsManager from '../Subscription/LimitationsManager.js'
 import PrivilegeLevels from '../Authorization/PrivilegeLevels.js'
 import { z, zz, validateReq } from '../../infrastructure/Validation.js'
 import Features from '../../infrastructure/Features.js'
@@ -106,19 +105,6 @@ async function setCollaboratorInfo(req, res, next) {
       'setCollaboratorInfo received request'
     )
 
-    const allowed =
-      await LimitationsManager.promises.canChangeCollaboratorPrivilegeLevel(
-        projectId,
-        userId,
-        privilegeLevel
-      )
-    if (!allowed) {
-      return HttpErrorHandler.forbidden(
-        req,
-        res,
-        'edit collaborator limit reached'
-      )
-    }
 
     await CollaboratorsHandler.promises.setCollaboratorPrivilegeLevel(
       projectId,
@@ -276,24 +262,6 @@ async function addUserDirectly(req, res) {
 
   logger.debug({ projectId, email, sendingUserId }, 'adding user directly to project')
 
-  // Check collaborator limits
-  let allowed = false
-  if (privileges === PrivilegeLevels.READ_ONLY) {
-    allowed = true
-  } else {
-    allowed = await LimitationsManager.promises.canAddXEditCollaborators(
-      projectId,
-      1
-    )
-  }
-
-  if (!allowed) {
-    logger.debug(
-      { projectId, email, sendingUserId },
-      'not allowed to add more users to project'
-    )
-    return res.status(403).json({ error: 'collaborator_limit_reached' })
-  }
 
   // Parse and validate email
   email = EmailHelper.parseEmail(email, true)

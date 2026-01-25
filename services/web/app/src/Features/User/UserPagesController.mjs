@@ -15,29 +15,14 @@ import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
 async function settingsPage(req, res) {
   const userId = SessionManager.getLoggedInUserId(req.session)
   const reconfirmationRemoveEmail = req.query.remove
-  // SSO
-  const ssoError = req.session.ssoError
-  if (ssoError) {
-    delete req.session.ssoError
-  }
-  const ssoErrorMessage = req.session.ssoErrorMessage
-  if (ssoErrorMessage) {
-    delete req.session.ssoErrorMessage
-  }
   const projectSyncSuccessMessage = req.session.projectSyncSuccessMessage
   if (projectSyncSuccessMessage) {
     delete req.session.projectSyncSuccessMessage
   }
-  const samlError = _.get(req.session, ['saml', 'error'])
-  delete req.session.saml
   let shouldAllowEditingDetails = true
   if (Settings.ldap && Settings.ldap.updateUserDetailsOnLogin) {
     shouldAllowEditingDetails = false
   }
-  if (Settings.saml && Settings.saml.updateUserDetailsOnLogin) {
-    shouldAllowEditingDetails = false
-  }
-  const oauthProviders = Settings.oauthProviders || {}
 
   const user = await UserGetter.promises.getUser(userId)
   if (!user) {
@@ -62,32 +47,6 @@ async function settingsPage(req, res) {
   }
 
   const currentManagedUserAdminEmail = null
-
-  let memberOfSSOEnabledGroups = []
-  try {
-    memberOfSSOEnabledGroups =
-      (
-        await Modules.promises.hooks.fire(
-          'getUserGroupsSSOEnrollmentStatus',
-          user._id,
-          { teamName: 1 },
-          ['email']
-        )
-      )?.[0] || []
-    memberOfSSOEnabledGroups = memberOfSSOEnabledGroups.map(group => {
-      return {
-        groupId: group._id.toString(),
-        linked: group.linked,
-        groupName: group.teamName,
-        adminEmail: group.admin_id?.email,
-      }
-    })
-  } catch (error) {
-    logger.error(
-      { err: error },
-      'error fetching groups with Group SSO enabled the user may be member of'
-    )
-  }
 
   res.render('user/settings', {
     title: 'account_settings',
@@ -127,15 +86,7 @@ async function settingsPage(req, res) {
     labsExperiments: user.labsExperiments ?? [],
     hasPassword: !!user.hashedPassword,
     shouldAllowEditingDetails,
-    oauthProviders: UserPagesController._translateProviderDescriptions(
-      oauthProviders,
-      req
-    ),
-    samlError,
     reconfirmationRemoveEmail,
-    samlBeta: req.session.samlBeta,
-    ssoErrorMessage,
-    thirdPartyIds: UserPagesController._restructureThirdPartyIds(user),
     projectSyncSuccessMessage,
     personalAccessTokens,
     emailAddressLimit: Settings.emailAddressLimit,
@@ -144,7 +95,6 @@ async function settingsPage(req, res) {
     currentManagedUserAdminEmail,
     gitBridgeEnabled: Settings.enableGitBridge,
     isSaas: Features.hasFeature('saas'),
-    memberOfSSOEnabledGroups,
     capabilities: [...req.capabilitySet],
   })
 }
@@ -186,7 +136,6 @@ const UserPagesController = {
       title: 'register',
       sharedProjectData,
       newTemplateData,
-      samlBeta: req.session.samlBeta,
       registrationEnabled,
     })
   },
@@ -263,7 +212,7 @@ const UserPagesController = {
         }
         NewsletterManager.subscribed(user, (err, subscribed) => {
           if (err != null) {
-            OError.tag(err, 'error getting newsletter subscription status')
+            OError.tag(err, 'error getting newsletter status')
             return next(err)
           }
           res.render('user/email-preferences', {
@@ -279,36 +228,6 @@ const UserPagesController = {
     res.render('user/compromised_password')
   },
 
-  _restructureThirdPartyIds(user) {
-    // 3rd party identifiers are an array of objects
-    // this turn them into a single object, which
-    // makes data easier to use in template
-    if (
-      !user.thirdPartyIdentifiers ||
-      user.thirdPartyIdentifiers.length === 0
-    ) {
-      return null
-    }
-    return user.thirdPartyIdentifiers.reduce((obj, identifier) => {
-      obj[identifier.providerId] = identifier.externalUserId
-      return obj
-    }, {})
-  },
-
-  _translateProviderDescriptions(providers, req) {
-    const result = {}
-    if (providers) {
-      for (const provider in providers) {
-        const data = providers[provider]
-        data.description = req.i18n.translate(
-          data.descriptionKey,
-          Object.assign({}, data.descriptionOptions)
-        )
-        result[provider] = data
-      }
-    }
-    return result
-  },
 }
 
 export default UserPagesController

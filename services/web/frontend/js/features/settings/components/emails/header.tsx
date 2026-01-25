@@ -10,14 +10,14 @@ function Header() {
   return (
     <>
       <OLRow>
-        <OLCol lg={4} className="d-none d-sm-block">
+        <OLCol lg={9} className="d-none d-sm-block">
           <EmailCell>
             <strong>{t('email')}</strong>
           </EmailCell>
         </OLCol>
-        <OLCol lg={8} className="d-none d-sm-block">
-          <EmailCell>
-            <strong>{t('institution_and_role')}</strong>
+        <OLCol lg={3} className="d-none d-sm-block">
+          <EmailCell className="text-lg-end">
+            <strong>{t('actions')}</strong>
           </EmailCell>
         </OLCol>
       </OLRow>

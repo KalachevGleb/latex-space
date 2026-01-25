@@ -588,14 +588,6 @@ export const LocalCompileProvider: FC<React.PropsWithChildren> = ({
 
         case 'timedout':
           setError('timedout')
-
-          if (!hasPremiumCompile && isProjectOwner) {
-            send(
-              'subscription-funnel',
-              'editor-click-feature',
-              'compile-timeout'
-            )
-          }
           break
 
         case 'autocompile-backoff':

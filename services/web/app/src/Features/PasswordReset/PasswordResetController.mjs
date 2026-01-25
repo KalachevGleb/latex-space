@@ -141,9 +141,7 @@ async function requestReset(req, res, next) {
       'user does not have one or more permissions within change-password'
     ) {
       return res.status(403).json({
-        message: {
-          key: 'no-password-allowed-due-to-sso',
-        },
+        message: 'Password reset is not available for this account.',
       })
     }
     throw err

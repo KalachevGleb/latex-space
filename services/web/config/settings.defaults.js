@@ -433,7 +433,6 @@ module.exports = {
 
   disableChat: process.env.OVERLEAF_DISABLE_CHAT === 'true',
   disableLinkSharing: process.env.OVERLEAF_DISABLE_LINK_SHARING === 'true',
-  enableSubscriptions: false,
   restrictedCountries: [],
   enableOnboardingEmails: process.env.ENABLE_ONBOARDING_EMAILS === 'true',
 
@@ -783,7 +782,6 @@ module.exports = {
       },
     ],
 
-    showSubscriptionLink: false,
 
     header_extras: [],
   },
@@ -1005,9 +1003,7 @@ module.exports = {
     editorLeftMenuSync: [],
     editorLeftMenuManageTemplate: [],
     oauth2Server: [],
-    managedGroupSubscriptionEnrollmentNotification: [],
     managedGroupEnrollmentInvite: [],
-    ssoCertificateInfo: [],
     v1ImportDataScreen: [],
     snapshotUtils: [],
     usGovBanner: [],

@@ -22,8 +22,6 @@ const UserSchema = new Schema(
           },
         },
         confirmedAt: { type: Date },
-        samlProviderId: { type: String },
-        affiliationUnchecked: { type: Boolean },
         reconfirmedAt: { type: Date },
       },
     ],
@@ -38,33 +36,13 @@ const UserSchema = new Schema(
       maxlength: MAX_NAME_LENGTH,
     },
     role: { type: String, default: '' },
-    institution: { type: String, default: '' },
     hashedPassword: String,
-    enrollment: {
-      sso: [
-        {
-          groupId: {
-            type: ObjectId,
-            ref: 'Subscription',
-          },
-          linkedAt: Date,
-          primary: { type: Boolean, default: false },
-        },
-      ],
-      managedBy: {
-        type: ObjectId,
-        ref: 'Subscription',
-      },
-      enrolledAt: { type: Date },
-    },
     isAdmin: { type: Boolean, default: false },
     adminRoles: { type: Array },
     permissions: { type: String, enum: ['basic', 'full'], default: 'full' },
     staffAccess: {
       publisherMetrics: { type: Boolean, default: false },
       publisherManagement: { type: Boolean, default: false },
-      institutionMetrics: { type: Boolean, default: false },
-      institutionManagement: { type: Boolean, default: false },
       groupMetrics: { type: Boolean, default: false },
       groupManagement: { type: Boolean, default: false },
       adminMetrics: { type: Boolean, default: false },
@@ -215,7 +193,6 @@ const UserSchema = new Schema(
       refreshToken: { type: String },
     },
     awareOfV2: { type: Boolean, default: false },
-    samlIdentifiers: { type: Array, default: [] },
     thirdPartyIdentifiers: { type: Array, default: [] },
     migratedAt: { type: Date },
     twoFactorAuthentication: {

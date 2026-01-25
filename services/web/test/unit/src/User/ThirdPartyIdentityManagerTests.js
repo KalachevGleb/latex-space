@@ -123,7 +123,7 @@ describe('ThirdPartyIdentityManager', function () {
         this.UserAuditLogHandler.promises.addEntry
       ).to.have.been.calledOnceWith(
         this.userId,
-        'link-sso',
+        'link-third-party',
         this.auditLog.initiatorId,
         this.auditLog.ipAddress,
         {
@@ -197,7 +197,7 @@ describe('ThirdPartyIdentityManager', function () {
         this.UserAuditLogHandler.promises.addEntry
       ).to.have.been.calledOnceWith(
         this.userId,
-        'unlink-sso',
+        'unlink-third-party',
         this.auditLog.initiatorId,
         this.auditLog.ipAddress,
         {

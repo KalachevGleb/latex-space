@@ -9,7 +9,6 @@ import UserGetter from '../User/UserGetter.js'
 import ProjectGetter from '../Project/ProjectGetter.js'
 import NotificationsBuilder from '../Notifications/NotificationsBuilder.js'
 import PrivilegeLevels from '../Authorization/PrivilegeLevels.js'
-import LimitationsManager from '../Subscription/LimitationsManager.js'
 import ProjectAuditLogHandler from '../Project/ProjectAuditLogHandler.mjs'
 import _ from 'lodash'
 
@@ -164,42 +163,6 @@ const CollaboratorsInviteHandler = {
     // Add canEdit to opts if it's set in the invite
     if (invite.canEdit !== undefined) {
       opts.canEdit = invite.canEdit
-    }
-    if (
-      [PrivilegeLevels.READ_AND_WRITE, PrivilegeLevels.REVIEW].includes(
-        invite.privileges
-      )
-    ) {
-      const allowed =
-        await LimitationsManager.promises.canAcceptEditCollaboratorInvite(
-          project._id
-        )
-      if (!allowed) {
-        privilegeLevel = PrivilegeLevels.READ_ONLY
-        if (invite.privileges === PrivilegeLevels.READ_AND_WRITE) {
-          opts.pendingEditor = true
-        } else if (invite.privileges === PrivilegeLevels.REVIEW) {
-          opts.pendingReviewer = true
-        }
-
-        logger.debug(
-          { projectId, userId: user._id, privileges: invite.privileges },
-          'no collaborator slots available, user added as read only (pending editor)'
-        )
-        await ProjectAuditLogHandler.promises.addEntry(
-          projectId,
-          'editor-moved-to-pending', // controller already logged accept-invite
-          null,
-          null,
-          {
-            userId: user._id.toString(),
-            role:
-              invite.privileges === PrivilegeLevels.REVIEW
-                ? 'reviewer'
-                : 'editor',
-          }
-        )
-      }
     }
 
     await CollaboratorsHandler.promises.addUserIdToProject(

@@ -10,17 +10,7 @@ block vars
 	- const suppressPugCookieBanner = true
 
 block append meta
-	meta(
-		name='ol-usersBestSubscription'
-		data-type='json'
-		content=usersBestSubscription
-	)
 	meta(name='ol-notifications' data-type='json' content=notifications)
-	meta(
-		name='ol-notificationsInstitution'
-		data-type='json'
-		content=notificationsInstitution
-	)
 	meta(name='ol-userEmails' data-type='json' content=userEmails)
 	meta(
 		name='ol-allInReconfirmNotificationPeriods'
@@ -28,8 +18,6 @@ block append meta
 		content=allInReconfirmNotificationPeriods
 	)
 	meta(name='ol-user' data-type='json' content=user)
-	meta(name='ol-userAffiliations' data-type='json' content=userAffiliations)
-	meta(name='ol-reconfirmedViaSAML' content=reconfirmedViaSAML)
 	meta(name='ol-survey' data-type='json' content=survey)
 	meta(name='ol-tags' data-type='json' content=tags)
 	meta(name='ol-portalTemplates' data-type='json' content=portalTemplates)
@@ -66,23 +54,6 @@ block append meta
 		content=recommendedCurrency
 	)
 	meta(name='ol-showLATAMBanner' data-type='boolean' content=showLATAMBanner)
-	meta(
-		name='ol-groupSubscriptionsPendingEnrollment'
-		data-type='json'
-		content=groupSubscriptionsPendingEnrollment
-	)
-	meta(
-		name='ol-hasIndividualPaidSubscription'
-		data-type='boolean'
-		content=hasIndividualPaidSubscription
-	)
-	meta(
-		name='ol-groupSsoSetupSuccess'
-		data-type='boolean'
-		content=groupSsoSetupSuccess
-	)
-	meta(name='ol-joinedGroupName' data-type='string' content=joinedGroupName)
-	meta(name='ol-viaDomainCapture' data-type='boolean' content=viaDomainCapture)
 	meta(name='ol-showUSGovBanner' data-type='boolean' content=showUSGovBanner)
 	meta(
 		name='ol-usGovBannerVariant'

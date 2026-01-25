@@ -38,8 +38,6 @@ export type User = {
   id: UserId
   isAdmin?: boolean
   email: string
-  allowedFreeTrial?: boolean
-  hasPaidSubscription?: boolean
   first_name?: string
   last_name?: string
   alphaProgram?: boolean
@@ -58,11 +56,6 @@ export type User = {
     enabled: boolean
   }
   featureUsage?: FeatureUsage
-  planCode?: string
-  planName?: string
-  isAnnualPlan?: boolean
-  isMemberOfGroupSubscription?: boolean
-  hasInstitutionLicence?: boolean
 }
 
 export type LoggedOutUser = {
@@ -74,7 +67,6 @@ export type LoggedOutUser = {
   labsProgram?: undefined
   alphaProgram?: undefined
   betaProgram?: undefined
-  allowedFreeTrial?: undefined
   features?: undefined
   refProviders?: undefined
   writefull?: undefined

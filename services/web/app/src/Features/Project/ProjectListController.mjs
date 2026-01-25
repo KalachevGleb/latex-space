@@ -51,18 +51,9 @@ function cleanupSession(req) {
 async function projectListPage(req, res, next) {
   cleanupSession(req)
 
-  const usersBestSubscription = null
-  const usersIndividualSubscription = null
-  const usersGroupSubscriptions = []
   let survey
-  const userIsMemberOfGroupSubscription = false
-  const groupSubscriptionsPendingEnrollment = []
-
-  const isSaas = false
 
   const userId = SessionManager.getLoggedInUserId(req.session)
-
-  // no SaaS flows in the non-commercial build
 
   const projectsBlobPending = _getProjects(userId).catch(err => {
     logger.err({ err, userId }, 'projects listing in background failed')
@@ -70,9 +61,7 @@ async function projectListPage(req, res, next) {
   })
   const user = await User.findById(
     userId,
-    `email emails features alphaProgram betaProgram lastPrimaryEmailCheck lastActive signUpDate refProviders${
-      isSaas ? ' enrollment writefull completedTutorials aiErrorAssistant' : ''
-    }`
+    'email emails features alphaProgram betaProgram lastPrimaryEmailCheck lastActive signUpDate refProviders writefull completedTutorials aiErrorAssistant'
   )
 
   // Handle case of deleted user
@@ -83,8 +72,6 @@ async function projectListPage(req, res, next) {
 
   user.refProviders = _.mapValues(user.refProviders, Boolean)
 
-  // no SaaS subscription flows
-
   const tags = await TagsHandler.promises.getAllTags(userId)
 
   /** @type {{ list: any[], allInReconfirmNotificationPeriods?: any[], error?: any }} */
@@ -94,7 +81,7 @@ async function projectListPage(req, res, next) {
 
   try {
     const fullEmails = await UserGetter.promises.getUserFullEmails(userId)
-    userEmailsData.list = fullEmails
+      userEmailsData.list = fullEmails
   } catch (error) {
     if (!(error instanceof V1ConnectionError)) {
       logger.error({ err: error, userId }, 'Failed to get user full emails')
@@ -103,7 +90,6 @@ async function projectListPage(req, res, next) {
 
   const userEmails = userEmailsData.list || []
 
-  const userAffiliations = []
   const portalTemplates = []
 
   const { allInReconfirmNotificationPeriods } = userEmailsData
@@ -118,25 +104,18 @@ async function projectListPage(req, res, next) {
     )
   }
 
-  const notificationsInstitution = []
-  const groupSsoSetupSuccess = undefined
-  const viaDomainCapture = undefined
-  const joinedGroupName = undefined
-  const reconfirmedViaSAML = undefined
 
   const prefetchedProjectsBlob = await projectsBlobPending
   Metrics.inc('project-list-prefetch-projects', 1, {
     status: prefetchedProjectsBlob ? 'success' : 'error',
   })
 
-  const hasPaidAffiliation = false
-
   const inactiveTutorials = TutorialHandler.getInactiveTutorials(user)
 
   const usGovBannerHooksResponse = await Modules.promises.hooks.fire(
     'getUSGovBanner',
     userEmails,
-    hasPaidAffiliation,
+    false,
     inactiveTutorials
   )
 
@@ -154,8 +133,6 @@ async function projectListPage(req, res, next) {
   const showBrlGeoBanner = false
   const showLATAMBanner = false
   const recommendedCurrency = null
-  const hasIndividualPaidSubscription = false
-
   const inEnterpriseCommons = false
 
   // customer.io: Premium nudge experiment
@@ -166,13 +143,9 @@ async function projectListPage(req, res, next) {
 
   res.render('project/list-react', {
     title: 'your_projects',
-    usersBestSubscription,
     notifications,
-    notificationsInstitution,
     user,
-    userAffiliations,
     userEmails,
-    reconfirmedViaSAML,
     allInReconfirmNotificationPeriods,
     survey,
     tags,
@@ -187,15 +160,6 @@ async function projectListPage(req, res, next) {
     showInrGeoBanner,
     showBrlGeoBanner,
     projectDashboardReact: true, // used in navbar
-    groupSsoSetupSuccess,
-    joinedGroupName,
-    viaDomainCapture,
-    groupSubscriptionsPendingEnrollment:
-      groupSubscriptionsPendingEnrollment.map(subscription => ({
-        groupId: subscription._id,
-        groupName: subscription.teamName,
-      })),
-    hasIndividualPaidSubscription,
     userRestrictions: Array.from(req.userRestrictions || []),
     customerIoEnabled,
     aiBlocked,

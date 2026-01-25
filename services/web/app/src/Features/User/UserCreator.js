@@ -43,14 +43,6 @@ async function createNewUser(attributes, options = {}) {
     createdAt: new Date(),
     reversedHostname,
   }
-  if (
-    attributes.samlIdentifiers &&
-    attributes.samlIdentifiers[0] &&
-    attributes.samlIdentifiers[0].providerId
-  ) {
-    emailData.samlProviderId = attributes.samlIdentifiers[0].providerId
-  }
-
   if (options.confirmedAt) {
     emailData.confirmedAt = options.confirmedAt
   }

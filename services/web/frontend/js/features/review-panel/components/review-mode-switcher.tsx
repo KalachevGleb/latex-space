@@ -1,4 +1,4 @@
-import { forwardRef, memo, MouseEventHandler, useState } from 'react'
+import { forwardRef, memo, MouseEventHandler } from 'react'
 import {
   Dropdown,
   DropdownMenu,
@@ -18,7 +18,6 @@ import usePersistedState from '@/shared/hooks/use-persisted-state'
 import { sendMB } from '@/infrastructure/event-tracking'
 import { useIdeReactContext } from '@/features/ide-react/context/ide-react-context'
 import { useProjectContext } from '@/shared/context/project-context'
-import UpgradeTrackChangesModal from './upgrade-track-changes-modal'
 import { useCodeMirrorViewContext } from '@/features/source-editor/components/codemirror-context'
 import { useEditorOpenDocContext } from '@/features/ide-react/context/editor-open-doc-context'
 import { useFileTreeData } from '@/shared/context/file-tree-data-context'
@@ -57,7 +56,6 @@ function ReviewModeSwitcher() {
   const { permissionsLevel } = useIdeReactContext()
   const { write, trackedWrite } = usePermissionsContext()
   const { features, project } = useProjectContext()
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const showViewOption = permissionsLevel === 'readOnly'
   const view = useCodeMirrorViewContext()
   const { currentDocument } = useEditorOpenDocContext()
@@ -134,20 +132,19 @@ function ReviewModeSwitcher() {
                 return
               }
               if (!features.trackChanges) {
-                setShowUpgradeModal(true)
-              } else {
-                sendMB('editing-mode-change', {
-                  role: permissionsLevel,
-                  previousMode: mode,
-                  newMode: 'review',
-                })
-                if (user?.id) {
-                  saveTrackChangesForCurrentUser(true)
-                } else {
-                  saveTrackChanges({ on_for_guests: true })
-                }
-                view.focus()
+                return
               }
+              sendMB('editing-mode-change', {
+                role: permissionsLevel,
+                previousMode: mode,
+                newMode: 'review',
+              })
+              if (user?.id) {
+                saveTrackChangesForCurrentUser(true)
+              } else {
+                saveTrackChanges({ on_for_guests: true })
+              }
+              view.focus()
             }}
             description={
               permissionsLevel === 'review' && !trackedWrite
@@ -170,10 +167,6 @@ function ReviewModeSwitcher() {
           )}
         </DropdownMenu>
       </Dropdown>
-      <UpgradeTrackChangesModal
-        show={showUpgradeModal}
-        setShow={setShowUpgradeModal}
-      />
     </div>
   )
 }

@@ -207,7 +207,7 @@ async function tryDeleteUser(req, res, next) {
       message: 'error while deleting user account',
       info: { userId },
     }
-    throw OError.tag(err, errorData.message, errorData.info)
+      throw OError.tag(err, errorData.message, errorData.info)
   }
 
   await Modules.promises.hooks.fire('tryDeleteV1Account', user)
@@ -286,12 +286,6 @@ async function updateUserSettings(req, res, next) {
   }
   if (body.last_name != null) {
     user.last_name = body.last_name.trim()
-  }
-  if (body.role != null) {
-    user.role = body.role.trim()
-  }
-  if (body.institution != null) {
-    user.institution = body.institution.trim()
   }
   if (body.mode != null) {
     user.ace.mode = body.mode

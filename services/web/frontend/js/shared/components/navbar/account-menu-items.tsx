@@ -10,10 +10,8 @@ import { SignOut } from '@phosphor-icons/react'
 
 export function AccountMenuItems({
   sessionUser,
-  showSubscriptionLink,
 }: {
   sessionUser: NavbarSessionUser
-  showSubscriptionLink: boolean
 }) {
   const { t } = useTranslation()
   const logOutFormId = 'logOutForm'
@@ -27,11 +25,6 @@ export function AccountMenuItems({
       <NavDropdownLinkItem href="/user/settings">
         {t('account_settings')}
       </NavDropdownLinkItem>
-      {showSubscriptionLink ? (
-        <NavDropdownLinkItem href="/user/subscription">
-          {t('subscription')}
-        </NavDropdownLinkItem>
-      ) : null}
       <NavDropdownDivider />
       <DropdownListItem>
         {

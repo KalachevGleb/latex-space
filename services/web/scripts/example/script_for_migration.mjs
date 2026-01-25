@@ -1,5 +1,4 @@
-/* subscription.freeTrialExpiresAt
- * Example script for a migration:
+/* Example script for a migration:
  *
  * This script demonstrates how to write a script that is runnable either via
  * the CLI, or via a migration. The related migration is `script_example`

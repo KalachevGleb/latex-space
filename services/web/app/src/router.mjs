@@ -365,18 +365,18 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     UserEmailsController.primaryEmailCheck
   )
 
-  webRouter.post(
-    '/user/emails/delete',
-    AuthenticationController.requireLogin(),
-    RateLimiterMiddleware.rateLimit(rateLimiters.deleteEmail),
-    await Modules.middleware('userDeleteEmail'),
-    UserEmailsController.remove
-  )
-  webRouter.post(
-    '/user/emails/default',
-    AuthenticationController.requireLogin(),
-    UserEmailsController.setDefault
-  )
+    webRouter.post(
+      '/user/emails/delete',
+      AuthenticationController.requireLogin(),
+      RateLimiterMiddleware.rateLimit(rateLimiters.deleteEmail),
+      await Modules.middleware('userDeleteEmail'),
+      UserEmailsController.remove
+    )
+    webRouter.post(
+      '/user/emails/default',
+      AuthenticationController.requireLogin(),
+      UserEmailsController.setDefault
+    )
 
   if (Features.hasFeature('saas')) {
     webRouter.get(

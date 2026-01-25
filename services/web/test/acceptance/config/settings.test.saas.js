@@ -15,7 +15,6 @@ const overrides = {
   appName: 'Overleaf',
   siteUrl: overleafHost,
 
-  enableSubscriptions: true,
 
   apis: {
     thirdPartyDataStore: {

@@ -4,7 +4,6 @@ import classnames from 'classnames'
 import { Question, User } from '@phosphor-icons/react'
 import NewProjectButton from '../new-project-button'
 import SidebarFilters from './sidebar-filters'
-import AddAffiliation, { useAddAffiliation } from '../add-affiliation'
 import { usePersistedResize } from '@/shared/hooks/use-resize'
 import { Dropdown } from 'react-bootstrap'
 import getMeta from '@/utils/meta'
@@ -26,12 +25,11 @@ function SidebarDsNav() {
     useContactUsModal({
       autofillProjectUrl: false,
     })
-  const { show: showAddAffiliationWidget } = useAddAffiliation()
   const { mousePos, getHandleProps, getTargetProps } = usePersistedResize({
     name: 'project-sidebar',
   })
   const sendMB = useSendProjectListMB()
-  const { sessionUser, showSubscriptionLink, items } = getMeta('ol-navbar')
+  const { sessionUser, items } = getMeta('ol-navbar')
   const helpItem = items.find(
     item => item.text === 'help_and_resources'
   ) as NavbarDropdownItemData
@@ -59,8 +57,6 @@ function SidebarDsNav() {
           data-testid="project-list-sidebar-scroll"
         >
           <SidebarFilters />
-          {showAddAffiliationWidget && <hr />}
-          <AddAffiliation />
         </div>
       </nav>
       <div
@@ -156,10 +152,7 @@ function SidebarDsNav() {
                     ],
                   }}
                 >
-                  <AccountMenuItems
-                    sessionUser={sessionUser}
-                    showSubscriptionLink={showSubscriptionLink}
-                  />
+                  <AccountMenuItems sessionUser={sessionUser} />
                 </Dropdown.Menu>
               </Dropdown>
               <UserProvider>{contactUsModal}</UserProvider>

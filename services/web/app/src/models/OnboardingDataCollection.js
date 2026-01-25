@@ -10,7 +10,6 @@ const OnboardingDataCollectionSchema = new Schema(
     companyDivisionDepartment: { type: String, default: null },
     companyJobTitle: { type: String, default: null },
     governmentJobTitle: { type: String, default: null },
-    institutionName: { type: String, default: null },
     otherJobTitle: { type: String, default: null },
     nonprofitDivisionDepartment: { type: String, default: null },
     nonprofitJobTitle: { type: String, default: null },

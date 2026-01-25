@@ -4,7 +4,7 @@ const { db } = require('../../infrastructure/mongodb')
 const { normalizeQuery } = require('../Helpers/Mongo')
 const { callbackify } = require('util')
 const UserGetter = require('./UserGetter')
-const FeaturesUpdater = require('../Subscription/FeaturesUpdater')
+const FeaturesUpdater = require('../UserFeatures/FeaturesUpdater')
 const EmailHandler = require('../Email/EmailHandler')
 const EmailHelper = require('../Helpers/EmailHelper')
 const Errors = require('../Errors/Errors')
@@ -28,7 +28,7 @@ async function _sendSecurityAlertPrimaryEmailChanged(
   // Send email to the following:
   // - the old primary
   // - the new primary
-  // - for all other current (confirmed or recently-enough reconfirmed) email addresses, group by institution if we
+  // - for all other current (confirmed or recently-enough reconfirmed) email addresses, group by domain
   //   have it, or domain if we don’t, and for each group send to the most recently reconfirmed (or confirmed if never
   //   reconfirmed) address in that group.
   // See #6101.
@@ -62,7 +62,7 @@ async function _sendSecurityAlertPrimaryEmailChanged(
   const oldAndNewPrimaryEmails = [oldEmail, email]
   await sendToRecipients(oldAndNewPrimaryEmails)
 
-  // Next, get extra recipients with affiliation data
+  // Next, get extra recipients based on existing confirmed emails
   const emailsData = await UserGetter.promises.getUserFullEmails(userId)
   const extraRecipients = _securityAlertPrimaryEmailChangedExtraRecipients(
     emailsData,
@@ -77,7 +77,7 @@ async function _sendSecurityAlertPrimaryEmailChanged(
  * Add a new email address for the user. Email cannot be already used by this
  * or any other user
  */
-async function addEmailAddress(userId, newEmail, affiliationOptions, auditLog) {
+async function addEmailAddress(userId, newEmail, _unusedOptions, auditLog) {
   AsyncLocalStorage.removeItem('userFullEmails')
   newEmail = EmailHelper.parseEmail(newEmail)
   if (!newEmail) {
@@ -135,39 +135,6 @@ async function addEmailAddress(userId, newEmail, affiliationOptions, auditLog) {
   }
 }
 
-async function clearSAMLData(userId, auditLog, sendEmail) {
-  const user = await UserGetter.promises.getUser(userId, {
-    email: 1,
-    emails: 1,
-  })
-
-  await UserAuditLogHandler.promises.addEntry(
-    userId,
-    'clear-institution-sso-data',
-    auditLog.initiatorId,
-    auditLog.ipAddress,
-    {}
-  )
-
-  const update = {
-    $unset: {
-      samlIdentifiers: 1,
-      'emails.$[].samlProviderId': 1,
-      'enrollment.sso': 1,
-    },
-  }
-
-  await updateUser(userId, update)
-
-  await FeaturesUpdater.promises.refreshFeatures(
-    userId,
-    'clear-institution-sso-data'
-  )
-
-  if (sendEmail) {
-    await EmailHandler.promises.sendEmail('SAMLDataCleared', { to: user.email })
-  }
-}
 
 async function clearThirdPartyIdentifiers(userId, auditLog) {
   const user = await UserGetter.promises.getUser(userId, {
@@ -279,7 +246,7 @@ async function setDefaultEmailAddress(
   } catch (error) {
     logger.warn(
       { err: error, oldEmail, newEmail: email },
-      'Failed to change email in newsletter subscription'
+      'Failed to change email in newsletter list'
     )
   }
   try {
@@ -354,19 +321,15 @@ async function migrateDefaultEmailAddress(
   )
 }
 
-async function confirmEmail(userId, email, affiliationOptions) {
+async function confirmEmail(userId, email) {
   AsyncLocalStorage.removeItem('userFullEmails')
-  // used for initial email confirmation (non-SSO and SSO)
-  // also used for reconfirmation of non-SSO emails
+  // used for initial email confirmation and reconfirmation
   const confirmedAt = new Date()
   email = EmailHelper.parseEmail(email)
   if (email == null) {
     throw new Error('invalid email')
   }
   logger.debug({ userId, email }, 'confirming user email')
-
-  affiliationOptions = affiliationOptions || {}
-  affiliationOptions.confirmedAt = confirmedAt
 
   const query = {
     _id: userId,
@@ -542,7 +505,7 @@ function _securityAlertPrimaryEmailChangedExtraRecipients(
   oldEmail,
   email
 ) {
-  // Group by institution if we have it, or domain if we don’t, and for each group send to the most recently
+  // Group by domain and for each group send to the most recently
   // reconfirmed (or confirmed if never reconfirmed) address in that group. We also remove the original and new
   // primary email addresses because they are emailed separately
   // See #6101.
@@ -556,15 +519,10 @@ function _securityAlertPrimaryEmailChangedExtraRecipients(
   // Remove non-confirmed emails
   const confirmedEmails = emailsData.filter(email => !!email.lastConfirmedAt)
 
-  // Group other emails by institution, separating out those with no institution and grouping them instead by domain.
-  // The keys for each group are not used for anything other than the grouping, so can have a slightly paranoid format
-  // to avoid any potential clash
-  const groupedEmails = _.groupBy(confirmedEmails, emailData => {
-    if (!emailData.affiliation || !emailData.affiliation.institution) {
-      return `domain:${EmailHelper.getDomain(emailData.email)}`
-    }
-    return `institution_id:${emailData.affiliation.institution.id}`
-  })
+  // Group emails by domain to avoid notifying multiple addresses for the same domain.
+  const groupedEmails = _.groupBy(confirmedEmails, emailData =>
+    `domain:${EmailHelper.getDomain(emailData.email)}`
+  )
 
   // For each group of emails, order the emails by (re-)confirmation date and pick the first
   for (const emails of Object.values(groupedEmails)) {
@@ -584,7 +542,6 @@ function _securityAlertPrimaryEmailChangedExtraRecipients(
 module.exports = {
   addEmailAddress: callbackify(addEmailAddress),
   changeEmailAddress: callbackify(changeEmailAddress),
-  clearSAMLData: callbackify(clearSAMLData),
   confirmEmail: callbackify(confirmEmail),
   removeEmailAddress: callbackify(removeEmailAddress),
   removeReconfirmFlag: callbackify(removeReconfirmFlag),
@@ -595,7 +552,6 @@ module.exports = {
   promises: {
     addEmailAddress,
     changeEmailAddress,
-    clearSAMLData,
     clearThirdPartyIdentifiers,
     confirmEmail,
     removeEmailAddress,

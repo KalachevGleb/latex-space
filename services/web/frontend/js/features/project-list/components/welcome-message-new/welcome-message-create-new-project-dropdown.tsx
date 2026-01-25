@@ -5,8 +5,6 @@ import getMeta from '../../../../utils/meta'
 import { NewProjectButtonModalVariant } from '../new-project-button/new-project-button-modal'
 import {
   Dropdown,
-  DropdownDivider,
-  DropdownHeader,
   DropdownItem,
   DropdownMenu,
   DropdownToggle,
@@ -58,8 +56,6 @@ function WelcomeMessageCreateNewProjectDropdown({
   setActiveModal,
 }: WelcomeMessageCreateNewProjectDropdownProps) {
   const { t } = useTranslation()
-  const portalTemplates = getMeta('ol-portalTemplates') || []
-
   const { isOverleaf, userHasFullPermissions } = getMeta('ol-ExposedSettings')
 
   const handleDropdownItemClick = useCallback(
@@ -78,20 +74,6 @@ function WelcomeMessageCreateNewProjectDropdown({
       setActiveModal(modalVariant)
     },
     [setActiveModal]
-  )
-
-  const handlePortalTemplateClick = useCallback(
-    (e: React.MouseEvent, institutionTemplateName: string) => {
-      // prevent firing the main dropdown onClick event
-      e.stopPropagation()
-
-      sendMB('welcome-page-create-first-project-click', {
-        dropdownMenu: 'institution-template',
-        dropdownOpen: true,
-        institutionTemplateName,
-      })
-    },
-    []
   )
 
   if (userHasFullPermissions === false) return null
@@ -152,23 +134,6 @@ function WelcomeMessageCreateNewProjectDropdown({
             </DropdownItem>
           </li>
         )}
-        {(portalTemplates?.length ?? 0) > 0 ? (
-          <>
-            <DropdownDivider />
-            <DropdownHeader aria-hidden="true">
-              {t('institution_templates')}
-            </DropdownHeader>
-            {portalTemplates?.map((portalTemplate, index) => (
-              <DropdownItem
-                key={`portal-template-${index}`}
-                onClick={e => handlePortalTemplateClick(e, portalTemplate.name)}
-                href={`${portalTemplate.url}#templates`}
-              >
-                {portalTemplate.name}
-              </DropdownItem>
-            ))}
-          </>
-        ) : null}
       </DropdownMenu>
     </Dropdown>
   )

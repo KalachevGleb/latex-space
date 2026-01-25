@@ -15,11 +15,9 @@ import LeaveSection from './leave-section'
 import InterfaceLanguageSection from './interface-language-section'
 import * as eventTracking from '../../../infrastructure/event-tracking'
 import { UserProvider } from '../../../shared/context/user-context'
-import { SSOProvider } from '../context/sso-context'
 import { SplitTestProvider } from '@/shared/context/split-test-context'
 import useWaitForI18n from '../../../shared/hooks/use-wait-for-i18n'
 import useScrollToIdOnLoad from '../../../shared/hooks/use-scroll-to-id-on-load'
-import { SSOAlert } from './emails/sso-alert'
 import OLRow from '@/shared/components/ol/ol-row'
 import OLCol from '@/shared/components/ol/ol-col'
 import OLPageContentCard from '@/shared/components/ol/ol-page-content-card'
@@ -56,7 +54,6 @@ function SettingsPageContent() {
         <div>
           <ManagedAccountAlert />
           <EmailsSection />
-          <SSOAlert />
           <OLRow>
             <OLCol lg={5}>
               <AccountInfoSection />
@@ -70,9 +67,7 @@ function SettingsPageContent() {
           <hr />
           <SecuritySection />
           <SplitTestProvider>
-            <SSOProvider>
-              <LinkingSection />
-            </SSOProvider>
+            <LinkingSection />
           </SplitTestProvider>
           {isOverleaf ? (
             <>

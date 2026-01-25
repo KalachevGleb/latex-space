@@ -14,7 +14,6 @@ export type OnboardingFormData = {
   companyDivisionDepartment: string
   companyJobTitle: string
   governmentJobTitle: string
-  institutionName: string
   otherJobTitle: string
   nonprofitDivisionDepartment: string
   nonprofitJobTitle: string

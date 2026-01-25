@@ -13,7 +13,7 @@ const oauthProviders = settings.oauthProviders || {}
 
 async function getUser(providerId, externalUserId) {
   if (providerId == null || externalUserId == null) {
-    throw new OError('invalid SSO arguments', {
+    throw new OError('invalid third-party identity arguments', {
       externalUserId,
       providerId,
     })
@@ -60,7 +60,7 @@ async function link(
 
   await UserAuditLogHandler.promises.addEntry(
     userId,
-    'link-sso',
+    'link-third-party',
     auditLog.initiatorId,
     auditLog.ipAddress,
     {
@@ -127,7 +127,7 @@ async function unlink(userId, providerId, auditLog) {
 
   await UserAuditLogHandler.promises.addEntry(
     userId,
-    'unlink-sso',
+    'unlink-third-party',
     auditLog.initiatorId,
     auditLog.ipAddress,
     {

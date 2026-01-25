@@ -15,7 +15,6 @@ block append meta
 	- const canDisplaySplitTestMenu = hasFeature('saas') && ((canDisplayAdminMenu && hasAdminCapability('view-split-test')) || staffAccess?.splitTestMetrics || staffAccess?.splitTestManagement)
 	- const canDisplaySurveyMenu = hasFeature('saas') && canDisplayAdminMenu && hasAdminCapability('manage-survey', false)
 	- const canDisplayScriptLogMenu = hasFeature('saas') && hasAdminCapability('view-script-log', false) && canDisplayAdminMenu
-	- const enableUpgradeButton = projectDashboardReact && usersBestSubscription && (usersBestSubscription.type === 'free' || usersBestSubscription.type === 'standalone-ai-add-on')
 	- const showSignUpLink = hasFeature('registration-page')
 
 	meta(
@@ -29,10 +28,8 @@ block append meta
 			canDisplaySplitTestMenu,
 			canDisplaySurveyMenu,
 			canDisplayScriptLogMenu,
-			enableUpgradeButton,
 			suppressNavbarRight: !!suppressNavbarRight,
 			suppressNavContentLinks: !!suppressNavContentLinks,
-			showSubscriptionLink: nav.showSubscriptionLink,
 			showSignUpLink: showSignUpLink,
 			currentUrl: currentUrl,
 			sessionUser: sessionUser ? {email: sessionUser.email} : undefined,

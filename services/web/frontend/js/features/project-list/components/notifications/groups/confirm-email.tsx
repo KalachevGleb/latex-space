@@ -6,64 +6,10 @@ import { UserEmailData } from '../../../../../../../types/user-email'
 import ResendConfirmationCodeModal from '@/features/settings/components/emails/resend-confirmation-code-modal'
 import { ReactNode, useState } from 'react'
 
-const ssoAvailable = ({ samlProviderId, affiliation }: UserEmailData) => {
-  const { hasSamlFeature, hasSamlBeta } = getMeta('ol-ExposedSettings')
-
-  if (!hasSamlFeature) {
-    return false
-  }
-  if (samlProviderId) {
-    return true
-  }
-  if (!affiliation?.institution) {
-    return false
-  }
-  if (affiliation.institution.ssoEnabled) {
-    return true
-  }
-  if (hasSamlBeta && affiliation.institution.ssoBeta) {
-    return true
-  }
-  return false
-}
-
-function emailHasLicenceAfterConfirming(emailData: UserEmailData) {
-  if (emailData.confirmedAt) {
-    return false
-  }
-  if (!emailData.affiliation) {
-    return false
-  }
-  const affiliation = emailData.affiliation
-  const institution = affiliation.institution
-  if (!institution) {
-    return false
-  }
-  if (!institution.confirmed) {
-    return false
-  }
-  if (affiliation.pastReconfirmDate) {
-    return false
-  }
-
-  return affiliation.institution.commonsAccount
-}
-
-function isOnFreeOrIndividualPlan() {
-  const subscription = getMeta('ol-usersBestSubscription')
-  if (!subscription) {
-    return false
-  }
-  const { type } = subscription
-  return (
-    type === 'free' || type === 'individual' || type === 'standalone-ai-add-on'
-  )
-}
-
 const showConfirmEmail = (userEmail: UserEmailData) => {
   const { emailConfirmationDisabled } = getMeta('ol-ExposedSettings')
 
-  return !emailConfirmationDisabled && !ssoAvailable(userEmail)
+  return !emailConfirmationDisabled
 }
 
 const EMAIL_DELETION_SCHEDULE = {
@@ -137,9 +83,6 @@ function ConfirmEmailNotification({
     userEmail.lastConfirmedAt &&
     new Date(userEmail.lastConfirmedAt) >= emailTrustCutoffDate
 
-  const shouldShowCommonsNotification =
-    emailHasLicenceAfterConfirming(userEmail) && isOnFreeOrIndividualPlan()
-
   if (isSuccess) {
     return null
   }
@@ -157,28 +100,7 @@ function ConfirmEmailNotification({
   let notificationType: 'info' | 'warning' | undefined
   let notificationBody: ReactNode | undefined
 
-  if (shouldShowCommonsNotification) {
-    notificationType = 'info'
-    notificationBody = (
-      <>
-        <Trans
-          i18nKey="one_step_away_from_professional_features"
-          components={[<strong />]} // eslint-disable-line react/jsx-key
-        />
-        <br />
-        <Trans
-          i18nKey="institution_has_overleaf_subscription"
-          values={{
-            institutionName: userEmail.affiliation?.institution.name,
-            emailAddress,
-          }}
-          shouldUnescape
-          tOptions={{ interpolation: { escapeValue: true } }}
-          components={[<strong />]} // eslint-disable-line react/jsx-key
-        />
-      </>
-    )
-  } else if (!isEmailConfirmed) {
+  if (!isEmailConfirmed) {
     notificationType = 'warning'
     notificationBody = (
       <>

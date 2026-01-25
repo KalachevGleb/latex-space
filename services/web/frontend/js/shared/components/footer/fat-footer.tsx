@@ -53,23 +53,6 @@ function FatFooter() {
       ],
     },
     {
-      title: t('Pricing'),
-      links: [
-        {
-          href: '/user/subscription/plans?itm_referrer=footer-for-indv',
-          label: t('for_individuals'),
-        },
-        {
-          href: '/user/subscription/plans?plan=group&itm_referrer=footer-for-groups',
-          label: t('for_groups_and_organizations'),
-        },
-        {
-          href: '/user/subscription/plans?itm_referrer=footer-for-students#student-annual',
-          label: t('for_students'),
-        },
-      ],
-    },
-    {
       title: t('Get Involved'),
       links: [
         {

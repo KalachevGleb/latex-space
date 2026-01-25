@@ -387,10 +387,6 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
       dropboxAppName:
         Settings.apis.thirdPartyDataStore?.dropboxAppName || 'Overleaf',
       ieeeBrandId: IEEE_BRAND_ID,
-      hasSamlBeta: req.session.samlBeta,
-      hasAffiliationsFeature: false,
-      hasSamlFeature: Features.hasFeature('saml'),
-      samlInitPath: _.get(Settings, ['saml', 'ukamf', 'initPath']),
       hasLinkUrlFeature: Features.hasFeature('link-url'),
       hasLinkedProjectFileFeature: Features.hasFeature('linked-project-file'),
       hasLinkedProjectOutputFileFeature: Features.hasFeature(
@@ -414,7 +410,6 @@ module.exports = function (webRouter, privateApiRouter, publicApiRouter) {
       sentryRelease: Settings.sentry.release,
       hotjarId: Settings.hotjar?.id,
       hotjarVersion: Settings.hotjar?.version,
-      enableSubscriptions: Settings.enableSubscriptions,
       gaToken:
         Settings.analytics &&
         Settings.analytics.ga &&

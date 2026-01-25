@@ -542,9 +542,7 @@ const AuthenticationController = {
 
   _redirectToLoginOrRegisterPage(req, res) {
     if (
-      req.query.zipUrl != null ||
-      req.session.sharedProjectData ||
-      req.path === '/user/subscription/new'
+      req.query.zipUrl != null || req.session.sharedProjectData
     ) {
       AuthenticationController._redirectToRegisterPage(req, res)
     } else {
@@ -644,7 +642,7 @@ function _afterLoginSessionSetup(req, user, callback) {
       }
       UserSessionsManager.trackSession(user, req.sessionID, function () {})
       if (!req.deviceHistory) {
-        // Captcha disabled or SSO-based login.
+        // Captcha disabled.
         return callback()
       }
       req.deviceHistory.add(user.email)
@@ -665,9 +663,7 @@ function _loginAsyncHandlers(req, user, anonymousAnalyticsId, isNewUser) {
   AuthenticationController._recordSuccessfulLogin(user._id, () => {})
   AuthenticationController.ipMatchCheck(req, user)
   Analytics.recordEventForUserInBackground(user._id, 'user-logged-in', {
-    source: req.session.saml
-      ? 'saml'
-      : req.user_info?.auth_provider || 'email-password',
+    source: req.user_info?.auth_provider || 'email-password',
   })
   Analytics.identifyUser(user._id, anonymousAnalyticsId, isNewUser)
 

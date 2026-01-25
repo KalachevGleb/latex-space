@@ -61,7 +61,7 @@ function makeMailchimpProvider(listName, listId) {
       if (err?.response?.status === 404) {
         return false
       }
-      throw OError.tag(err, 'error getting newsletter subscriptions status', {
+      throw OError.tag(err, 'error getting newsletter status', {
         userId: user._id,
         listName,
       })
