@@ -60,10 +60,8 @@ function ThinFooter({
             {showPoweredBy ? (
               <>
                 <li>
-                  {/* year of Server Pro release, static */}© 2025{' '}
-                  <a href="https://www.overleaf.com/for/enterprises">
-                    Powered by Overleaf
-                  </a>
+                  {/* year of Server Pro release, static */}© 2026{' '}
+                    Based on Overleaf Community Edition
                 </li>
                 {showLanguagePicker || hasCustomLeftNav ? <Separator /> : null}
               </>

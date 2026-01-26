@@ -72,8 +72,8 @@ block content
 									| #{translate("already_have_sl_account")}
 									|
 									a(href='/login') #{translate("login_here")}
-							
-							script.
+
+							script(nonce=scriptNonce).
 								document.addEventListener('DOMContentLoaded', function() {
 									const form = document.getElementById('registerForm');
 									if (form) {
