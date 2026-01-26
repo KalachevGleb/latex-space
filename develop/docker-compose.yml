@@ -139,6 +139,7 @@ services:
       target: dev
     env_file:
       - dev.env
+      - .env  # Load production-like settings from .env
     environment:
       - APP_NAME=Overleaf Community Edition
       - ENABLED_LINKED_FILE_TYPES=project_file,project_output_file
@@ -149,6 +150,10 @@ services:
       - OVERLEAF_EMAIL_SMTP_HOST=mailpit
       - OVERLEAF_EMAIL_SMTP_PORT=1025
       - OVERLEAF_EMAIL_SMTP_IGNORE_TLS=true
+      # Production-like security settings (override from .env if needed)
+      - CSP_ENABLED=${CSP_ENABLED:-true}
+      - OVERLEAF_SESSION_SECRET=${OVERLEAF_SESSION_SECRET:-dev_secret}
+      - OVERLEAF_SECURE_COOKIE=${OVERLEAF_SECURE_COOKIE:-false}
     command: ["node", "app.mjs"]
     volumes:
       - sharelatex-data:/var/lib/overleaf

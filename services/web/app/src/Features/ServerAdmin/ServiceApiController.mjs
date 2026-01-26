@@ -3,24 +3,19 @@ import crypto from 'crypto'
 import logger from '@overleaf/logger'
 import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
 
-// Fallback to env vars or defaults
+// Load config from MongoDB (admin panel settings only)
 async function getDefaultConfig() {
   return {
     enabled:
-      process.env.SERVICE_API_ENABLED === 'true' ||
       (await SystemSettingsManager.promises.getSetting('serviceApiEnabled')) ||
       false,
     password:
-      process.env.SERVICE_API_PASSWORD ||
       (await SystemSettingsManager.promises.getSetting('serviceApiPassword')) ||
-      Settings.serviceApi?.password ||
       null,
     localhostOnly:
-      process.env.SERVICE_API_LOCALHOST_ONLY === 'true' ||
       (await SystemSettingsManager.promises.getSetting(
         'serviceApiLocalhostOnly'
       )) ||
-      Settings.serviceApi?.localhostOnly ||
       false,
   }
 }
@@ -49,10 +44,10 @@ async function saveConfig(config) {
 export async function getServiceApiSettings(req, res, next) {
   try {
     const config = await loadConfig()
-    // Don't send password to frontend
+    // Send password to frontend for admin to view/edit
     res.json({
       enabled: config.enabled,
-      hasPassword: !!config.password,
+      password: config.password || '',
       localhostOnly: config.localhostOnly,
     })
   } catch (err) {
