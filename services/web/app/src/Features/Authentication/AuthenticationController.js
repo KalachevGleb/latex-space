@@ -435,6 +435,11 @@ const AuthenticationController = {
   },
 
   requireGlobalLogin(req, res, next) {
+    // Skip for Service API requests - they have their own auth
+    if (req.isServiceAuth) {
+      return next()
+    }
+
     if (
       AuthenticationController._globalLoginWhitelist.includes(
         req._parsedUrl.pathname

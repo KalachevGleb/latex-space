@@ -12,7 +12,7 @@ PACKAGE_NAME="overleaf-custom.tar.gz"
 # Options
 SKIP_TEXLIVE="${SKIP_TEXLIVE:-false}"
 SKIP_BASE_DEPS="${SKIP_BASE_DEPS:-false}"
-CLEANUP_AFTER="${CLEANUP_AFTER:-true}"
+CLEANUP_AFTER="${CLEANUP_AFTER:-false}"
 
 echo "=========================================="
 echo "Preparing Overleaf Custom Edition for deployment"
@@ -269,6 +269,10 @@ if [ "$CLEANUP_AFTER" = "true" ]; then
     docker rmi "overleaf-custom-base:$REVISION" 2>/dev/null || true
     docker rmi "overleaf-custom:$REVISION" 2>/dev/null || true
     echo "Kept: texlive-full, mongo:6.0, redis:6.2 (for reuse)"
+else
+    echo "Keeping Docker images for future use (base + community)"
+    echo "  overleaf-custom-base:$REVISION"
+    echo "  overleaf-custom:$REVISION"
 fi
 
 echo "=========================================="
