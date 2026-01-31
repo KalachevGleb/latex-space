@@ -6,5 +6,5 @@ RUN apt-cache depends texlive-full | grep "Depends: " | grep -v -- "-doc" | grep
 RUN apt-get install -y --no-install-recommends texlive-lang-cyrillic
 RUN apt-get install -y --no-install-recommends fontconfig inkscape pandoc python3-pygments
 
-RUN useradd tex
+RUN useradd -m tex
 USER tex
