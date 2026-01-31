@@ -74,19 +74,15 @@ const DockerRunner = {
       volumes[directory] += ':ro'
     }
 
-    // Mount TexLive cache for fonts and other TeX data
-    // This significantly speeds up repeated compilations (especially with babel, fonts, etc.)
-    // TexLive writes caches to $HOME/.texlive{year}/texmf-var/
-    // Since container runs as 'tex' user, this is /home/tex
+    // Mount shared TexLive cache for fonts and other TeX data.
+    // TexLive writes generated fonts to $HOME/.texlive{year}/texmf-var/fonts/
+    // via mktextfm. This cache depends only on the TexLive version (same Docker
+    // image), not on the project, so one shared directory is used for all projects.
     if (Settings.path.sandboxedCompilesHostDirTexliveCache) {
-      const texliveCacheDir = Path.join(
-        Settings.path.sandboxedCompilesHostDirTexliveCache,
-        Path.basename(directory) // Use same naming as compile dir (projectId or projectId-userId)
-      )
-      volumes[texliveCacheDir] = '/home/tex'
+      volumes[Settings.path.sandboxedCompilesHostDirTexliveCache] = '/home/tex'
       logger.debug(
-        { projectId, texliveCacheDir },
-        'mounting texlive cache directory'
+        { projectId },
+        'mounting shared texlive cache directory'
       )
     }
 

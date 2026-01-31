@@ -84,8 +84,12 @@ const buildViewPolicy = (
   reportUri,
   viewDirectives
 ) => {
+  // In development mode, webpack-dev-server requires 'unsafe-eval' for HMR
+  const isDevelopment = process.env.NODE_ENV !== 'production'
+  const unsafeEval = isDevelopment ? " 'unsafe-eval'" : ''
+
   const directives = [
-    `script-src 'nonce-${scriptNonce}' 'unsafe-inline' 'strict-dynamic' https: 'report-sample'`, // only allow scripts from certain sources
+    `script-src 'nonce-${scriptNonce}' 'unsafe-inline' 'strict-dynamic' https: 'report-sample'${unsafeEval}`, // only allow scripts from certain sources
     `object-src 'none'`, // forbid loading an "object" element
     `base-uri 'none'`, // forbid setting a "base" element
     ...(viewDirectives ?? []),
