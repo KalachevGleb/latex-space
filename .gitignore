@@ -2,7 +2,7 @@
 .dockerignore
 
 # build artifacts
-build/
+build*/
 *.tar.gz
 
 # user defined files
@@ -13,6 +13,13 @@ overleaf_config.json
 # backup files
 *.bak
 
+# workspace files
+.cursor/
+.vscode/
+.idea/
+.cursorrules/
+.bash_history
+
 # development artifacts
 develop/output/
 develop/texlive-build.log
@@ -20,9 +27,11 @@ compiles/
 output/
 texlive-cache/
 .claude/
+node_modules/
 setup.sh
 check-ready.sh
 cookies.txt
+tmp/
 
 # version info (generated automatically)
 services/web/public/version.json
