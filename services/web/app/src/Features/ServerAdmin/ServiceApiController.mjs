@@ -1,7 +1,10 @@
 import Settings from '@overleaf/settings'
 import crypto from 'crypto'
+import bcrypt from 'bcrypt'
 import logger from '@overleaf/logger'
 import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
+
+const BCRYPT_ROUNDS = Settings.security?.bcryptRounds || 12
 
 // Load config from MongoDB (admin panel settings only)
 async function getDefaultConfig() {
@@ -44,10 +47,9 @@ async function saveConfig(config) {
 export async function getServiceApiSettings(req, res, next) {
   try {
     const config = await loadConfig()
-    // Send password to frontend for admin to view/edit
     res.json({
       enabled: config.enabled,
-      password: config.password || '',
+      hasPassword: !!config.password,
       localhostOnly: config.localhostOnly,
     })
   } catch (err) {
@@ -67,8 +69,7 @@ export async function updateServiceApiSettings(req, res, next) {
     }
 
     if (password && password.trim()) {
-      // Hash password for storage
-      config.password = password.trim()
+      config.password = await bcrypt.hash(password.trim(), BCRYPT_ROUNDS)
     }
 
     if (typeof localhostOnly === 'boolean') {

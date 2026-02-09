@@ -52,6 +52,9 @@ make build-community
 if [ "$SKIP_TEXLIVE" = "true" ]; then
     echo "Skipping TexLive build (SKIP_TEXLIVE=true)"
     echo "NOTE: Using existing texlive-full image from previous build"
+elif docker image inspect texlive-full &>/dev/null; then
+    echo "TexLive image already exists locally, skipping build"
+    echo "NOTE: Run with SKIP_TEXLIVE=rebuild to force rebuild"
 else
     echo "Building TexLive image (this takes ~1 hour)..."
     cd "$PROJECT_ROOT/develop"
@@ -59,13 +62,22 @@ else
 fi
 
 # Pull base dependencies if needed
-if [ "$SKIP_BASE_DEPS" != "true" ]; then
-    echo "Pulling MongoDB and Redis images..."
-    docker pull mongo:6.0
-    docker pull redis:6.2
-else
+if [ "$SKIP_BASE_DEPS" = "true" ]; then
     echo "Skipping MongoDB/Redis pull (SKIP_BASE_DEPS=true)"
-    echo "NOTE: Using existing images from previous build"
+else
+    if docker image inspect mongo:6.0 &>/dev/null; then
+        echo "MongoDB image already exists locally, skipping pull"
+    else
+        echo "Pulling MongoDB image..."
+        docker pull mongo:6.0
+    fi
+
+    if docker image inspect redis:6.2 &>/dev/null; then
+        echo "Redis image already exists locally, skipping pull"
+    else
+        echo "Pulling Redis image..."
+        docker pull redis:6.2
+    fi
 fi
 
 # Save Docker images to tar files

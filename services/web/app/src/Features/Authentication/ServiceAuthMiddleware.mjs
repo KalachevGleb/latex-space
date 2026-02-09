@@ -1,13 +1,39 @@
-import AuthenticationController from './AuthenticationController.js'
 import UserGetter from '../User/UserGetter.js'
 import Settings from '@overleaf/settings'
 import logger from '@overleaf/logger'
+import basicAuth from 'basic-auth'
+import bcrypt from 'bcrypt'
+import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
 
 const SERVICE_USER_ID_HEADER = 'x-overleaf-user-id'
 const SERVICE_USER_EMAIL_HEADER = 'x-overleaf-user-email'
 
-function requireServiceAuth(req, res, next) {
-  // Check if Service API is enabled
+// Detect whether a string is a bcrypt hash (starts with $2a$, $2b$, or $2y$, 60 chars)
+function isBcryptHash(value) {
+  return (
+    typeof value === 'string' &&
+    value.length === 60 &&
+    /^\$2[aby]\$\d{2}\$/.test(value)
+  )
+}
+
+// One-time migration: if the password in MongoDB is still plain text, hash it now.
+async function migratePasswordIfNeeded(storedPassword) {
+  if (isBcryptHash(storedPassword)) {
+    return storedPassword
+  }
+  logger.info('Service API: migrating plain-text password to bcrypt hash')
+  const BCRYPT_ROUNDS = Settings.security?.bcryptRounds || 12
+  const hashed = await bcrypt.hash(storedPassword, BCRYPT_ROUNDS)
+  await SystemSettingsManager.promises.setSetting(
+    'serviceApiPassword',
+    hashed
+  )
+  Settings.serviceApi.password = hashed
+  return hashed
+}
+
+async function requireServiceAuth(req, res, next) {
   if (!Settings.serviceApi?.enabled) {
     logger.warn('Service API access attempted but not enabled')
     return res.status(403).json({
@@ -24,7 +50,6 @@ function requireServiceAuth(req, res, next) {
     })
   }
 
-  // Check localhost-only restriction
   if (Settings.serviceApi?.localhostOnly) {
     const ip = req.ip || req.connection.remoteAddress
     const isLocalhost =
@@ -42,21 +67,39 @@ function requireServiceAuth(req, res, next) {
     }
   }
 
-  const basicAuth = AuthenticationController.requireBasicAuth({
-    overleaf: Settings.serviceApi.password,
-  })
-  return basicAuth(req, res, err => {
-    if (err) {
-      return next(err)
+  const credentials = basicAuth(req)
+  if (!credentials || credentials.name !== 'overleaf') {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Service API"')
+    return res.status(401).json({
+      error: 'unauthorized',
+      error_description: 'Missing or invalid credentials',
+    })
+  }
+
+  try {
+    const hashedPassword = await migratePasswordIfNeeded(
+      Settings.serviceApi.password
+    )
+    const match = await bcrypt.compare(credentials.pass, hashedPassword)
+
+    if (!match) {
+      res.setHeader('WWW-Authenticate', 'Basic realm="Service API"')
+      return res.status(401).json({
+        error: 'unauthorized',
+        error_description: 'Invalid credentials',
+      })
     }
-    req.isServiceAuth = true
-    const userId = req.get(SERVICE_USER_ID_HEADER)
-    const userEmail = req.get(SERVICE_USER_EMAIL_HEADER)
-    if (userId || userEmail) {
-      req.serviceUser = { userId, userEmail }
-    }
-    return next()
-  })
+  } catch (err) {
+    return next(err)
+  }
+
+  req.isServiceAuth = true
+  const userId = req.get(SERVICE_USER_ID_HEADER)
+  const userEmail = req.get(SERVICE_USER_EMAIL_HEADER)
+  if (userId || userEmail) {
+    req.serviceUser = { userId, userEmail }
+  }
+  return next()
 }
 
 async function attachSessionUser(req, res, next) {
@@ -70,11 +113,27 @@ async function attachSessionUser(req, res, next) {
   if (!userId && !userEmail) {
     return next()
   }
+
+  logger.info(
+    { userId, userEmail, lookupBy: userId ? 'id' : 'email' },
+    'Service API: looking up user'
+  )
+
   try {
     const user = userId
       ? await UserGetter.promises.getUser(userId)
       : await UserGetter.promises.getUserByAnyEmail(userEmail)
+
+    logger.info(
+      { userId, userEmail, userFound: !!user, foundUserId: user?._id },
+      'Service API: user lookup result'
+    )
+
     if (!user) {
+      logger.warn(
+        { userId, userEmail },
+        'Service API: user not found in database'
+      )
       return res.status(401).json({
         error: 'invalid_user',
         error_description: 'Service user not found',
