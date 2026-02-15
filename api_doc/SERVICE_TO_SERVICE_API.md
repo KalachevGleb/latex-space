@@ -131,6 +131,64 @@ DELETE /service/Project/:Project_id
 GET /service/project/:Project_id/entities
 ```
 
+#### Управление файлами и документами
+
+**Важно:** Service API позволяет изменять защищённые файлы, в отличие от обычного Web API.
+
+```bash
+# Загрузить файл в проект
+POST /service/project/:Project_id/upload
+Content-Type: multipart/form-data
+Headers:
+  - name: имя файла (обязательно)
+  - qqfile: содержимое файла
+Query params:
+  - folder_id: ID папки для загрузки (опционально, по умолчанию корень)
+Body: {
+  "name": "document.pdf",
+  "relativePath": "subfolder/document.pdf"  # опционально, для сохранения структуры папок
+}
+
+# Создать новый документ (LaTeX)
+POST /service/project/:Project_id/doc
+Body: {
+  "name": "chapter1.tex",
+  "parent_folder_id": "folder_id"  # опционально
+}
+
+# Создать новую папку
+POST /service/project/:Project_id/folder
+Body: {
+  "name": "chapters",
+  "parent_folder_id": "folder_id"  # опционально
+}
+
+# Переименовать файл/документ/папку
+POST /service/project/:Project_id/:entity_type/:entity_id/rename
+Body: {"name": "new_name.tex"}
+# entity_type: "file", "doc", или "folder"
+
+# Переместить файл/документ/папку
+POST /service/project/:Project_id/:entity_type/:entity_id/move
+Body: {"folder_id": "target_folder_id"}
+# entity_type: "file", "doc", или "folder"
+
+# Удалить файл
+DELETE /service/project/:Project_id/file/:entity_id
+
+# Удалить документ
+DELETE /service/project/:Project_id/doc/:entity_id
+
+# Удалить папку
+DELETE /service/project/:Project_id/folder/:entity_id
+
+# Скачать файл
+GET /service/project/:Project_id/file/:File_id
+
+# Скачать документ (текст)
+GET /service/project/:Project_id/doc/:Doc_id/download
+```
+
 #### Управление участниками
 
 ```bash
@@ -291,6 +349,83 @@ class OverleafServiceAPI:
         )
         return response.json()
 
+    # === Файловые операции ===
+
+    def upload_file(self, user_id: str, project_id: str, file_path: str, folder_id: Optional[str] = None):
+        """Загрузить файл в проект"""
+        import os
+        file_name = os.path.basename(file_path)
+
+        url = f'/project/{project_id}/upload'
+        if folder_id:
+            url += f'?folder_id={folder_id}'
+
+        with open(file_path, 'rb') as f:
+            files = {'qqfile': (file_name, f)}
+            data = {'name': file_name}
+            response = self._make_request(
+                'POST', url,
+                user_id=user_id,
+                files=files,
+                data=data
+            )
+        return response.json()
+
+    def create_doc(self, user_id: str, project_id: str, name: str, parent_folder_id: Optional[str] = None):
+        """Создать новый документ"""
+        response = self._make_request(
+            'POST', f'/project/{project_id}/doc',
+            user_id=user_id,
+            json={'name': name, 'parent_folder_id': parent_folder_id}
+        )
+        return response.json()
+
+    def create_folder(self, user_id: str, project_id: str, name: str, parent_folder_id: Optional[str] = None):
+        """Создать новую папку"""
+        response = self._make_request(
+            'POST', f'/project/{project_id}/folder',
+            user_id=user_id,
+            json={'name': name, 'parent_folder_id': parent_folder_id}
+        )
+        return response.json()
+
+    def rename_entity(self, user_id: str, project_id: str, entity_type: str, entity_id: str, new_name: str):
+        """Переименовать файл/документ/папку"""
+        self._make_request(
+            'POST', f'/project/{project_id}/{entity_type}/{entity_id}/rename',
+            user_id=user_id,
+            json={'name': new_name}
+        )
+
+    def move_entity(self, user_id: str, project_id: str, entity_type: str, entity_id: str, target_folder_id: str):
+        """Переместить файл/документ/папку"""
+        self._make_request(
+            'POST', f'/project/{project_id}/{entity_type}/{entity_id}/move',
+            user_id=user_id,
+            json={'folder_id': target_folder_id}
+        )
+
+    def delete_file(self, user_id: str, project_id: str, file_id: str):
+        """Удалить файл"""
+        self._make_request(
+            'DELETE', f'/project/{project_id}/file/{file_id}',
+            user_id=user_id
+        )
+
+    def delete_doc(self, user_id: str, project_id: str, doc_id: str):
+        """Удалить документ"""
+        self._make_request(
+            'DELETE', f'/project/{project_id}/doc/{doc_id}',
+            user_id=user_id
+        )
+
+    def delete_folder(self, user_id: str, project_id: str, folder_id: str):
+        """Удалить папку"""
+        self._make_request(
+            'DELETE', f'/project/{project_id}/folder/{folder_id}',
+            user_id=user_id
+        )
+
 # Использование
 api = OverleafServiceAPI('http://localhost', 'overleaf', 'password')
 
@@ -298,6 +433,22 @@ api = OverleafServiceAPI('http://localhost', 'overleaf', 'password')
 user_id = '507f1f77bcf86cd799439011'
 project = api.create_project(user_id, 'Service API Test')
 project_id = project['project_id']
+
+# Создать папку для изображений
+folder = api.create_folder(user_id, project_id, 'images')
+folder_id = folder['folder_id']
+
+# Загрузить файл в папку
+upload_result = api.upload_file(user_id, project_id, 'logo.png', folder_id)
+print(f"Uploaded file: {upload_result['entity_id']}")
+
+# Создать новый документ
+doc = api.create_doc(user_id, project_id, 'chapter1.tex')
+print(f"Created doc: {doc['_id']}")
+
+# Переименовать документ
+api.rename_entity(user_id, project_id, 'doc', doc['_id'], 'introduction.tex')
+print("Document renamed")
 
 # Компилировать
 compile_result = api.compile_project(user_id, project_id, incrementalCompilesEnabled=True)
@@ -315,6 +466,8 @@ print(f"Found {len(comments['comments'])} comments")
 
 ```javascript
 const axios = require('axios');
+const FormData = require('form-data');
+const fs = require('fs');
 
 class OverleafServiceAPI {
   constructor(baseURL, username, password) {
@@ -355,11 +508,10 @@ class OverleafServiceAPI {
         responseType: 'stream'
       }
     );
-    
-    const fs = require('fs');
+
     const writer = fs.createWriteStream(outputPath);
     response.data.pipe(writer);
-    
+
     return new Promise((resolve, reject) => {
       writer.on('finish', resolve);
       writer.on('error', reject);
@@ -380,6 +532,74 @@ class OverleafServiceAPI {
     );
     return response.data;
   }
+
+  // === Файловые операции ===
+
+  async uploadFile(userId, projectId, filePath, targetFolderId = null) {
+    const form = new FormData();
+    form.append('qqfile', fs.createReadStream(filePath));
+    form.append('name', require('path').basename(filePath));
+
+    const url = targetFolderId
+      ? `/project/${projectId}/upload?folder_id=${targetFolderId}`
+      : `/project/${projectId}/upload`;
+
+    const response = await this.client.post(url, form, {
+      headers: {
+        'X-Overleaf-User-Id': userId,
+        ...form.getHeaders()
+      }
+    });
+    return response.data;
+  }
+
+  async createDoc(userId, projectId, name, parentFolderId = null) {
+    const response = await this.client.post(`/project/${projectId}/doc`,
+      { name, parent_folder_id: parentFolderId },
+      { headers: { 'X-Overleaf-User-Id': userId } }
+    );
+    return response.data;
+  }
+
+  async createFolder(userId, projectId, name, parentFolderId = null) {
+    const response = await this.client.post(`/project/${projectId}/folder`,
+      { name, parent_folder_id: parentFolderId },
+      { headers: { 'X-Overleaf-User-Id': userId } }
+    );
+    return response.data;
+  }
+
+  async renameEntity(userId, projectId, entityType, entityId, newName) {
+    await this.client.post(`/project/${projectId}/${entityType}/${entityId}/rename`,
+      { name: newName },
+      { headers: { 'X-Overleaf-User-Id': userId } }
+    );
+  }
+
+  async moveEntity(userId, projectId, entityType, entityId, targetFolderId) {
+    await this.client.post(`/project/${projectId}/${entityType}/${entityId}/move`,
+      { folder_id: targetFolderId },
+      { headers: { 'X-Overleaf-User-Id': userId } }
+    );
+  }
+
+  async deleteFile(userId, projectId, fileId) {
+    await this.client.delete(`/project/${projectId}/file/${fileId}`, {
+      headers: { 'X-Overleaf-User-Id': userId }
+    });
+  }
+
+  async deleteDoc(userId, projectId, docId) {
+    await this.client.delete(`/project/${projectId}/doc/${docId}`, {
+      headers: { 'X-Overleaf-User-Id': userId }
+    });
+  }
+
+  async deleteFolder(userId, projectId, folderId) {
+    await this.client.delete(`/project/${projectId}/folder/${folderId}`, {
+      headers: { 'X-Overleaf-User-Id': userId }
+    });
+  }
 }
 
 // Использование
@@ -390,6 +610,22 @@ class OverleafServiceAPI {
   // Создать проект
   const project = await api.createProject(userId, 'Service API Test');
   console.log('Created project:', project.project_id);
+
+  // Создать папку для файлов
+  const folder = await api.createFolder(userId, project.project_id, 'images');
+  console.log('Created folder:', folder.folder_id);
+
+  // Загрузить файл
+  const uploadResult = await api.uploadFile(userId, project.project_id, './logo.png', folder.folder_id);
+  console.log('Uploaded file:', uploadResult.entity_id);
+
+  // Создать новый документ
+  const doc = await api.createDoc(userId, project.project_id, 'chapter1.tex');
+  console.log('Created document:', doc._id);
+
+  // Переименовать документ
+  await api.renameEntity(userId, project.project_id, 'doc', doc._id, 'introduction.tex');
+  console.log('Document renamed');
 
   // Компилировать
   const compileResult = await api.compileProject(userId, project.project_id, {
@@ -473,10 +709,93 @@ add_collaborator() {
     local project_id=$1
     local email=$2
     local privileges=${3:-readAndWrite}
-    
+
     service_request POST "/project/$project_id/add" \
         -H "Content-Type: application/json" \
         -d "{\"email\":\"$email\",\"privileges\":\"$privileges\"}" | jq .
+}
+
+# === Файловые операции ===
+
+# Загрузить файл
+upload_file() {
+    local project_id=$1
+    local file_path=$2
+    local folder_id=$3
+    local file_name=$(basename "$file_path")
+
+    local url="/project/$project_id/upload"
+    if [ -n "$folder_id" ]; then
+        url="$url?folder_id=$folder_id"
+    fi
+
+    curl -s -u "$SERVICE_USER:$SERVICE_PASS" \
+        -H "X-Overleaf-User-Id: $USER_ID" \
+        -F "qqfile=@$file_path" \
+        -F "name=$file_name" \
+        "$OVERLEAF_URL/service$url" | jq .
+}
+
+# Создать документ
+create_doc() {
+    local project_id=$1
+    local name=$2
+    local parent_folder_id=$3
+
+    local body="{\"name\":\"$name\""
+    if [ -n "$parent_folder_id" ]; then
+        body="$body,\"parent_folder_id\":\"$parent_folder_id\""
+    fi
+    body="$body}"
+
+    service_request POST "/project/$project_id/doc" \
+        -H "Content-Type: application/json" \
+        -d "$body" | jq .
+}
+
+# Создать папку
+create_folder() {
+    local project_id=$1
+    local name=$2
+    local parent_folder_id=$3
+
+    local body="{\"name\":\"$name\""
+    if [ -n "$parent_folder_id" ]; then
+        body="$body,\"parent_folder_id\":\"$parent_folder_id\""
+    fi
+    body="$body}"
+
+    service_request POST "/project/$project_id/folder" \
+        -H "Content-Type: application/json" \
+        -d "$body" | jq .
+}
+
+# Переименовать сущность
+rename_entity() {
+    local project_id=$1
+    local entity_type=$2
+    local entity_id=$3
+    local new_name=$4
+
+    service_request POST "/project/$project_id/$entity_type/$entity_id/rename" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"$new_name\"}"
+}
+
+# Удалить файл
+delete_file() {
+    local project_id=$1
+    local file_id=$2
+
+    service_request DELETE "/project/$project_id/file/$file_id"
+}
+
+# Удалить документ
+delete_doc() {
+    local project_id=$1
+    local doc_id=$2
+
+    service_request DELETE "/project/$project_id/doc/$doc_id"
 }
 
 # Пример использования
@@ -487,6 +806,22 @@ echo "Creating project..."
 PROJECT_RESPONSE=$(create_project "Service API Test")
 PROJECT_ID=$(echo "$PROJECT_RESPONSE" | jq -r '.project_id')
 echo "Created project: $PROJECT_ID"
+
+echo "Creating folder..."
+FOLDER_RESPONSE=$(create_folder "$PROJECT_ID" "images")
+FOLDER_ID=$(echo "$FOLDER_RESPONSE" | jq -r '.folder_id')
+echo "Created folder: $FOLDER_ID"
+
+echo "Uploading file..."
+upload_file "$PROJECT_ID" "logo.png" "$FOLDER_ID"
+
+echo "Creating document..."
+DOC_RESPONSE=$(create_doc "$PROJECT_ID" "chapter1.tex")
+DOC_ID=$(echo "$DOC_RESPONSE" | jq -r '._id')
+echo "Created document: $DOC_ID"
+
+echo "Renaming document..."
+rename_entity "$PROJECT_ID" "doc" "$DOC_ID" "introduction.tex"
 
 echo "Compiling project..."
 COMPILE_RESPONSE=$(compile_project "$PROJECT_ID")

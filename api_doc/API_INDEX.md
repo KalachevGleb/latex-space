@@ -1,6 +1,6 @@
-# 📚 Overleaf CE API - Полный индекс документации
+# Overleaf CE API - Полный индекс документации
 
-## 🎯 Для кого эта документация?
+## Для кого эта документация?
 
 - **Начинающие:** Начните с [API_README.md](API_README.md) и используйте [api-example.sh](api-example.sh)
 - **Разработчики Python:** Используйте [overleaf_api.py](overleaf_api.py) и запустите [api_examples.py](api_examples.py)
@@ -9,9 +9,9 @@
 
 ---
 
-## 📖 Документация
+## Документация
 
-### 🌟 Начните здесь
+### Начните здесь
 
 **[API_README.md](API_README.md)** - Основное руководство
 - Быстрый старт
@@ -21,7 +21,7 @@
 
 ---
 
-### ✨ Service-to-Service API
+### Service-to-Service API
 
 **[SERVICE_TO_SERVICE_API.md](SERVICE_TO_SERVICE_API.md)** - Интеграция с другими сервисами
 - Аутентификация без браузерной сессии
@@ -33,7 +33,7 @@
 
 ---
 
-### 📘 Полная документация
+### Полная документация
 
 **[API_DOCUMENTATION_RU.md](API_DOCUMENTATION_RU.md)** - Справочник всех endpoints
 - Все API endpoints с параметрами и ответами
@@ -45,7 +45,7 @@
 
 ---
 
-### 📋 Справочники
+### Справочники
 
 **[API_QUICK_REFERENCE.md](API_QUICK_REFERENCE.md)** - Краткий справочник
 - Таблицы всех endpoints
@@ -60,7 +60,7 @@
 
 ---
 
-## 🛠️ Готовые инструменты
+## Готовые инструменты
 
 ### Bash скрипт
 
@@ -198,8 +198,6 @@ example_collaboration()
 
 **[requirements_api.txt](requirements_api.txt)** - Python зависимости
 
-**Размер:** 76 B | **Строк:** 4
-
 ```txt
 requests>=2.31.0
 ```
@@ -211,7 +209,7 @@ pip install -r requirements_api.txt
 
 ---
 
-## 🚀 Быстрый старт
+## Быстрый старт
 
 ### Сценарий 1: Первый запуск (новичок)
 
@@ -280,7 +278,7 @@ api.update_document(project_id, doc_id, new_lines, version + 1)
 ---
 
 
-## 🔗 Связанные документы
+## Связанные документы
 
 В репозитории также доступны:
 - `ARCHITECTURE_RU.md` - Архитектура Overleaf
@@ -290,7 +288,7 @@ api.update_document(project_id, doc_id, new_lines, version + 1)
 
 ---
 
-## 📞 Поддержка
+## Поддержка
 
 ### Если возникли проблемы:
 
@@ -298,7 +296,6 @@ api.update_document(project_id, doc_id, new_lines, version + 1)
 2. **Изучите примеры** в [API_DOCUMENTATION_RU.md](API_DOCUMENTATION_RU.md#примеры-использования)
 3. **Запустите демо** `./api-example.sh demo`
 4. **Проверьте логи** Overleaf: `bin/dev logs`
-5. **Создайте issue** на GitHub: https://github.com/overleaf/overleaf/issues
 
 ### Полезные ссылки:
 
@@ -306,9 +303,11 @@ api.update_document(project_id, doc_id, new_lines, version + 1)
 - **GitHub Issues:** https://github.com/overleaf/overleaf/issues
 - **Community Forum:** https://github.com/overleaf/overleaf/discussions
 
+Однако эти ресурсы относятся к основному репозиторию Overleaf, а не к данному Fork'у, там не может быть ответов на вопросы относительно добавленного функционала.
+
 ---
 
-## ⚡ Быстрые команды
+## Быстрые команды
 
 ### Bash
 ```bash
@@ -346,7 +345,7 @@ curl -b c.txt -H "X-CSRF-Token: $CSRF" -H "Content-Type: application/json" -d '{
 
 ---
 
-## 📝 Обновления
+## Обновления
 
 **Версия:** 2.1
 **Дата:** 2026-01-24
@@ -378,13 +377,7 @@ curl -b c.txt -H "X-CSRF-Token: $CSRF" -H "Content-Type: application/json" -d '{
 
 ---
 
-## 📄 Лицензия
-
-Документация распространяется вместе с Overleaf CE под лицензией AGPL-3.0.
-
----
-
-## ✨ Начните прямо сейчас!
+## Начните прямо сейчас!
 
 **Для новичков:**
 ```bash
@@ -402,8 +395,3 @@ python api_examples.py
 source api-example.sh
 # Используйте любые функции из скрипта
 ```
-
----
-
-**Выберите нужный инструмент и начинайте работу с Overleaf API!** 🚀
-
