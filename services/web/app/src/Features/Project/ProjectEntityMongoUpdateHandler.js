@@ -16,6 +16,7 @@ const ProjectLocator = require('./ProjectLocator')
 const FolderStructureBuilder = require('./FolderStructureBuilder')
 const SafePath = require('./SafePath')
 const { iterablePaths } = require('./IterablePath')
+const AsyncLocalStorage = require('../../infrastructure/AsyncLocalStorage')
 
 const LOCK_NAMESPACE = 'mongoTransaction'
 const ENTITY_TYPE_TO_MONGO_PATH_SEGMENT = {
@@ -160,10 +161,14 @@ async function replaceFileWithNew(projectId, fileId, newFileRef, userId) {
     type: 'file',
   })
 
-  // Check if file is protected
-  const protectedFiles = project.protectedFiles || []
-  if (protectedFiles.includes(path.fileSystem)) {
-    throw new Errors.InvalidNameError('cannot modify protected file')
+  // Check if file is protected (bypass for Service API)
+  const store = AsyncLocalStorage.storage.getStore()
+  const isServiceAuth = store?.isServiceAuth || false
+  if (!isServiceAuth) {
+    const protectedFiles = project.protectedFiles || []
+    if (protectedFiles.includes(path.fileSystem)) {
+      throw new Errors.InvalidNameError('cannot modify protected file')
+    }
   }
   const newProject = await Project.findOneAndUpdate(
     { _id: project._id, [path.mongo]: { $exists: true } },
@@ -414,11 +419,15 @@ async function deleteEntity(projectId, entityId, entityType, userId) {
     type: entityType,
   })
 
-  // Check if file is protected
+  // Check if file is protected (bypass for Service API)
   if (entityType === 'doc' || entityType === 'file') {
-    const protectedFiles = project.protectedFiles || []
-    if (protectedFiles.includes(path.fileSystem)) {
-      throw new Errors.NonDeletableEntityError('cannot delete protected file')
+    const store = AsyncLocalStorage.storage.getStore()
+    const isServiceAuth = store?.isServiceAuth || false
+    if (!isServiceAuth) {
+      const protectedFiles = project.protectedFiles || []
+      if (protectedFiles.includes(path.fileSystem)) {
+        throw new Errors.NonDeletableEntityError('cannot delete protected file')
+      }
     }
   }
   const newProject = await _removeElementFromMongoArray(
@@ -448,11 +457,15 @@ async function renameEntity(projectId, entityId, entityType, newName, userId) {
   const startPath = entPath.fileSystem
   const endPath = path.join(path.dirname(entPath.fileSystem), newName)
 
-  // Check if file is protected
+  // Check if file is protected (bypass for Service API)
   if (entityType === 'doc' || entityType === 'file') {
-    const protectedFiles = project.protectedFiles || []
-    if (protectedFiles.includes(startPath)) {
-      throw new Errors.InvalidNameError('cannot rename protected file')
+    const store = AsyncLocalStorage.storage.getStore()
+    const isServiceAuth = store?.isServiceAuth || false
+    if (!isServiceAuth) {
+      const protectedFiles = project.protectedFiles || []
+      if (protectedFiles.includes(startPath)) {
+        throw new Errors.InvalidNameError('cannot rename protected file')
+      }
     }
   }
 

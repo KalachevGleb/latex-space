@@ -374,6 +374,135 @@ GET /Project/:Project_id/download/zip
 
 ## Файлы и документы
 
+### Загрузить файл в проект
+```http
+POST /project/:Project_id/upload
+Content-Type: multipart/form-data
+
+Form data:
+  - qqfile: содержимое файла (file)
+  - name: имя файла (string)
+  - relativePath: относительный путь для сохранения структуры папок (string, опционально)
+
+Query params:
+  - folder_id: ID папки для загрузки (опционально, по умолчанию корень)
+```
+
+**Пример:**
+```bash
+curl -X POST "http://localhost/project/$PROJECT_ID/upload?folder_id=$FOLDER_ID" \
+  -F "qqfile=@document.pdf" \
+  -F "name=document.pdf"
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "entity_id": "507f1f77bcf86cd799439011",
+  "entity_type": "file",
+  "hash": "abc123def456"
+}
+```
+
+**Замечание:** Через Service API можно загружать файлы даже если они защищены.
+
+### Создать новый документ
+```http
+POST /project/:Project_id/doc
+Content-Type: application/json
+
+{
+  "name": "chapter1.tex",
+  "parent_folder_id": "507f1f77bcf86cd799439011"  // опционально
+}
+```
+
+**Ответ:**
+```json
+{
+  "_id": "507f1f77bcf86cd799439012",
+  "name": "chapter1.tex"
+}
+```
+
+### Создать новую папку
+```http
+POST /project/:Project_id/folder
+Content-Type: application/json
+
+{
+  "name": "chapters",
+  "parent_folder_id": "507f1f77bcf86cd799439011"  // опционально
+}
+```
+
+**Ответ:**
+```json
+{
+  "folder_id": "507f1f77bcf86cd799439013",
+  "name": "chapters"
+}
+```
+
+### Переименовать файл/документ/папку
+```http
+POST /project/:Project_id/:entity_type/:entity_id/rename
+Content-Type: application/json
+
+{
+  "name": "new_name.tex"
+}
+```
+
+**Параметры:**
+- `entity_type` - тип сущности: `file`, `doc`, или `folder`
+- `entity_id` - ID сущности
+
+**Ответ:** 204 No Content
+
+**Замечание:** Через Service API можно переименовывать защищенные файлы.
+
+### Переместить файл/документ/папку
+```http
+POST /project/:Project_id/:entity_type/:entity_id/move
+Content-Type: application/json
+
+{
+  "folder_id": "507f1f77bcf86cd799439014"
+}
+```
+
+**Параметры:**
+- `entity_type` - тип сущности: `file`, `doc`, или `folder`
+- `entity_id` - ID сущности
+- `folder_id` - ID целевой папки
+
+**Ответ:** 204 No Content
+
+### Удалить файл
+```http
+DELETE /project/:Project_id/file/:entity_id
+```
+
+**Ответ:** 204 No Content
+
+**Замечание:** Через Service API можно удалять защищенные файлы.
+
+### Удалить документ
+```http
+DELETE /project/:Project_id/doc/:entity_id
+```
+
+**Ответ:** 204 No Content
+
+### Удалить папку
+```http
+DELETE /project/:Project_id/folder/:entity_id
+```
+
+**Ответ:** 204 No Content
+
 ### Скачать файл
 ```http
 GET /Project/:Project_id/file/:File_id

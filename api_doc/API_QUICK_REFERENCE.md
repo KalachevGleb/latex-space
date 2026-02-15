@@ -47,11 +47,21 @@
 
 | Endpoint | Method | Описание |
 |----------|--------|----------|
+| `/project/:Project_id/upload` | POST | Загрузить файл (multipart/form-data) |
+| `/project/:Project_id/doc` | POST | Создать новый документ |
+| `/project/:Project_id/folder` | POST | Создать новую папку |
+| `/project/:Project_id/:entity_type/:entity_id/rename` | POST | Переименовать файл/документ/папку |
+| `/project/:Project_id/:entity_type/:entity_id/move` | POST | Переместить файл/документ/папку |
+| `/project/:Project_id/file/:entity_id` | DELETE | Удалить файл |
+| `/project/:Project_id/doc/:entity_id` | DELETE | Удалить документ |
+| `/project/:Project_id/folder/:entity_id` | DELETE | Удалить папку |
 | `/Project/:Project_id/file/:File_id` | GET | Скачать файл |
 | `/Project/:Project_id/file/:File_id` | HEAD | Получить метаданные файла |
 | `/Project/:Project_id/doc/:Doc_id/download` | GET | Скачать документ |
 | `/project/:project_id/doc/:doc_id/metadata` | POST | Обновить метаданные документа |
 | `/api/project/:Project_id/is-file-protected/:file_path` | GET | Проверить, защищён ли файл |
+
+**Примечание:** При использовании Service API (`/service/` префикс) можно изменять защищённые файлы.
 
 ## Защита проектов и файлов
 

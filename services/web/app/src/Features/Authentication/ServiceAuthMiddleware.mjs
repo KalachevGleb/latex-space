@@ -4,6 +4,7 @@ import logger from '@overleaf/logger'
 import basicAuth from 'basic-auth'
 import bcrypt from 'bcrypt'
 import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
+import AsyncLocalStorage from '../../infrastructure/AsyncLocalStorage.js'
 
 const SERVICE_USER_ID_HEADER = 'x-overleaf-user-id'
 const SERVICE_USER_EMAIL_HEADER = 'x-overleaf-user-email'
@@ -94,6 +95,13 @@ async function requireServiceAuth(req, res, next) {
   }
 
   req.isServiceAuth = true
+
+  // Store Service API context in AsyncLocalStorage for bypassing file protection
+  const store = AsyncLocalStorage.storage.getStore()
+  if (store) {
+    store.isServiceAuth = true
+  }
+
   const userId = req.get(SERVICE_USER_ID_HEADER)
   const userEmail = req.get(SERVICE_USER_EMAIL_HEADER)
   if (userId || userEmail) {
