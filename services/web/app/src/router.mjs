@@ -11,6 +11,7 @@ import EditorRouter from './Features/Editor/EditorRouter.mjs'
 import Settings from '@overleaf/settings'
 import TpdsController from './Features/ThirdPartyDataStore/TpdsController.mjs'
 import UploadsRouter from './Features/Uploads/UploadsRouter.mjs'
+import ServiceApiUploadsRouter from './Features/Uploads/ServiceApiRouter.mjs'
 import metrics from '@overleaf/metrics'
 import AuthenticationController from './Features/Authentication/AuthenticationController.js'
 import PermissionsController from './Features/Authorization/PermissionsController.mjs'
@@ -278,6 +279,7 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
   EditorRouter.apply(webRouter, privateApiRouter)
   CollaboratorsRouter.apply(webRouter, privateApiRouter)
   UploadsRouter.apply(webRouter, privateApiRouter)
+  ServiceApiUploadsRouter.apply(webRouter)
   PasswordResetRouter.apply(webRouter, privateApiRouter)
   StaticPagesRouter.apply(webRouter, privateApiRouter)
   ContactRouter.apply(webRouter, privateApiRouter)

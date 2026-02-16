@@ -1,12 +1,16 @@
 import logger from '@overleaf/logger'
 import metrics from '@overleaf/metrics'
 import fs from 'node:fs'
+import fsPromises from 'node:fs/promises'
 import Path from 'node:path'
 import FileSystemImportManager from './FileSystemImportManager.js'
 import ProjectUploadManager from './ProjectUploadManager.js'
+import ProjectSyncManager from './ProjectSyncManager.mjs'
 import SessionManager from '../Authentication/SessionManager.js'
 import EditorController from '../Editor/EditorController.js'
 import ProjectLocator from '../Project/ProjectLocator.js'
+import ProjectGetter from '../Project/ProjectGetter.js'
+import ProjectEntityUpdateHandler from '../Project/ProjectEntityUpdateHandler.js'
 import Settings from '@overleaf/settings'
 import { InvalidZipFileError } from './ArchiveErrors.js'
 import multer from 'multer'
@@ -173,8 +177,181 @@ function multerMiddleware(req, res, next) {
   })
 }
 
+/**
+ * Sync project from ZIP (Service API)
+ * Updates project to match ZIP contents
+ */
+async function syncProjectFromZip(req, res, next) {
+  const timer = new metrics.Timer('project-sync-from-zip')
+  const { path } = req.file
+  const projectId = req.params.Project_id
+  // Get userId from session or Service API user
+  const userId =
+    SessionManager.getLoggedInUserId(req.session) ||
+    (req.user && req.user._id && req.user._id.toString())
+
+  try {
+    const result = await ProjectSyncManager.promises.syncProjectFromZip(
+      projectId,
+      userId,
+      path
+    )
+
+    fs.unlink(path, function () {})
+    timer.done()
+
+    return res.json({
+      success: true,
+      ...result,
+    })
+  } catch (error) {
+    fs.unlink(path, function () {})
+    timer.done()
+
+    logger.error(
+      { err: error, projectId },
+      'error syncing project from zip'
+    )
+
+    if (error instanceof InvalidZipFileError) {
+      return res.status(422).json({
+        success: false,
+        error: req.i18n?.translate(error.message) || error.message,
+      })
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: req.i18n?.translate('upload_failed') || 'Upload failed',
+      })
+    }
+  }
+}
+
+/**
+ * Document extensions (text files)
+ */
+const DOC_EXTENSIONS = new Set([
+  '.tex',
+  '.latex',
+  '.sty',
+  '.cls',
+  '.bst',
+  '.bib',
+  '.bibtex',
+  '.txt',
+  '.md',
+  '.markdown',
+])
+
+/**
+ * Upload file by path (Service API)
+ * Automatically creates folders if they don't exist
+ * Preserves history when replacing existing files
+ */
+async function uploadFileByPath(req, res, next) {
+  const timer = new metrics.Timer('file-upload-by-path')
+  const name = req.body.name
+  const filePath = req.body.path || `/${name}` // Default to root if no path
+  const { path: uploadPath } = req.file
+  const projectId = req.params.Project_id
+  // Get userId from session or Service API user
+  const userId =
+    SessionManager.getLoggedInUserId(req.session) ||
+    (req.user && req.user._id && req.user._id.toString())
+
+  if (name == null || name.length === 0 || name.length > 150) {
+    fs.unlink(uploadPath, function () {})
+    return res.status(422).json({
+      success: false,
+      error: 'invalid_filename',
+    })
+  }
+
+  try {
+    // Parse the path
+    const normalizedPath = filePath.startsWith('/')
+      ? filePath
+      : `/${filePath}`
+
+    // Determine if this is a document or binary file
+    const ext = Path.extname(name).toLowerCase()
+    const isDoc = DOC_EXTENSIONS.has(ext)
+
+    let entityId, entityType, hash, isNew
+
+    if (isDoc) {
+      // Document - read as text and use upsertDocWithPath
+      const content = await fsPromises.readFile(uploadPath, 'utf8')
+      const lines = content.split(/\r?\n/)
+
+      const { doc, isNew: docIsNew } =
+        await ProjectEntityUpdateHandler.promises.upsertDocWithPath(
+          projectId,
+          normalizedPath,
+          lines,
+          'upload',
+          userId
+        )
+
+      entityId = doc._id
+      entityType = 'doc'
+      hash = doc.hash
+      isNew = docIsNew
+    } else {
+      // Binary file - use upsertFileWithPath
+      const { fileRef, isNew: fileIsNew } =
+        await ProjectEntityUpdateHandler.promises.upsertFileWithPath(
+          projectId,
+          normalizedPath,
+          uploadPath,
+          null, // linkedFileData
+          userId,
+          'upload'
+        )
+
+      entityId = fileRef._id
+      entityType = 'file'
+      hash = fileRef.hash
+      isNew = fileIsNew
+    }
+
+    fs.unlink(uploadPath, function () {})
+    timer.done()
+
+    return res.json({
+      success: true,
+      entity_id: entityId,
+      entity_type: entityType,
+      hash,
+      path: normalizedPath,
+      isNew,
+    })
+  } catch (error) {
+    fs.unlink(uploadPath, function () {})
+    timer.done()
+
+    if (error.name === 'InvalidNameError') {
+      return res.status(422).json({
+        success: false,
+        error: 'invalid_filename',
+      })
+    }
+
+    logger.error(
+      { err: error, projectId, filePath },
+      'error in uploadFileByPath'
+    )
+    return res.status(500).json({
+      success: false,
+      error: 'upload_failed',
+    })
+  }
+}
+
 export default {
   uploadProject,
   uploadFile: expressify(uploadFile),
+  uploadFileByPath: expressify(uploadFileByPath),
+  syncProjectFromZip: expressify(syncProjectFromZip),
   multerMiddleware,
 }

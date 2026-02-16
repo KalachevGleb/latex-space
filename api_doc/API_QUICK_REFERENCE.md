@@ -61,6 +61,13 @@
 | `/project/:project_id/doc/:doc_id/metadata` | POST | Обновить метаданные документа |
 | `/api/project/:Project_id/is-file-protected/:file_path` | GET | Проверить, защищён ли файл |
 
+**Service API эндпоинты (только через `/service/` префикс):**
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/service/project/:Project_id/upload-by-path` | POST | Загрузить файл по пути (с сохранением истории) |
+| `/service/project/:Project_id/sync-from-zip` | POST | Синхронизировать проект из ZIP (сохраняет историю и комментарии) |
+
 **Примечание:** При использовании Service API (`/service/` префикс) можно изменять защищённые файлы.
 
 ## Защита проектов и файлов
