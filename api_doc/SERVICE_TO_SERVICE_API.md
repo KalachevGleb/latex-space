@@ -187,6 +187,37 @@ GET /service/project/:Project_id/file/:File_id
 
 # Скачать документ (текст)
 GET /service/project/:Project_id/doc/:Doc_id/download
+
+# Загрузить файл по пути (Service API, с сохранением истории)
+POST /service/project/:Project_id/upload-by-path
+Content-Type: multipart/form-data
+Body: {
+  "name": "figure.png",
+  "path": "/images/figure.png",  # полный путь, папки создаются автоматически
+  "qqfile": <binary data>
+}
+Response: {
+  "success": true,
+  "entity_id": "file_id",
+  "entity_type": "file",
+  "hash": "file_hash",
+  "path": "/images/figure.png",
+  "isNew": false  # true если файл новый, false если обновлён
+}
+
+# Синхронизировать проект из ZIP (Service API, с сохранением истории)
+POST /service/project/:Project_id/sync-from-zip
+Content-Type: multipart/form-data
+Body: {
+  "qqfile": <ZIP archive>
+}
+Response: {
+  "success": true,
+  "deleted": 2,   # количество удалённых файлов
+  "updated": 5,   # количество обновлённых файлов
+  "added": 3      # количество добавленных файлов
+}
+# Примечание: История и комментарии сохраняются при обновлении файлов
 ```
 
 #### Управление участниками
@@ -426,6 +457,36 @@ class OverleafServiceAPI:
             user_id=user_id
         )
 
+    def upload_file_by_path(self, user_id: str, project_id: str, file_path: str, target_path: str):
+        """Загрузить файл по пути (с сохранением истории)"""
+        import os
+        file_name = os.path.basename(target_path)
+
+        with open(file_path, 'rb') as f:
+            files = {'qqfile': (file_name, f)}
+            data = {
+                'name': file_name,
+                'path': target_path
+            }
+            response = self._make_request(
+                'POST', f'/project/{project_id}/upload-by-path',
+                user_id=user_id,
+                files=files,
+                data=data
+            )
+        return response.json()
+
+    def sync_project_from_zip(self, user_id: str, project_id: str, zip_path: str):
+        """Синхронизировать проект из ZIP (с сохранением истории)"""
+        with open(zip_path, 'rb') as f:
+            files = {'qqfile': ('project.zip', f)}
+            response = self._make_request(
+                'POST', f'/project/{project_id}/sync-from-zip',
+                user_id=user_id,
+                files=files
+            )
+        return response.json()
+
 # Использование
 api = OverleafServiceAPI('http://localhost', 'overleaf', 'password')
 
@@ -599,6 +660,34 @@ class OverleafServiceAPI {
     await this.client.delete(`/project/${projectId}/folder/${folderId}`, {
       headers: { 'X-Overleaf-User-Id': userId }
     });
+  }
+
+  async uploadFileByPath(userId, projectId, filePath, targetPath) {
+    const form = new FormData();
+    form.append('qqfile', fs.createReadStream(filePath));
+    form.append('name', require('path').basename(targetPath));
+    form.append('path', targetPath);
+
+    const response = await this.client.post(`/project/${projectId}/upload-by-path`, form, {
+      headers: {
+        'X-Overleaf-User-Id': userId,
+        ...form.getHeaders()
+      }
+    });
+    return response.data;
+  }
+
+  async syncProjectFromZip(userId, projectId, zipPath) {
+    const form = new FormData();
+    form.append('qqfile', fs.createReadStream(zipPath));
+
+    const response = await this.client.post(`/project/${projectId}/sync-from-zip`, form, {
+      headers: {
+        'X-Overleaf-User-Id': userId,
+        ...form.getHeaders()
+      }
+    });
+    return response.data;
   }
 }
 

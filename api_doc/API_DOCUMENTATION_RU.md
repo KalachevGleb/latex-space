@@ -407,6 +407,104 @@ curl -X POST "http://localhost/project/$PROJECT_ID/upload?folder_id=$FOLDER_ID" 
 
 **Замечание:** Через Service API можно загружать файлы даже если они защищены.
 
+### Загрузить файл по пути (Service API)
+
+**Эндпоинт:** Доступен только через `/service/` префикс
+
+```http
+POST /service/project/:Project_id/upload-by-path
+Content-Type: multipart/form-data
+
+Form data:
+  - qqfile: содержимое файла (file)
+  - name: имя файла (string)
+  - path: полный путь в проекте, например "/images/figure.png" (string)
+```
+
+**Особенности:**
+- Автоматически создаёт папки, если их нет
+- **Сохраняет историю** при замене существующих файлов (не удаляет и создаёт заново)
+- **Сохраняет комментарии** для документов (.tex файлов)
+- Работает с защищёнными файлами
+
+**Пример:**
+```bash
+curl -u overleaf:password \
+  -H "X-Overleaf-User-Id: $USER_ID" \
+  -F "qqfile=@figure.png" \
+  -F "name=figure.png" \
+  -F "path=/images/figure.png" \
+  "http://localhost/service/project/$PROJECT_ID/upload-by-path"
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "entity_id": "507f1f77bcf86cd799439011",
+  "entity_type": "file",
+  "hash": "abc123def456",
+  "path": "/images/figure.png",
+  "isNew": false
+}
+```
+
+**Поле `isNew`:**
+- `true` - файл был создан впервые
+- `false` - файл был обновлён (история сохранена)
+
+### Синхронизировать проект из ZIP (Service API)
+
+**Эндпоинт:** Доступен только через `/service/` префикс
+
+```http
+POST /service/project/:Project_id/sync-from-zip
+Content-Type: multipart/form-data
+
+Form data:
+  - qqfile: ZIP архив с файлами проекта (file)
+```
+
+**Операции:**
+1. **Удаляет** файлы, которых нет в ZIP
+2. **Обновляет** файлы, которые изменились (с сохранением истории)
+3. **Добавляет** новые файлы из ZIP
+
+**Особенности:**
+- Автоматически определяет тип файлов (документы .tex или бинарные файлы)
+- **Сохраняет историю изменений** для всех файлов
+- **Сохраняет комментарии** в документах
+- Автоматически создаёт структуру папок
+- Работает с защищёнными файлами
+
+**Пример:**
+```bash
+curl -u overleaf:password \
+  -H "X-Overleaf-User-Id: $USER_ID" \
+  -F "qqfile=@project.zip" \
+  "http://localhost/service/project/$PROJECT_ID/sync-from-zip"
+```
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "deleted": 2,
+  "updated": 5,
+  "added": 3
+}
+```
+
+**Поля ответа:**
+- `deleted` - количество удалённых файлов
+- `updated` - количество обновлённых файлов (история сохранена)
+- `added` - количество добавленных файлов
+
+**Формат ZIP архива:**
+- Может содержать папку верхнего уровня или файлы напрямую
+- Структура папок в ZIP сохраняется в проекте
+- Поддерживаются как документы (.tex, .bib, .sty), так и бинарные файлы (изображения, PDF)
+
 ### Создать новый документ
 ```http
 POST /project/:Project_id/doc

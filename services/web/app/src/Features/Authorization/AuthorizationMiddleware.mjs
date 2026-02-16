@@ -239,6 +239,7 @@ function _getUserId(req) {
   return (
     SessionManager.getLoggedInUserId(req.session) ||
     (req.oauth_user && req.oauth_user._id?.toString()) ||
+    (req.user && req.user._id?.toString()) || // Service API user
     null
   )
 }
