@@ -40,6 +40,9 @@ const settings = {
     // gcs - Google Cloud Storage
     backend: process.env.BACKEND,
 
+    // Use subdirectories for file storage (required for blob storage)
+    useSubdirectories: process.env.FILESTORE_USE_SUBDIRECTORIES === 'true',
+
     gcs: {
       endpoint: process.env.GCS_API_ENDPOINT
         ? {
