@@ -71,6 +71,7 @@ services:
       - filestore-public-files:/overleaf/services/filestore/public_files
       - filestore-template-files:/overleaf/services/filestore/template_files
       - filestore-uploads:/overleaf/services/filestore/uploads
+      - history-v1-buckets:/overleaf/data
 
   history-v1:
     build:
