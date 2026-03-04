@@ -24,6 +24,12 @@
 | `/api/user/:user_id/permissions` | GET | Получить права пользователя (admin) |
 | `/api/user/:user_id/permissions` | POST | Установить права пользователя (admin) |
 
+## Приглашение пользователей (Service API only)
+
+| Endpoint | Method | Описание |
+|----------|--------|----------|
+| `/service/api/user/invite` | POST | Пригласить нового пользователя по e-mail, возвращает ссылку активации |
+
 ## Проекты
 
 | Endpoint | Method | Описание |

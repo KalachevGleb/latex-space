@@ -127,36 +127,45 @@ Authorization: Basic <base64(username:password)>
 
 ## Управление пользователями
 
-### Создание пользователя (через код)
+### Пригласить нового пользователя (Service API)
 
-Overleaf CE не предоставляет публичный API endpoint для создания пользователей. Создание выполняется программно через `UserRegistrationHandler`:
+```http
+POST /service/api/user/invite
+Authorization: Basic overleaf:<service_password>
+Content-Type: application/json
 
-```javascript
-// Пример использования в коде
-const UserRegistrationHandler = require('./app/src/Features/User/UserRegistrationHandler')
-
-const user = await UserRegistrationHandler.promises.registerNewUser({
-  email: 'newuser@example.com',
-  password: 'secure_password',
-  first_name: 'John',
-  last_name: 'Doe'
-})
+{
+  "email": "newuser@example.com"
+}
 ```
 
-Альтернативно через MongoDB напрямую (для административных целей):
-```javascript
-const UserCreator = require('./app/src/Features/User/UserCreator')
-const AuthenticationManager = require('./app/src/Features/Authentication/AuthenticationManager')
+Создаёт нового пользователя, генерирует токен активации (действует 7 дней) и отправляет письмо с ссылкой на указанный e-mail. В ответе возвращается та же ссылка.
 
-// Создать пользователя
-const user = await UserCreator.promises.createNewUser({
-  email: 'admin@example.com',
-  first_name: 'Admin',
-  last_name: 'User'
-})
+**Ответ при успехе (201):**
+```json
+{
+  "status": "created",
+  "email": "newuser@example.com",
+  "setNewPasswordUrl": "https://overleaf.example.com/user/activate?token=64e4...&user_id=507f1f77bcf86cd799439011"
+}
+```
 
-// Установить пароль
-await AuthenticationManager.promises.setUserPassword(user, 'password123')
+**Коды ошибок:**
+
+| Код | `error` | Причина |
+|-----|---------|---------|
+| 400 | `missing_email` | Email не передан |
+| 400 | `invalid_email` | Неверный формат email |
+| 403 | `forbidden` | Запрос без Service API аутентификации |
+| 409 | `email_already_registered` | Пользователь с таким e-mail уже существует |
+| 500 | — | Внутренняя ошибка |
+
+**Пример (curl):**
+```bash
+curl -u overleaf:SERVICE_PASSWORD \
+  -H "Content-Type: application/json" \
+  -d '{"email":"newuser@example.com"}' \
+  http://localhost/service/api/user/invite
 ```
 
 ### Получить информацию о текущем пользователе
