@@ -144,6 +144,8 @@ services:
             OVERLEAF_REDIS_HOST: redis
             REDIS_HOST: redis
 
+            FILESTORE_USE_SUBDIRECTORIES: true
+
             # Email configuration
             OVERLEAF_EMAIL_FROM_ADDRESS: ${OVERLEAF_EMAIL_FROM_ADDRESS:-}
             OVERLEAF_EMAIL_REPLY_TO: ${OVERLEAF_EMAIL_REPLY_TO:-}
@@ -167,6 +169,7 @@ services:
             COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
             OVERLEAF_SECURE_COOKIE: ${OVERLEAF_SECURE_COOKIE:-}
             ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+            OVERLEAF_BEHIND_PROXY: true
 
             # Features
             ENABLED_LINKED_FILE_TYPES: 'project_file,project_output_file'
