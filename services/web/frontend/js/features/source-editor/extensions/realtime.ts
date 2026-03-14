@@ -15,6 +15,7 @@ import {
   HistoryOTShareDoc,
 } from '../../../../../types/share-doc'
 import { debugConsole } from '@/utils/debugging'
+import { diffChars } from 'diff'
 import { DocumentContainer } from '@/features/ide-react/editor/document-container'
 import {
   EditOperation,
@@ -243,6 +244,11 @@ class ShareLatexOTAdapter {
     const trackedDeletesLength =
       ranges != null ? ranges.getTrackedDeletesLength() : 0
 
+    console.log(
+      '[realtime] ShareLatexOTAdapter.handleUpdateFromCM called, track_changes=',
+      shareDoc.track_changes
+    )
+
     for (const transaction of transactions) {
       if (transaction.docChanged) {
         const origin = chooseOrigin(transaction)
@@ -281,12 +287,51 @@ class ShareLatexOTAdapter {
 
             const pos = fromA + positionShift
 
-            if (removed) {
-              shareDoc.del(pos, removedLength, fromUndo)
-            }
+            if (removed && inserted && shareDoc.track_changes) {
+              // When track changes is enabled, apply character-level diff for
+              // replacements to produce granular tracked changes instead of one
+              // big delete + insert pair.
+              const oldText = transaction.startState.doc.sliceString(fromA, toA)
+              const newText = insertedText.toString()
+              console.log(
+                '[realtime] track_changes replacement: diffChars("' +
+                  oldText +
+                  '" → "' +
+                  newText +
+                  '")'
+              )
+              const diffs = diffChars(oldText, newText)
+              let absPos = pos
+              for (let i = 0; i < diffs.length; i++) {
+                const part = diffs[i]
+                if (!part.added && !part.removed) {
+                  absPos += part.value.length
+                } else if (part.removed) {
+                  const nextPart = diffs[i + 1]
+                  if (nextPart?.added) {
+                    // Replacement: delete old, then insert new at same position
+                    shareDoc.del(absPos, part.value.length, fromUndo)
+                    shareDoc.insert(absPos, nextPart.value, fromUndo)
+                    absPos += nextPart.value.length
+                    i++ // skip the added part already handled
+                  } else {
+                    // Pure deletion
+                    shareDoc.del(absPos, part.value.length, fromUndo)
+                  }
+                } else if (part.added) {
+                  // Pure insertion
+                  shareDoc.insert(absPos, part.value, fromUndo)
+                  absPos += part.value.length
+                }
+              }
+            } else {
+              if (removed) {
+                shareDoc.del(pos, removedLength, fromUndo)
+              }
 
-            if (inserted) {
-              shareDoc.insert(pos, insertedText.toString(), fromUndo)
+              if (inserted) {
+                shareDoc.insert(pos, insertedText.toString(), fromUndo)
+              }
             }
 
             // TODO: mapPos instead?

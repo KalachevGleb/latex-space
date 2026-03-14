@@ -164,6 +164,7 @@ export class ShareJsDoc extends EventEmitter {
 
   setTrackChangesUserId(userId: string | null) {
     this.track_changes = userId != null
+    ;(this._doc as any).track_changes = this.track_changes
   }
 
   getTrackedChanges() {

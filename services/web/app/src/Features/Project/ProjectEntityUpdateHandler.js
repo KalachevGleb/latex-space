@@ -473,12 +473,34 @@ const upsertDoc = wrapWithLock(
       )
       return { doc, isNew: true }
     } else if (existingDoc) {
+      // Check if track changes is enabled for this user so uploads create
+      // tracked changes visible in the review panel
+      let trackChangesUserId = null
+      if (source === 'upload' && userId != null) {
+        const projectForTc = await ProjectGetter.promises.getProject(
+          projectId,
+          { track_changes: true }
+        )
+        const tcState = projectForTc && projectForTc.track_changes
+        if (tcState === true) {
+          trackChangesUserId = userId
+        } else if (tcState && typeof tcState === 'object') {
+          const userIdStr = userId.toString()
+          if (
+            tcState[userIdStr] === true ||
+            (tcState[userIdStr] == null && tcState.__guests__ === true)
+          ) {
+            trackChangesUserId = userId
+          }
+        }
+      }
       const result = await DocumentUpdaterHandler.promises.setDocument(
         projectId,
         existingDoc._id,
         userId,
         docLines,
-        source
+        source,
+        trackChangesUserId
       )
       logger.debug(
         { projectId, docId: existingDoc._id },

@@ -10,6 +10,7 @@ export interface ShareLatexOTShareDoc extends EventEmitter {
   insert: (pos: number, insert: string, fromUndo: boolean) => void
   del: (pos: number, length: number, fromUndo: boolean) => void
   submitOp(op: any[]): void
+  track_changes: boolean
 }
 
 export interface HistoryOTShareDoc extends EventEmitter {

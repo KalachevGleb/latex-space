@@ -199,7 +199,13 @@ async function clearProjectState(req, res) {
 async function setDoc(req, res) {
   const docId = req.params.doc_id
   const projectId = req.params.project_id
-  const { lines, source, user_id: userId, undoing } = req.body
+  const {
+    lines,
+    source,
+    user_id: userId,
+    undoing,
+    track_changes_user_id: trackChangesUserId,
+  } = req.body
   const lineSize = getTotalSizeOfLines(lines)
 
   if (lineSize > Settings.max_doc_length) {
@@ -222,7 +228,8 @@ async function setDoc(req, res) {
     source,
     userId,
     undoing,
-    true
+    true,
+    trackChangesUserId
   )
   timer.done()
   logger.debug({ projectId, docId }, 'set doc via http')

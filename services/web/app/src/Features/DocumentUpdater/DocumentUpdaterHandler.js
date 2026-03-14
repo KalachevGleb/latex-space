@@ -114,16 +114,23 @@ async function getDocumentWithHistoryRanges(projectId, docId) {
   return doc
 }
 
-async function setDocument(projectId, docId, userId, docLines, source) {
+async function setDocument(
+  projectId,
+  docId,
+  userId,
+  docLines,
+  source,
+  trackChangesUserId
+) {
+  const body = { lines: docLines, source, user_id: userId }
+  if (trackChangesUserId != null) {
+    body.track_changes_user_id = trackChangesUserId
+  }
   const maybeJson = await fetchString(
     `${BASE_URL}/project/${projectId}/doc/${docId}`,
     {
       method: 'POST',
-      json: {
-        lines: docLines,
-        source,
-        user_id: userId,
-      },
+      json: body,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     }
   )
