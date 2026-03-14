@@ -15,7 +15,6 @@ import { ReviewPanelEntry } from './review-panel-entry'
 import { useModalsContext } from '@/features/ide-react/context/modals-context'
 import { ExpandableContent } from './review-panel-expandable-content'
 import { ReviewPanelCommentWithMath } from './review-panel-comment-with-math'
-import { useUserContext } from '@/shared/context/user-context'
 import { ChangeAction } from '@/features/review-panel/components/review-panel-change-action'
 import {
   AddIcon,
@@ -50,7 +49,6 @@ export const ReviewPanelChange = memo<{
     const permissions = usePermissionsContext()
     const changesUsers = useChangesUsersContext()
     const { showGenericMessageModal } = useModalsContext()
-    const user = useUserContext()
 
     const [accepting, setAccepting] = useState(false)
 
@@ -105,7 +103,6 @@ export const ReviewPanelChange = memo<{
       return null
     }
 
-    const isChangeAuthor = change.metadata?.user_id === user.id
     const aggregateChange = aggregate && /\S/.test(aggregate.op.d)
 
     return (
@@ -151,8 +148,7 @@ export const ReviewPanelChange = memo<{
                   />
                 )}
 
-                {(permissions.write ||
-                  (permissions.trackedWrite && isChangeAuthor)) && (
+                {(permissions.write || permissions.trackedWrite) && (
                   <ChangeAction
                     id="reject-change"
                     label={translations.reject_change}

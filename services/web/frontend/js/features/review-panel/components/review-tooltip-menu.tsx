@@ -163,8 +163,10 @@ const ReviewTooltipMenuContent: FC<{ onAddComment: () => void }> = ({
     changesInSelection,
   ])
 
-  // Показываем кнопки Accept/Reject только если есть изменения И у пользователя есть права write
-  const showChangesButtons = changesInSelection.length > 0 && permissions.write
+  const canAcceptChanges = permissions.write
+  const canRejectChanges = permissions.write || permissions.trackedWrite
+  const showChangesButtons =
+    changesInSelection.length > 0 && (canAcceptChanges || canRejectChanges)
 
   useEffect(() => {
     view.requestMeasure({
@@ -227,31 +229,35 @@ const ReviewTooltipMenuContent: FC<{ onAddComment: () => void }> = ({
       {showChangesButtons && (
         <>
           <div className="review-tooltip-menu-divider" />
-          <OLTooltip
-            id="accept-all-changes"
-            description={t('accept_selected_changes')}
-          >
-            <button
-              className="review-tooltip-menu-button"
-              onClick={acceptChangesHandler}
-              aria-label={t('accept_selected_changes')}
+          {canAcceptChanges && (
+            <OLTooltip
+              id="accept-all-changes"
+              description={t('accept_selected_changes')}
             >
-              <MaterialIcon type="check" />
-            </button>
-          </OLTooltip>
+              <button
+                className="review-tooltip-menu-button"
+                onClick={acceptChangesHandler}
+                aria-label={t('accept_selected_changes')}
+              >
+                <MaterialIcon type="check" />
+              </button>
+            </OLTooltip>
+          )}
 
-          <OLTooltip
-            id="reject-all-changes"
-            description={t('reject_selected_changes')}
-          >
-            <button
-              className="review-tooltip-menu-button"
-              onClick={rejectChangesHandler}
-              aria-label={t('reject_selected_changes')}
+          {canRejectChanges && (
+            <OLTooltip
+              id="reject-all-changes"
+              description={t('reject_selected_changes')}
             >
-              <MaterialIcon type="clear" />
-            </button>
-          </OLTooltip>
+              <button
+                className="review-tooltip-menu-button"
+                onClick={rejectChangesHandler}
+                aria-label={t('reject_selected_changes')}
+              >
+                <MaterialIcon type="clear" />
+              </button>
+            </OLTooltip>
+          )}
         </>
       )}
     </div>

@@ -72,7 +72,7 @@ export const ReviewPanelResolvedThreadsMenu: FC = () => {
       return Date.parse(b.thread.resolved_at) - Date.parse(a.thread.resolved_at)
     })
 
-    return allResolvedThreads.filter(thread => allComments.has(thread.id))
+    return allResolvedThreads.filter(({ id }) => allComments.has(id))
   }, [threads, allComments])
 
   if (loading) {

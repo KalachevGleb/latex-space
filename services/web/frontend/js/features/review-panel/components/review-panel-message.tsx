@@ -47,7 +47,8 @@ export const ReviewPanelMessage: FC<{
   const canResolve =
     permissions.resolveAllComments ||
     (permissions.resolveOwnComments && isCommentAuthor)
-  const canDelete = canResolve
+  const canDelete =
+    permissions.admin || (permissions.resolveOwnComments && isCommentAuthor)
 
   const handleEditOption = useCallback(() => setEditing(true), [])
   const showDeleteModal = useCallback(() => setDeleting(true), [])
