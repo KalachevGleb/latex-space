@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react'
 import OLDropdownMenuItem from '@/shared/components/ol/ol-dropdown-menu-item'
 import { useTranslation } from 'react-i18next'
 import { RestoreProjectModal } from '../../../diff-view/modals/restore-project-modal'
-import { useSplitTestContext } from '@/shared/context/split-test-context'
 import { useRestoreProject } from '@/features/history/context/hooks/use-restore-project'
 import withErrorBoundary from '@/infrastructure/error-boundary'
 import { RestoreProjectErrorModal } from '../../../diff-view/modals/restore-project-error-modal'
@@ -23,7 +22,6 @@ const RestoreProject = ({
 }: RestoreProjectProps) => {
   const { t } = useTranslation()
   const [showModal, setShowModal] = useState(false)
-  const { splitTestVariants } = useSplitTestContext()
   const { restoreProject, isRestoring } = useRestoreProject()
 
   const handleClick = useCallback(() => {
@@ -34,13 +32,6 @@ const RestoreProject = ({
   const onRestore = useCallback(() => {
     restoreProject(projectId, version)
   }, [restoreProject, version, projectId])
-
-  if (
-    splitTestVariants['revert-file'] !== 'enabled' ||
-    splitTestVariants['revert-project'] !== 'enabled'
-  ) {
-    return null
-  }
 
   return (
     <>
