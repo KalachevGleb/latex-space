@@ -169,7 +169,8 @@ const DocumentManager = {
     originOrSource,
     userId,
     undoing,
-    external
+    external,
+    trackChangesUserId
   ) {
     if (newLines == null) {
       throw new Error('No lines were provided to setDoc')
@@ -194,10 +195,14 @@ const DocumentManager = {
     let op
     if (type === 'history-ot') {
       const file = StringFileData.fromRaw(oldLines)
-      const operation = DiffCodec.diffAsHistoryOTEditOperation(
-        file,
-        newLines.join('\n')
-      )
+      const operation =
+        trackChangesUserId != null
+          ? DiffCodec.diffAsHistoryOTTrackedOperation(
+              file,
+              newLines.join('\n'),
+              trackChangesUserId
+            )
+          : DiffCodec.diffAsHistoryOTEditOperation(file, newLines.join('\n'))
       if (operation.isNoop()) {
         op = []
       } else {
@@ -660,7 +665,8 @@ const DocumentManager = {
     source,
     userId,
     undoing,
-    external
+    external,
+    trackChangesUserId
   ) {
     const UpdateManager = require('./UpdateManager')
     return await UpdateManager.promises.lockUpdatesAndDo(
@@ -671,7 +677,8 @@ const DocumentManager = {
       source,
       userId,
       undoing,
-      external
+      external,
+      trackChangesUserId
     )
   },
 

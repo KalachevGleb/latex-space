@@ -16,6 +16,7 @@ import {
   TrackingProps,
   TrackedChangeList,
 } from 'overleaf-editor-core'
+import { diffChars } from 'diff'
 import { DocumentContainer } from '@/features/ide-react/editor/document-container'
 import { HistoryOTShareDoc } from '../../../../../types/share-doc'
 import {
@@ -249,6 +250,10 @@ const updateSender = EditorState.transactionExtender.of(tr => {
   }
 
   const trackingUserId = tr.startState.field(trackChangesUserIdState)
+  console.log(
+    '[history-ot] updateSender called, trackingUserId=',
+    trackingUserId
+  )
   const trackedDeletes = trackedDeletesFromState(tr.startState)
   const startDoc = tr.startState.doc
   const opBuilder = new OperationBuilder(
@@ -275,22 +280,79 @@ const updateSender = EditorState.transactionExtender.of(tr => {
     // Tracking changes
     const timestamp = new Date()
     tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
-      // insertion
-      if (inserted.length > 0) {
-        const pos = trackedDeletes.toSnapshot(fromA)
-        opBuilder.trackedInsert(
-          pos,
-          inserted.toString(),
-          trackingUserId,
-          timestamp
-        )
-      }
+      const insertedText = inserted.toString()
+      const removedLength = toA - fromA
 
-      // deletion
-      if (toA > fromA) {
-        const start = trackedDeletes.toSnapshot(fromA)
-        const end = trackedDeletes.toSnapshot(toA)
-        opBuilder.trackedDelete(start, end - start, trackingUserId, timestamp)
+      if (insertedText.length > 0 && removedLength > 0) {
+        // Text replacement: apply word-level diff to preserve comment positions
+        // and produce more granular tracked changes
+        const oldText = startDoc.sliceString(fromA, toA)
+        const diffs = diffChars(oldText, insertedText)
+        let cmOffset = 0
+
+        for (let i = 0; i < diffs.length; i++) {
+          const part = diffs[i]
+          if (!part.added && !part.removed) {
+            // Unchanged — just advance position
+            cmOffset += part.value.length
+          } else if (part.removed) {
+            const snapshotStart = trackedDeletes.toSnapshot(fromA + cmOffset)
+            const snapshotEnd = trackedDeletes.toSnapshot(
+              fromA + cmOffset + part.value.length
+            )
+            const nextPart = diffs[i + 1]
+            if (nextPart?.added) {
+              // Replacement at this position: insert new text first, then
+              // mark old text as tracked-deleted
+              opBuilder.trackedInsert(
+                snapshotStart,
+                nextPart.value,
+                trackingUserId,
+                timestamp
+              )
+              opBuilder.trackedDelete(
+                snapshotStart,
+                snapshotEnd - snapshotStart,
+                trackingUserId,
+                timestamp
+              )
+              cmOffset += part.value.length
+              i++ // skip the ADDED part already handled
+            } else {
+              // Pure deletion
+              opBuilder.trackedDelete(
+                snapshotStart,
+                snapshotEnd - snapshotStart,
+                trackingUserId,
+                timestamp
+              )
+              cmOffset += part.value.length
+            }
+          } else if (part.added) {
+            // Pure insertion (no preceding REMOVED at same position)
+            const snapshotPos = trackedDeletes.toSnapshot(fromA + cmOffset)
+            opBuilder.trackedInsert(
+              snapshotPos,
+              part.value,
+              trackingUserId,
+              timestamp
+            )
+            // cmOffset does not advance for insertions
+          }
+        }
+      } else {
+        // Pure insertion
+        if (insertedText.length > 0) {
+          const pos = trackedDeletes.toSnapshot(fromA)
+          opBuilder.trackedInsert(pos, insertedText, trackingUserId, timestamp)
+        }
+
+        // Pure deletion
+        if (removedLength > 0) {
+          const start = trackedDeletes.toSnapshot(fromA)
+          const end = trackedDeletes.toSnapshot(toA)
+          opBuilder.trackedDelete(start, end - start, trackingUserId, timestamp)
+        }
       }
     })
   }

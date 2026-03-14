@@ -16,6 +16,7 @@ import { useFileTreeData } from '@/shared/context/file-tree-data-context'
 import { useFileTreeSelectable } from '../contexts/file-tree-selectable'
 import { isAcceptableFile } from '@/features/file-tree/util/is-acceptable-file'
 import { FileTreeFindResult } from '@/features/ide-react/types/file-tree'
+import { usePermissionsContext } from '@/features/ide-react/context/permissions-context'
 
 const DRAGGABLE_TYPE = 'ENTITY'
 export const FileTreeDraggableProvider: FC<
@@ -97,11 +98,17 @@ export function useDraggable(draggedEntityId: string) {
 
 export function useDroppable(targetEntityId: string) {
   const { setDroppedFiles, startUploadingDocOrFile } = useFileTreeActionable()
+  const { write } = usePermissionsContext()
 
   const [{ isOver }, dropRef] = useDrop({
     accept: [DRAGGABLE_TYPE, NativeTypes.FILE],
     canDrop(item: DragObject, monitor) {
       if (!monitor.isOver({ shallow: true })) {
+        return false
+      }
+
+      // Native file drops require write permission
+      if (item.type !== DRAGGABLE_TYPE && !write) {
         return false
       }
 
@@ -121,7 +128,11 @@ export function useDroppable(targetEntityId: string) {
         return { targetEntityId }
       }
 
-      // native file(s) dragged in from outside
+      // native file(s) dragged in from outside - requires write permission
+      if (!write) {
+        return
+      }
+
       getDroppedFiles(item as unknown as DataTransfer)
         .then(files =>
           files.filter(file =>

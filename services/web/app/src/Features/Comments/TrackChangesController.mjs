@@ -22,10 +22,10 @@ async function setTrackChangesState(req, res) {
       return res.status(400).json({ error: 'Either "on" or "on_for" is required' })
     }
     
-    // Обновляем статус в БД
+    // Обновляем статус в БД (поле track_changes — стандартное поле Overleaf)
     await db.projects.updateOne(
       { _id: new ObjectId(projectId) },
-      { $set: { trackChangesState } }
+      { $set: { track_changes: trackChangesState } }
     )
     
     // Отправляем socket event для синхронизации
