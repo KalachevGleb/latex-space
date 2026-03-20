@@ -53,6 +53,7 @@ services:
       - ../services/document-updater/app:/overleaf/services/document-updater/app
       - ../services/document-updater/app.js:/overleaf/services/document-updater/app.js
       - ../services/document-updater/config:/overleaf/services/document-updater/config
+      - ../libraries/ranges-tracker:/overleaf/libraries/ranges-tracker
 
   filestore:
     command: ["node", "--watch", "app.js"]
@@ -137,3 +138,4 @@ services:
       - ../services/web/transform:/overleaf/services/web/transform
       - ../services/web/types:/overleaf/services/web/types
       - ../services/web/webpack-plugins:/overleaf/services/web/webpack-plugins
+      - ../libraries/ranges-tracker:/overleaf/libraries/ranges-tracker

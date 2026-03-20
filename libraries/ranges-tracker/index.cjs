@@ -309,7 +309,7 @@ class RangesTracker {
 
     let alreadyMerged = false
     let previousChange = null
-    const movedChanges = []
+    let movedChanges = []
     const removeChanges = []
     const newChanges = []
     const trackedDeletesAtOpPosition = []
@@ -325,13 +325,13 @@ class RangesTracker {
         } else if (opStart === changeStart) {
           if (
             !alreadyMerged &&
-            undoing &&
             change.op.d.length >= op.i.length &&
             change.op.d.slice(0, op.i.length) === op.i
           ) {
-            // If we are undoing, then we want to reject any existing tracked delete if we can.
-            // Check if the insert matches the start of the delete, and just
-            // remove it from the delete instead if so.
+            // Cancel the tracked delete if the new insert exactly restores the
+            // deleted text (prefix match). This covers both explicit undo
+            // (op.u=true) and the case where the user manually types back the
+            // same characters they previously deleted, making the edit a no-op.
             change.op.d = change.op.d.slice(op.i.length)
             change.op.p += op.i.length
             if (change.op.d === '') {
@@ -383,7 +383,6 @@ class RangesTracker {
           op.p === changeEnd &&
           nextChange.op.p === op.p
         const willOpCancelNextDelete =
-          undoing &&
           isOpAdjacentToNextDelete &&
           nextChange.op.d.slice(0, op.i.length) === op.i
 
@@ -472,6 +471,16 @@ class RangesTracker {
 
     for (change of removeChanges) {
       this._removeChange(change)
+    }
+
+    if (alreadyMerged) {
+        // Some changes remaining since merge can't be applied twice in current implementation, so we need to normalize
+        const results = this._scanAndMergeAdjacentUpdates(op.p, op.p + op.i.length, metadata.user_id)
+        movedChanges = movedChanges.concat(results.movedChanges)
+        for (const change of results.removeChanges) {
+          this._removeChange(change)
+          movedChanges = movedChanges.filter(c => c !== change)
+        }
     }
 
     for (change of movedChanges) {
@@ -624,7 +633,7 @@ class RangesTracker {
       // it becomes:
       //   |-- user_1 insert --||-- user_1 insert --|
       // We need to merge these together again
-      const results = this._scanAndMergeAdjacentUpdates()
+      const results = this._scanAndMergeAdjacentUpdates(op.p, op.p, metadata.user_id)
       movedChanges = movedChanges.concat(results.movedChanges)
       for (const change of results.removeChanges) {
         this._removeChange(change)
@@ -708,40 +717,90 @@ class RangesTracker {
     return content
   }
 
-  _scanAndMergeAdjacentUpdates() {
+  _scanAndMergeAdjacentUpdates(beginPosition, endPosition, userId) {
     // This should only need calling when deleting an update between two
     // other updates. There's no other way to get two adjacent updates from the
     // same user, since they would be merged on insert.
-    let previousChange = null
+    // let previousChange = null
+    //console.log('calling scanAndMergeAdjacentUpdates')
     const removeChanges = []
     const movedChanges = []
-    for (const change of this.changes) {
-      if (previousChange?.op.i != null && change.op.i != null) {
+    const stack = []
+    const userChanges = this.changes
+    const firstOverlapIndex = userChanges.findIndex(c => c.op.p + (c.op.i?.length ?? 0) >= beginPosition && c.op.p <= endPosition)
+    const lastOverlapIndex = userChanges.findLastIndex(c => c.op.p + (c.op.i?.length ?? 0) >= beginPosition && c.op.p <= endPosition)
+    if (firstOverlapIndex === -1) {
+      return { movedChanges, removeChanges }
+    }
+    let first = firstOverlapIndex
+    let last = lastOverlapIndex
+
+    while(last < userChanges.length - 1) {
+        if (userChanges[last + 1].op.p > userChanges[last].op.p+(userChanges[last].op.i?.length ?? 0) || userChanges[last + 1].metadata.user_id != userChanges[last].metadata.user_id) {
+            break
+        }
+        last++
+    }
+    while (first > 0) {
+        if (userChanges[first - 1].op.p + (userChanges[first - 1].op.i?.length ?? 0) < userChanges[first].op.p || userChanges[first - 1].metadata.user_id != userChanges[first].metadata.user_id) {
+            break
+        }
+        first--
+    }
+    const changesToMerge = userChanges.slice(first, last + 1)
+
+    for (const change of changesToMerge) {
+      const previousChange = stack.length ? stack[stack.length - 1] : null   
+      const changeStart = change.op.p
+      if (previousChange === null || previousChange.metadata.user_id != change.metadata.user_id) {
+        stack.push(change)
+      } else if (previousChange?.op.i != null && change.op.i != null) {
+        //console.log('merging inserts', previousChange, change)
         const previousChangeEnd =
           previousChange.op.p + previousChange.op.i.length
-        const previousChangeUserId = previousChange.metadata.user_id
-        const changeStart = change.op.p
-        const changeUserId = change.metadata.user_id
         if (
-          previousChangeEnd === changeStart &&
-          previousChangeUserId === changeUserId
+          previousChangeEnd === changeStart
         ) {
           removeChanges.push(change)
           previousChange.op.i += change.op.i
           movedChanges.push(previousChange)
+        } else {
+          stack.push(change)
         }
       } else if (
         previousChange?.op.d != null &&
         change.op.d != null &&
         previousChange?.op.p === change.op.p
       ) {
+        //console.log('merging deletes', previousChange, change)
         // Merge adjacent deletes
         previousChange.op.d += change.op.d
         removeChanges.push(change)
         movedChanges.push(previousChange)
+      } else if (previousChange?.op.i != null && change.op.d != null) {
+        //console.log('merging insert and delete', previousChange, change)
+        if (previousChange.op.i === change.op.d && (previousChange.op.p <= change.op.p && previousChange.op.p + previousChange.op.i.length >= change.op.p)) {
+            removeChanges.push(change)
+            removeChanges.push(previousChange)
+        } else {
+            if (previousChange.op.p < change.op.p && previousChange.op.p + previousChange.op.i.length > change.op.p){
+                // This shouldn't happen, but if it does due to bugs, we fix it here
+                change.op.p = previousChange.op.p + previousChange.op.i.length
+                movedChanges.push(change)
+            }
+            stack.push(change)
+        }
+      } else if (previousChange?.op.d != null && change.op.i != null) {
+        //console.log('merging delete and insert', previousChange, change)
+        if (previousChange.op.d === change.op.i) {
+            removeChanges.push(change)
+            removeChanges.push(previousChange)
+        } else {
+            stack.push(change)
+        }
       } else {
         // Only update to the current change if we haven't removed it.
-        previousChange = change
+        stack.push(change)
       }
     }
     return { movedChanges, removeChanges }
