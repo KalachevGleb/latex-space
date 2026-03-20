@@ -17,6 +17,7 @@ import NotificationsHandler from '../Notifications/NotificationsHandler.js'
 import Modules from '../../infrastructure/Modules.js'
 import { OError, V1ConnectionError } from '../Errors/Errors.js'
 import { User } from '../../models/User.js'
+import { Project } from '../../models/Project.js'
 import UserPrimaryEmailCheckHandler from '../User/UserPrimaryEmailCheckHandler.js'
 import UserController from '../User/UserController.mjs'
 import SplitTestHandler from '../SplitTests/SplitTestHandler.js'
@@ -356,12 +357,14 @@ function _formatProjectInfo(project, accessLevel, source, userId) {
  */
 async function _injectProjectUsers(projects) {
   const userIds = new Set()
+  const projectIdsWithLastUpdatedBy = []
   for (const project of projects) {
     if (project.owner_ref != null) {
       userIds.add(project.owner_ref.toString())
     }
     if (project.lastUpdatedBy != null) {
       userIds.add(project.lastUpdatedBy.toString())
+      projectIdsWithLastUpdatedBy.push(project.id)
     }
   }
 
@@ -382,25 +385,50 @@ async function _injectProjectUsers(projects) {
     }
   }
 
-  return projects.map(project => ({
-    id: project.id,
-    name: project.name,
-    archived: project.archived,
-    trashed: project.trashed,
-    accessLevel: project.accessLevel,
-    source: project.source,
-    isProtected: project.isProtected,
-    lastUpdated: project.lastUpdated.toISOString(),
-    lastUpdatedBy:
-      project.lastUpdatedBy == null
-        ? null
-        : users[project.lastUpdatedBy.toString()] || null,
-    owner:
-      project.owner_ref == null
-        ? undefined
-        : users[project.owner_ref.toString()],
-    owner_ref: undefined,
-  }))
+  // Load memberAliases for projects that have a lastUpdatedBy user
+  /** @type {Record<string, Record<string, string>>} */
+  const projectMemberAliases = {}
+  if (projectIdsWithLastUpdatedBy.length > 0) {
+    const projectDocs = await Project.find(
+      { _id: { $in: projectIdsWithLastUpdatedBy } },
+      { memberAliases: 1 }
+    ).exec()
+    for (const doc of projectDocs) {
+      if (doc.memberAliases && Object.keys(doc.memberAliases).length > 0) {
+        projectMemberAliases[doc._id.toString()] = doc.memberAliases
+      }
+    }
+  }
+
+  return projects.map(project => {
+    let lastUpdatedBy = null
+    if (project.lastUpdatedBy != null) {
+      const lastUpdatedByUserId = project.lastUpdatedBy.toString()
+      const user = users[lastUpdatedByUserId]
+      const alias = projectMemberAliases[project.id]?.[lastUpdatedByUserId]
+      if (alias && user) {
+        lastUpdatedBy = { id: lastUpdatedByUserId, email: '', firstName: alias, lastName: '' }
+      } else {
+        lastUpdatedBy = user || null
+      }
+    }
+    return {
+      id: project.id,
+      name: project.name,
+      archived: project.archived,
+      trashed: project.trashed,
+      accessLevel: project.accessLevel,
+      source: project.source,
+      isProtected: project.isProtected,
+      lastUpdated: project.lastUpdated.toISOString(),
+      lastUpdatedBy,
+      owner:
+        project.owner_ref == null
+          ? undefined
+          : users[project.owner_ref.toString()],
+      owner_ref: undefined,
+    }
+  })
 }
 
 /**

@@ -244,11 +244,6 @@ class ShareLatexOTAdapter {
     const trackedDeletesLength =
       ranges != null ? ranges.getTrackedDeletesLength() : 0
 
-    console.log(
-      '[realtime] ShareLatexOTAdapter.handleUpdateFromCM called, track_changes=',
-      shareDoc.track_changes
-    )
-
     for (const transaction of transactions) {
       if (transaction.docChanged) {
         const origin = chooseOrigin(transaction)
@@ -287,19 +282,13 @@ class ShareLatexOTAdapter {
 
             const pos = fromA + positionShift
 
-            if (removed && inserted && shareDoc.track_changes) {
-              // When track changes is enabled, apply character-level diff for
-              // replacements to produce granular tracked changes instead of one
-              // big delete + insert pair.
+            if (removed && inserted) {
+              // Apply character-level diff for replacements to produce granular
+              // operations instead of one big delete + insert pair. This
+              // preserves comment positions for unchanged parts of the text,
+              // regardless of whether track changes is enabled.
               const oldText = transaction.startState.doc.sliceString(fromA, toA)
               const newText = insertedText.toString()
-              console.log(
-                '[realtime] track_changes replacement: diffChars("' +
-                  oldText +
-                  '" → "' +
-                  newText +
-                  '")'
-              )
               const diffs = diffChars(oldText, newText)
               let absPos = pos
               for (let i = 0; i < diffs.length; i++) {
