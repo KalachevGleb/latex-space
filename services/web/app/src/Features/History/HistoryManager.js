@@ -324,7 +324,7 @@ async function getProjectBlobStats(historyIds) {
   })
 }
 
-async function injectUserDetails(data) {
+async function injectUserDetails(data, memberAliases = {}) {
   // data can be either:
   // {
   // 	diff: [{
@@ -373,7 +373,9 @@ async function injectUserDetails(data) {
   const usersArray = await UserGetter.promises.getUsers(userIds, projection)
   const users = {}
   for (const user of usersArray) {
-    users[user._id.toString()] = _userView(user)
+    const userId = user._id.toString()
+    const alias = memberAliases[userId]
+    users[userId] = alias ? _aliasedUserView(user, alias) : _userView(user)
   }
   projection.overleaf = 1
   const v1IdentifiedUsersArray = await UserGetter.promises.getUsersByV1Ids(
@@ -400,6 +402,10 @@ async function injectUserDetails(data) {
 function _userView(user) {
   const { _id, first_name: firstName, last_name: lastName, email } = user
   return { first_name: firstName, last_name: lastName, email, id: _id }
+}
+
+function _aliasedUserView(user, alias) {
+  return { first_name: alias, last_name: null, email: '', id: user._id }
 }
 
 const loadGlobalBlobsPromise = loadGlobalBlobs()

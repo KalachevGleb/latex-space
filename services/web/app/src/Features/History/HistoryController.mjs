@@ -142,12 +142,20 @@ async function proxyToHistoryApi(req, res, next) {
 
 async function proxyToHistoryApiAndInjectUserDetails(req, res, next) {
   const userId = SessionManager.getLoggedInUserId(req.session)
+  const projectId = req.params.Project_id
   const url = settings.apis.project_history.url + req.url
   const body = await fetchJson(url, {
     method: req.method,
     headers: { 'X-User-Id': userId },
   })
-  const data = await HistoryManager.promises.injectUserDetails(body)
+  const project = await ProjectGetter.promises.getProject(projectId, {
+    memberAliases: 1,
+  })
+  const memberAliases = (project && project.memberAliases) || {}
+  const data = await HistoryManager.promises.injectUserDetails(
+    body,
+    memberAliases
+  )
   res.json(data)
 }
 
@@ -231,15 +239,25 @@ async function revertProject(req, res, next) {
   res.json(reverted)
 }
 
+async function _loadProjectMemberAliases(projectId) {
+  const project = await ProjectGetter.promises.getProject(projectId, {
+    memberAliases: 1,
+  })
+  return (project && project.memberAliases) || {}
+}
+
 async function getLabels(req, res, next) {
   const projectId = req.params.Project_id
 
-  let labels = await fetchJson(
-    `${settings.apis.project_history.url}/project/${projectId}/labels`
-  )
-  labels = await _enrichLabels(labels)
+  const [labels, memberAliases] = await Promise.all([
+    fetchJson(
+      `${settings.apis.project_history.url}/project/${projectId}/labels`
+    ),
+    _loadProjectMemberAliases(projectId),
+  ])
+  const enrichedLabels = await _enrichLabels(labels, memberAliases)
 
-  res.json(labels)
+  res.json(enrichedLabels)
 }
 
 async function createLabel(req, res, next) {
@@ -247,19 +265,22 @@ async function createLabel(req, res, next) {
   const { comment, version } = req.body
   const userId = SessionManager.getLoggedInUserId(req.session)
 
-  let label = await fetchJson(
-    `${settings.apis.project_history.url}/project/${projectId}/labels`,
-    {
-      method: 'POST',
-      json: { comment, version, user_id: userId },
-    }
-  )
-  label = await _enrichLabel(label)
+  const [label, memberAliases] = await Promise.all([
+    fetchJson(
+      `${settings.apis.project_history.url}/project/${projectId}/labels`,
+      {
+        method: 'POST',
+        json: { comment, version, user_id: userId },
+      }
+    ),
+    _loadProjectMemberAliases(projectId),
+  ])
+  const enrichedLabel = await _enrichLabel(label, memberAliases)
 
-  res.json(label)
+  res.json(enrichedLabel)
 }
 
-async function _enrichLabel(label) {
+async function _enrichLabel(label, memberAliases = {}) {
   const newLabel = Object.assign({}, label)
   if (!label.user_id) {
     newLabel.user_display_name = _displayNameForUser(null)
@@ -271,11 +292,12 @@ async function _enrichLabel(label) {
     last_name: 1,
     email: 1,
   })
-  newLabel.user_display_name = _displayNameForUser(user)
+  const alias = memberAliases[label.user_id]
+  newLabel.user_display_name = _displayNameForUser(user, alias)
   return newLabel
 }
 
-async function _enrichLabels(labels) {
+async function _enrichLabels(labels, memberAliases = {}) {
   if (!labels || !labels.length) {
     return []
   }
@@ -298,12 +320,16 @@ async function _enrichLabels(labels) {
 
   labels.forEach(label => {
     const user = users.get(label.user_id)
-    label.user_display_name = _displayNameForUser(user)
+    const alias = memberAliases[label.user_id]
+    label.user_display_name = _displayNameForUser(user, alias)
   })
   return labels
 }
 
-function _displayNameForUser(user) {
+function _displayNameForUser(user, alias) {
+  if (alias) {
+    return alias
+  }
   if (user == null) {
     return 'Anonymous'
   }
