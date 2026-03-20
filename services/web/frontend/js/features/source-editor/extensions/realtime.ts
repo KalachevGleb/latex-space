@@ -282,35 +282,25 @@ class ShareLatexOTAdapter {
 
             const pos = fromA + positionShift
 
-            if (removed && inserted) {
-              // Apply character-level diff for replacements to produce granular
-              // operations instead of one big delete + insert pair. This
-              // preserves comment positions for unchanged parts of the text,
-              // regardless of whether track changes is enabled.
+            if (removed && inserted && !fromUndo) {
+              // Apply character-level diff for direct user replacements to
+              // produce granular operations instead of one big delete + insert
+              // pair. This preserves comment positions for unchanged parts of
+              // the text. Nearby edit groups are merged (see mergeNearbyDiffEdits).
+              // Skipped for undo/reject so those apply exactly as-is.
               const oldText = transaction.startState.doc.sliceString(fromA, toA)
               const newText = insertedText.toString()
               const diffs = diffChars(oldText, newText)
+              const { mergedEdits } = mergeNearbyDiffEdits(diffs)
               let absPos = pos
-              for (let i = 0; i < diffs.length; i++) {
-                const part = diffs[i]
-                if (!part.added && !part.removed) {
-                  absPos += part.value.length
-                } else if (part.removed) {
-                  const nextPart = diffs[i + 1]
-                  if (nextPart?.added) {
-                    // Replacement: delete old, then insert new at same position
-                    shareDoc.del(absPos, part.value.length, fromUndo)
-                    shareDoc.insert(absPos, nextPart.value, fromUndo)
-                    absPos += nextPart.value.length
-                    i++ // skip the added part already handled
-                  } else {
-                    // Pure deletion
-                    shareDoc.del(absPos, part.value.length, fromUndo)
-                  }
-                } else if (part.added) {
-                  // Pure insertion
-                  shareDoc.insert(absPos, part.value, fromUndo)
-                  absPos += part.value.length
+              for (const edit of mergedEdits) {
+                absPos += edit.equalBefore.length
+                if (edit.del.length > 0) {
+                  shareDoc.del(absPos, edit.del.length, fromUndo)
+                }
+                if (edit.ins.length > 0) {
+                  shareDoc.insert(absPos, edit.ins, fromUndo)
+                  absPos += edit.ins.length
                 }
               }
             } else {
@@ -495,4 +485,97 @@ const chooseOrigin = (transaction: Transaction) => {
   if (transaction.annotation(trackChangesAnnotation) === 'reject') {
     return 'reject'
   }
+}
+
+type MergedEdit = { equalBefore: string; del: string; ins: string }
+
+/**
+ * Post-processes diffChars output by merging neighbouring edit groups that are
+ * "close" to each other.  Two adjacent edits A and B (separated by an equal
+ * gap of length `dist`) are merged when:
+ *
+ *   dist / (|A| + |B|) < alpha
+ *
+ * where |X| = max(del(X), ins(X)).  The merge is applied greedily, working
+ * backwards from the newly added edit (like a stack), so chains of close edits
+ * collapse into a single group.
+ *
+ * When two edits are merged the equal segment between them is absorbed: it
+ * becomes part of both the `del` and `ins` strings of the merged edit (it is
+ * deleted then immediately re-inserted, so the net text is unchanged).
+ */
+function mergeNearbyDiffEdits(
+  diffs: Array<{ value: string; added?: boolean; removed?: boolean }>,
+  alpha: number = 1
+): { mergedEdits: MergedEdit[]; trailingEqual: string } {
+  // --- Pass 1: group consecutive removed/added parts into edit segments ---
+  const editSegs: Array<{ del: string; ins: string }> = []
+  const gapsBefore: string[] = [] // gapsBefore[i] is the equal text before editSegs[i]
+  let pendingEqual = ''
+  let currentDel = ''
+  let currentIns = ''
+  let inEdit = false
+
+  const flushEdit = () => {
+    if (inEdit) {
+      editSegs.push({ del: currentDel, ins: currentIns })
+      gapsBefore.push(pendingEqual)
+      pendingEqual = ''
+      currentDel = ''
+      currentIns = ''
+      inEdit = false
+    }
+  }
+
+  for (const part of diffs) {
+    if (!part.added && !part.removed) {
+      flushEdit()
+      pendingEqual += part.value
+    } else {
+      inEdit = true
+      if (part.removed) currentDel += part.value
+      else if (part.added) currentIns += part.value
+    }
+  }
+  flushEdit()
+  const trailingEqual = pendingEqual
+
+  if (editSegs.length === 0) {
+    return { mergedEdits: [], trailingEqual }
+  }
+
+  // --- Pass 2: stack-based merging ---
+  const stack: MergedEdit[] = []
+
+  for (let i = 0; i < editSegs.length; i++) {
+    let entry: MergedEdit = {
+      equalBefore: gapsBefore[i],
+      del: editSegs[i].del,
+      ins: editSegs[i].ins,
+    }
+
+    while (stack.length > 0) {
+      const last = stack[stack.length - 1]
+      const gap = entry.equalBefore
+      const dist = gap.length
+      const sizeA = Math.max(last.del.length, last.ins.length)
+      const sizeB = Math.max(entry.del.length, entry.ins.length)
+
+      if (sizeA + sizeB > 0 && dist <= alpha * (sizeA + sizeB)) {
+        // Absorb the gap and merge the two edits
+        stack.pop()
+        entry = {
+          equalBefore: last.equalBefore,
+          del: last.del + gap + entry.del,
+          ins: last.ins + gap + entry.ins,
+        }
+      } else {
+        break
+      }
+    }
+
+    stack.push(entry)
+  }
+
+  return { mergedEdits: stack, trailingEqual }
 }
