@@ -22,6 +22,8 @@ import {
 } from '@/features/source-editor/components/codemirror-context'
 import { useRangesContext } from '../context/ranges-context'
 import { useThreadsContext } from '../context/threads-context'
+import { useReviewPanelFilterContext } from '../context/review-panel-filter-context'
+import { useUserContext } from '@/shared/context/user-context'
 import { isDeleteChange, isInsertChange } from '@/utils/operations'
 import { positionItems } from '../utils/position-items'
 import { canAggregate } from '../utils/can-aggregate'
@@ -48,6 +50,8 @@ const ReviewPanelCurrentFile: FC = () => {
   const state = useCodeMirrorStateContext()
   const [hoveredEntry, setHoveredEntry] = useState<string | null>(null)
   const newEditor = useIsNewEditorEnabled()
+  const { filterMode, hideMine } = useReviewPanelFilterContext()
+  const user = useUserContext()
 
   const hoverTimeout = useRef<number>(0)
   const handleEntryEnter = useCallback((id: string) => {
@@ -113,6 +117,30 @@ const ReviewPanelCurrentFile: FC = () => {
   }, [buildAggregatedRanges])
 
   useEventListener('editor:viewport-changed', buildAggregatedRanges)
+
+  const filteredRanges = useMemo(() => {
+    if (!aggregatedRanges) return undefined
+
+    let changes = aggregatedRanges.changes
+    let comments = aggregatedRanges.comments
+    const aggregates = aggregatedRanges.aggregates
+
+    // Filter by mode
+    if (filterMode === 'comments') {
+      changes = []
+    } else if (filterMode === 'changes') {
+      comments = []
+    }
+
+    // Filter out my changes only (keep comments)
+    if (hideMine) {
+      changes = changes.filter(
+        change => change.metadata?.user_id !== user.id
+      )
+    }
+
+    return { changes, comments, aggregates }
+  }, [aggregatedRanges, filterMode, hideMine, user.id])
 
   const [positions, setPositions] = useState<Map<string, number>>(new Map())
 
@@ -236,8 +264,8 @@ const ReviewPanelCurrentFile: FC = () => {
     onMoreCommentsAboveClick,
     onMoreCommentsBelowClick,
   } = useMoreCommments(
-    aggregatedRanges?.changes ?? [],
-    aggregatedRanges?.comments ?? [],
+    filteredRanges?.changes ?? [],
+    filteredRanges?.comments ?? [],
     addCommentRanges ?? Decoration.none
   )
 
@@ -297,7 +325,7 @@ const ReviewPanelCurrentFile: FC = () => {
     }
   }, [updatePositions])
 
-  if (!aggregatedRanges) {
+  if (!aggregatedRanges || !filteredRanges) {
     return null
   }
 
@@ -330,7 +358,7 @@ const ReviewPanelCurrentFile: FC = () => {
           )
         })}
 
-        {aggregatedRanges.changes.map(
+        {filteredRanges.changes.map(
           change =>
             positions.has(change.id) && (
               <ReviewPanelChange
@@ -338,7 +366,7 @@ const ReviewPanelCurrentFile: FC = () => {
                 key={change.id}
                 change={change}
                 top={positions.get(change.id)}
-                aggregate={aggregatedRanges.aggregates.get(change.id)}
+                aggregate={filteredRanges.aggregates.get(change.id)}
                 hovered={hoveredEntry === change.id}
                 handleEnter={handleEntryEnter}
                 handleLeave={handleEntryLeave}
@@ -346,7 +374,7 @@ const ReviewPanelCurrentFile: FC = () => {
             )
         )}
 
-        {aggregatedRanges.comments.map(
+        {filteredRanges.comments.map(
           comment =>
             positions.has(comment.id) && (
               <ReviewPanelComment
