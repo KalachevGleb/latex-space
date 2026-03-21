@@ -243,6 +243,99 @@ del.review-panel-content-highlight {
   color: var(--content-secondary);
 }
 
+// Compact change entry styles
+.review-panel-entry-compact {
+    padding: var(--spacing-01) var(--spacing-01);
+    margin-top: 0;
+    margin-bottom: 0;
+    border-radius: 9999px;
+
+    .review-panel-entry-compact-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-02);
+        cursor: pointer;
+        font-size: var(--font-size-01);
+        min-height: 20px;
+    }
+
+    .review-panel-entry-compact-left {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-03);
+        overflow: hidden;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .review-panel-entry-initials {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        margin: 1px;
+        border-radius: 50%;
+        color: white;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.3px;
+    }
+    .review-panel-entry-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-03);
+    
+        .btn {
+          background-color: transparent;
+          color: var(--review-panel-color);
+          border-width: 0;
+          padding: 0;
+          height: 22px;
+          width: 22px;
+          text-align: center;
+          vertical-align: middle;
+    
+          &:hover,
+          &:focus {
+            background-color: var(--review-panel-button-hover-bg-color);
+            color: var(--review-panel-color);
+          }
+        }
+
+        .review-panel-entry-actions-icon {
+            padding: 1px; //var(--spacing-01);
+            font-size: var(--font-size-05);
+        }
+    }
+          
+    .review-panel-entry-compact-change {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--review-panel-color-secondary);
+        font-size: var(--font-size-01);
+
+        ins.review-panel-content-highlight {
+            text-decoration: none;
+            background-color: rgba(44, 142, 48, 0.20);
+        }
+
+        del.review-panel-content-highlight {
+            text-decoration: line-through;
+            text-decoration-color: rgba(0, 0, 0, 0.40);
+            background-color: rgba(230, 40, 40, 0.20);
+        }
+    }
+
+    .review-panel-entry-compact-collapse-header {
+    cursor: pointer;
+    }
+}
+
 .review-panel-header {
   position: sticky;
   top: 0;

@@ -49,9 +49,14 @@ const ReviewPanelCurrentFile: FC = () => {
   const threads = useThreadsContext()
   const state = useCodeMirrorStateContext()
   const [hoveredEntry, setHoveredEntry] = useState<string | null>(null)
+  const [expandedChangeId, setExpandedChangeId] = useState<string | null>(null)
   const newEditor = useIsNewEditorEnabled()
   const { filterMode, hideMine } = useReviewPanelFilterContext()
   const user = useUserContext()
+
+  const handleToggleExpand = useCallback((changeId: string) => {
+    setExpandedChangeId(prev => (prev === changeId ? null : changeId))
+  }, [])
 
   const hoverTimeout = useRef<number>(0)
   const handleEntryEnter = useCallback((id: string) => {
@@ -368,6 +373,8 @@ const ReviewPanelCurrentFile: FC = () => {
                 top={positions.get(change.id)}
                 aggregate={filteredRanges.aggregates.get(change.id)}
                 hovered={hoveredEntry === change.id}
+                expanded={expandedChangeId === change.id}
+                onToggleExpand={handleToggleExpand}
                 handleEnter={handleEntryEnter}
                 handleLeave={handleEntryLeave}
               />

@@ -247,7 +247,7 @@ The web service loads dynamic settings from MongoDB on startup ([app.mjs:82-116]
 2. Edit files in [services/web/frontend/js/](services/web/frontend/js/)
 3. Browser auto-refreshes with changes (HMR)
 4. View at http://localhost
-5. All new text elements in UI should have Russian translation. Don't forget to update also services/web/frontend/extracted-translations.json file and en.json and ru.json files in services/web/locales directory.
+5. All new text elements in UI should have Russian translation. Don't forget to update also services/web/frontend/extracted-translations.json file and en.json and ru.json files in services/web/locales directory. Also it is recommended to add translations in other common languages such as Spanish, French, German, Italian, Chinese.
 
 ### Backend Development
 
@@ -407,4 +407,4 @@ This means you typically only need to configure `OUTPUT_CACHE_LIMIT` and `OUTPUT
 
 ## Notes on interaction with User in Claude Code chat
 
-All the text intended to be read by the user should be in Russian.
+All the text intended to be read by the user should be in the same language as the user's request language.
