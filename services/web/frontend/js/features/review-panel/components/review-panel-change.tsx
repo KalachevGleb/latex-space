@@ -146,6 +146,31 @@ export const ReviewPanelChange = memo<{
       return text.length > n ? text.slice(0, n) + '...' : text
     }
 
+    // Replace whitespace chars with visible semi-transparent symbols
+    const renderCompactText = (text: string, limit: number) => {
+      const cropped = cropText(text, limit)
+      // Split into segments of whitespace and non-whitespace
+      const parts = cropped.split(/([ \t\n\r]+)/)
+      const startsWithWhitespace = parts.length > 0 && parts[0].length == 0
+      const endsWithWhitespace = parts.length > 0 && parts[parts.length-1].length == 0
+      const makeVisible = (part: string, i: number) => {
+        if ((i==0 || (startsWithWhitespace&&i==1) || (endsWithWhitespace&&i==parts.length-2) || i==parts.length-1) && /^[ \t\n\r]+$/.test(part)) {
+          const visible = part
+            .replace(/ /g, '\u00B7')   // · middle dot
+            .replace(/\t/g, '\u2192')  // → right arrow
+            .replace(/\n/g, '\u21B5')  // ↵ return symbol
+            .replace(/\r/g, '')
+          return (
+            <span key={i} className="review-panel-whitespace-symbol">
+              {visible}
+            </span>
+          )
+        }
+        return part
+      }
+      return parts.map(makeVisible)
+    }
+
     const aggregateChange = aggregate && /\S/.test(aggregate.op.d)
     const userId = change.metadata?.user_id
     const user = userId ? changesUsers.get(userId) : undefined
@@ -214,22 +239,22 @@ export const ReviewPanelChange = memo<{
                 {compactContent.type === 'replace' && (
                   <>
                     <del className="review-panel-content-highlight">
-                      {cropText(compactContent.oldText!, 15)}
+                      {renderCompactText(compactContent.oldText!, 15)}
                     </del>
                     {' → '}
                     <ins className="review-panel-content-highlight">
-                      {cropText(compactContent.newText!, 30)}
+                      {renderCompactText(compactContent.newText!, 30)}
                     </ins>
                   </>
                 )}
                 {compactContent.type === 'insert' && (
                   <ins className="review-panel-content-highlight">
-                    {cropText(compactContent.text!, 50)}
+                    {renderCompactText(compactContent.text!, 50)}
                   </ins>
                 )}
                 {compactContent.type === 'delete' && (
                   <del className="review-panel-content-highlight">
-                    {cropText(compactContent.text!, 50)}
+                    {renderCompactText(compactContent.text!, 50)}
                   </del>
                 )}
               </span>
