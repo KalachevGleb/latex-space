@@ -27,7 +27,7 @@ const ReviewPanel: FC<{ mini?: boolean }> = ({ mini = false }) => {
   return (
     <div className={className} style={style} data-testid="review-panel">
       <div id="review-panel-inner" className="review-panel-inner">
-        {!newEditor && !mini && <ReviewPanelHeader />}
+        {!mini && <ReviewPanelHeader showTitle={!newEditor} />}
 
         {activeSubView === 'cur_file' && <ReviewPanelCurrentFile />}
         {activeSubView === 'overview' && <ReviewPanelOverview />}

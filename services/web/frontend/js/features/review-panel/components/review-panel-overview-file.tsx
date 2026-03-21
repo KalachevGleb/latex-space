@@ -18,6 +18,8 @@ import { canAggregate } from '../utils/can-aggregate'
 
 import useOverviewFileCollapsed from '../hooks/use-overview-file-collapsed'
 import { useThreadsContext } from '../context/threads-context'
+import { useReviewPanelFilterContext } from '../context/review-panel-filter-context'
+import { useUserContext } from '@/shared/context/user-context'
 import { CollapsibleFileHeader } from '@/shared/components/collapsible-file-header'
 
 export const ReviewPanelOverviewFile: FC<{
@@ -26,6 +28,8 @@ export const ReviewPanelOverviewFile: FC<{
 }> = ({ doc, ranges }) => {
   const { collapsed, toggleCollapsed } = useOverviewFileCollapsed(doc.doc.id)
   const threads = useThreadsContext()
+  const { filterMode, hideMine } = useReviewPanelFilterContext()
+  const user = useUserContext()
 
   const { aggregates, changes } = useMemo(() => {
     const changes: Change<EditOperation>[] = []
@@ -50,15 +54,33 @@ export const ReviewPanelOverviewFile: FC<{
   }, [ranges])
 
   const entries = useMemo(() => {
-    const unresolvedComments = ranges.comments.filter(comment => {
+    let filteredChanges = changes
+    let unresolvedComments = ranges.comments.filter(comment => {
       if (comment.resolved) {
         return false
       }
       const thread = threads?.[comment.op.t]
       return thread && thread.messages.length > 0 && !thread.resolved
     })
-    return [...changes, ...unresolvedComments].sort((a, b) => a.op.p - b.op.p)
-  }, [changes, ranges.comments, threads])
+
+    // Filter by mode
+    if (filterMode === 'comments') {
+      filteredChanges = []
+    } else if (filterMode === 'changes') {
+      unresolvedComments = []
+    }
+
+    // Filter out my changes only (keep comments)
+    if (hideMine) {
+      filteredChanges = filteredChanges.filter(
+        change => change.metadata?.user_id !== user.id
+      )
+    }
+
+    return [...filteredChanges, ...unresolvedComments].sort(
+      (a, b) => a.op.p - b.op.p
+    )
+  }, [changes, ranges.comments, threads, filterMode, hideMine, user.id])
 
   if (entries.length === 0) {
     return null
