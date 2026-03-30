@@ -6,7 +6,10 @@ import { syntaxTree } from '@codemirror/language'
 import { metadataState } from '../../../extensions/language'
 
 const commandNameFromLabel = (label: string): string | undefined =>
-  label.match(/^\\\w+/)?.[0]
+  label.match(/^\\[A-Za-z@]+/)?.[0]
+
+const isPublicCommandName = (commandName?: string) =>
+  Boolean(commandName && !commandName.includes('@'))
 
 export function customCommandCompletions(
   context: CompletionContext,
@@ -24,11 +27,13 @@ export function customCommandCompletions(
   const items = countCommandUsage(context)
 
   for (const item of items.values()) {
+    const itemCommandName = commandNameFromLabel(item.label)
     if (
-      !existingCommands.has(commandNameFromLabel(item.label)) &&
+      isPublicCommandName(itemCommandName) &&
+      !existingCommands.has(itemCommandName) &&
       !item.ignoreInAutoComplete
     ) {
-      existingCommands.add(commandNameFromLabel(item.label))
+      existingCommands.add(itemCommandName)
       output.push({
         type: 'cmd',
         label: item.label,
@@ -44,7 +49,7 @@ export function customCommandCompletions(
   if (metadata?.macros) {
     for (const macro of metadata.macros) {
       const commandName = commandNameFromLabel(macro)
-      if (commandName && !existingCommands.has(commandName)) {
+      if (isPublicCommandName(commandName) && !existingCommands.has(commandName)) {
         existingCommands.add(commandName)
         output.push({
           type: 'cmd',

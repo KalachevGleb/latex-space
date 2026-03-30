@@ -284,6 +284,28 @@ describe('autocomplete', { scrollBehavior: false }, function () {
       .should('match', /^\\begin\{abstract}/)
   })
 
+  it('includes environments declared via \\newtheorem in begin autocomplete', function () {
+    const scope = mockScope()
+
+    cy.mount(
+      <TestContainer>
+        <EditorProviders scope={scope}>
+          <CodeMirrorEditor />
+        </EditorProviders>
+      </TestContainer>
+    )
+
+    cy.get('.cm-line').eq(16).as('line')
+    cy.get('@line').click()
+
+    cy.get('@line').type('\\newtheorem{{}thm}{{}Theorem}{Enter}')
+    activeEditorLine().type('\\begin{{}th')
+    cy.findAllByRole('option').contains('\\begin{thm}').click()
+
+    activeEditorLine().should('have.text', '\\begin{thm}')
+    cy.get('.cm-line').contains('\\end{thm}')
+  })
+
   it('opens autocomplete using metadata for usepackage parameter', function () {
     const rootFolder: Folder[] = [
       {

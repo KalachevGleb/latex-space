@@ -23,6 +23,14 @@ describe('MetaHandler', function () {
       '\\bibitem{ref1}', // ref1 should be in bibitems
       '\\Bibitem{ref2}', // ref2 should be in bibitems
       '\\RBibitem{ref3}', // ref3 should be in bibitems
+      '\\newcommand{\\publicmacro}{x}',
+      '\\newcommand{\\internal@macro}{x}',
+      '\\def\\plainmacro{x}',
+      '\\def\\internal@def{x}',
+      '\\newenvironment{publicenv}{a}{b}',
+      '\\newenvironment{internal@env}{a}{b}',
+      '\\newtheorem{publicthm}{Theorem}',
+      '\\newtheorem{internal@thm}{Theorem}',
     ]
 
     ctx.docs = {
@@ -107,7 +115,8 @@ describe('MetaHandler', function () {
         },
         packageNames: ['foo', 'bar', 'baz'],
         bibitems: ['ref1', 'ref2', 'ref3'],
-        macros: [],
+        macros: ['\\publicmacro', '\\plainmacro'],
+        environments: ['publicenv', 'publicthm'],
       })
 
       ctx.DocumentUpdaterHandler.promises.flushDocToMongo.should.be.calledWith(
@@ -168,6 +177,7 @@ describe('MetaHandler', function () {
           packageNames: [],
           bibitems: [],
           macros: [],
+          environments: [],
         },
         id_two: {
           labels: [],
@@ -175,6 +185,7 @@ describe('MetaHandler', function () {
           packageNames: [],
           bibitems: [],
           macros: [],
+          environments: [],
         },
         id_three: {
           labels: ['bbb', 'ccc'],
@@ -182,6 +193,7 @@ describe('MetaHandler', function () {
           packageNames: [],
           bibitems: [],
           macros: [],
+          environments: [],
         },
         id_four: {
           labels: [],
@@ -198,6 +210,7 @@ describe('MetaHandler', function () {
           packageNames: ['baz', 'amsmath'],
           bibitems: [],
           macros: [],
+          environments: [],
         },
         id_five: {
           labels: ['sec:intro'],
@@ -228,6 +241,7 @@ describe('MetaHandler', function () {
           packageNames: ['foo', 'baz', 'hello'],
           bibitems: [],
           macros: [],
+          environments: [],
         },
       })
 
@@ -238,6 +252,61 @@ describe('MetaHandler', function () {
       ctx.ProjectEntityHandler.promises.getAllDocs.should.be.calledWith(
         ctx.projectId
       )
+    })
+
+    it('should ignore bibitems in .cls and .sty documents', async function (ctx) {
+      ctx.ProjectEntityHandler.promises.getAllDocs = sinon.stub().resolves({
+        '/main.tex': {
+          _id: 'id_main',
+          lines: ['\\bibitem{main-ref}'],
+        },
+        '/style/custom.sty': {
+          _id: 'id_style',
+          lines: ['\\bibitem{style-ref}'],
+        },
+        '/class/custom.cls': {
+          _id: 'id_class',
+          lines: ['\\bibitem{class-ref}'],
+        },
+      })
+
+      const result = await ctx.MetaHandler.promises.getAllMetaForProject(
+        ctx.projectId
+      )
+
+      expect(result.id_main.bibitems).to.deep.equal(['main-ref'])
+      expect(result.id_style.bibitems).to.deep.equal([])
+      expect(result.id_class.bibitems).to.deep.equal([])
+    })
+
+    it('should collect environments from .cls and .sty files and filter internal names', async function (ctx) {
+      ctx.ProjectEntityHandler.promises.getAllDocs = sinon.stub().resolves({
+        '/style/custom.sty': {
+          _id: 'id_style',
+          lines: [
+            '\\newenvironment{styenv}{a}{b}',
+            '\\newtheorem{stythm}{Theorem}',
+            '\\newenvironment{sty@internal}{a}{b}',
+            '\\newtheorem{sty@internalthm}{Theorem}',
+          ],
+        },
+        '/class/custom.cls': {
+          _id: 'id_class',
+          lines: [
+            '\\newenvironment{clsenv}{a}{b}',
+            '\\newtheorem{clsthm}{Theorem}',
+            '\\newenvironment{cls@internal}{a}{b}',
+            '\\newtheorem{cls@internalthm}{Theorem}',
+          ],
+        },
+      })
+
+      const result = await ctx.MetaHandler.promises.getAllMetaForProject(
+        ctx.projectId
+      )
+
+      expect(result.id_style.environments).to.deep.equal(['styenv', 'stythm'])
+      expect(result.id_class.environments).to.deep.equal(['clsenv', 'clsthm'])
     })
   })
 })
