@@ -670,6 +670,12 @@ const upsertFile = wrapWithLock({
       )
       return { fileRef, isNew: true, oldFileRef: existingFile }
     } else if (existingFile) {
+      // Avoid creating history noise for no-op replacements where the file
+      // content hash is unchanged (works for text and binary files alike).
+      if (existingFile.hash && fileRef.hash && existingFile.hash === fileRef.hash) {
+        return { fileRef: existingFile, isNew: false, oldFileRef: existingFile }
+      }
+
       await ProjectEntityUpdateHandler._replaceFile(
         projectId,
         existingFile._id,

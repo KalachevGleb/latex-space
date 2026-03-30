@@ -1193,6 +1193,62 @@ describe('ProjectEntityUpdateHandler', function () {
       })
     })
 
+    describe('replacing an existing file with identical content', function () {
+      let upsertFileResult
+
+      beforeEach(async function () {
+        this.existingFile = {
+          _id: fileId,
+          name: this.fileName,
+          rev: 1,
+          hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        }
+        this.file = {
+          _id: new ObjectId(),
+          name: this.fileName,
+          rev: 0,
+          hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        }
+        this.FileStoreHandler.promises.uploadFileFromDisk.resolves({
+          fileRef: this.file,
+          createdBlob: true,
+        })
+        this.folder = { _id: folderId, fileRefs: [this.existingFile], docs: [] }
+        this.ProjectLocator.promises.findElement.resolves({
+          element: this.folder,
+        })
+
+        upsertFileResult =
+          await this.ProjectEntityUpdateHandler.promises.upsertFile(
+            projectId,
+            folderId,
+            this.fileName,
+            this.fileSystemPath,
+            this.linkedFileData,
+            userId,
+            this.source
+          )
+      })
+
+      it('does not replace the file in mongo', function () {
+        this.ProjectEntityMongoUpdateHandler.promises.replaceFileWithNew.should.not.have.been.called
+      })
+
+      it('does not notify TPDS', function () {
+        this.TpdsUpdateSender.promises.addFile.should.not.have.been.called
+      })
+
+      it('does not send project structure updates', function () {
+        this.DocumentUpdaterHandler.promises.updateProjectStructure.should.not.have.been.called
+      })
+
+      it('returns the existing file as unchanged replacement result', function () {
+        expect(upsertFileResult.isNew).to.be.false
+        expect(upsertFileResult.fileRef).to.eql(this.existingFile)
+        expect(upsertFileResult.oldFileRef).to.eql(this.existingFile)
+      })
+    })
+
     describe('creating a new file', function () {
       let upsertFileResult
       beforeEach(async function () {
