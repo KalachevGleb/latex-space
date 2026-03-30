@@ -28,6 +28,7 @@ export type Metadata = {
   referenceKeys: Set<string>
   bibitems: Set<string>
   macros: Set<string>
+  environments: Set<string>
   searchLocalReferences: (
     query: string
   ) => Promise<AdvancedReferenceSearchResult>

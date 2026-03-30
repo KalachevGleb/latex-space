@@ -34,6 +34,7 @@ export type DocumentMetadata = {
   packageNames: string[]
   bibitems?: string[]
   macros?: string[]
+  environments?: string[]
 }
 
 type DocumentsMetadata = Record<string, DocumentMetadata>
@@ -47,6 +48,7 @@ export const MetadataContext = createContext<
       packageNames: Set<string>
       bibitems: Set<string>
       macros: Set<string>
+      environments: Set<string>
     }
   | undefined
 >(undefined)
@@ -270,6 +272,7 @@ export const MetadataProvider: FC<React.PropsWithChildren> = ({ children }) => {
       packageNames: new Set(docs.flatMap(doc => doc.packageNames)),
       bibitems: new Set(docs.flatMap(doc => doc.bibitems || [])),
       macros: new Set(docs.flatMap(doc => doc.macros || [])),
+      environments: new Set(docs.flatMap(doc => doc.environments || [])),
     }
   }, [documents])
 

@@ -4,6 +4,7 @@ import { SyntaxNode, SyntaxNodeRef } from '@lezer/common'
 import { previousSiblingIs } from './common'
 import { NodeIntersectsChangeFn, ProjectionItem } from './projection'
 import { FigureData } from '../../extensions/figure-modal'
+import { parseTheoremArguments } from './theorems'
 
 const HUNDRED_MS = 100
 
@@ -12,6 +13,8 @@ export class Environment extends ProjectionItem {
   readonly type: 'usage' | 'definition' = 'usage'
   readonly raw: string = ''
 }
+
+const isPublicEnvironmentName = (name: string) => !name.includes('@')
 
 export const enterNode = (
   state: EditorState,
@@ -65,7 +68,7 @@ export const enterNode = (
     }
     const envNameText = state.doc.sliceString(envNameNode.from, envNameNode.to)
 
-    if (!envNameText) {
+    if (!envNameText || !isPublicEnvironmentName(envNameText)) {
       return
     }
 
@@ -74,6 +77,27 @@ export const enterNode = (
       from: envNameNode.from,
       to: envNameNode.to,
       line: state.doc.lineAt(envNameNode.from).number,
+      type: 'definition',
+      raw: state.sliceDoc(node.from, node.to),
+    }
+
+    items.push(thisEnvironmentName)
+  } else if (node.type.is('NewTheoremCommand')) {
+    if (!nodeIntersectsChange(node.node)) {
+      // This should already be in `items`
+      return false
+    }
+
+    const theoremArgs = parseTheoremArguments(state, node.node)
+    if (!theoremArgs?.name || !isPublicEnvironmentName(theoremArgs.name)) {
+      return
+    }
+
+    const thisEnvironmentName: Environment = {
+      title: theoremArgs.name,
+      from: node.from,
+      to: node.to,
+      line: state.doc.lineAt(node.from).number,
       type: 'definition',
       raw: state.sliceDoc(node.from, node.to),
     }

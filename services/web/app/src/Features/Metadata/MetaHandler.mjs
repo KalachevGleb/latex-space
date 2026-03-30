@@ -2,6 +2,7 @@ import ProjectEntityHandler from '../Project/ProjectEntityHandler.js'
 import DocumentUpdaterHandler from '../DocumentUpdater/DocumentUpdaterHandler.js'
 import packageMapping from './packageMapping.mjs'
 import { callbackify } from '@overleaf/promise-utils'
+import path from 'path'
 
 /** @typedef {{
  *   labels: string[]
@@ -9,6 +10,7 @@ import { callbackify } from '@overleaf/promise-utils'
  *   packageNames: string[],
  *   bibitems: string[],
  *   macros: string[],
+ *   environments: string[],
  * }} DocMeta
  */
 
@@ -24,6 +26,7 @@ async function extractMetaFromDoc(lines) {
     packageNames: [],
     bibitems: [],
     macros: [],
+    environments: [],
   }
 
   const labelRe = /\\label{(.{0,80}?)}/g
@@ -34,6 +37,9 @@ async function extractMetaFromDoc(lines) {
   // Regex for \newcommand, \renewcommand, and \def
   const newCommandRe = /\\(?:newcommand|renewcommand)\*?{?(\\[a-zA-Z@]+)}?/g
   const defRe = /\\def(\\[a-zA-Z@]+)/g
+  const newEnvironmentRe =
+    /\\(?:newenvironment|renewenvironment)\*?\s*{([^}]{1,80})}/g
+  const newTheoremRe = /\\newtheorem\*?\s*{([^}]{1,80})}/g
 
   for (const rawLine of lines) {
     const line = getNonCommentedContent(rawLine)
@@ -59,14 +65,32 @@ async function extractMetaFromDoc(lines) {
     }
 
     for (const macro of lineMatches(newCommandRe, line)) {
-      if (!docMeta.macros.includes(macro)) {
+      if (isPublicLatexName(macro) && !docMeta.macros.includes(macro)) {
         docMeta.macros.push(macro)
       }
     }
 
     for (const macro of lineMatches(defRe, line)) {
-      if (!docMeta.macros.includes(macro)) {
+      if (isPublicLatexName(macro) && !docMeta.macros.includes(macro)) {
         docMeta.macros.push(macro)
+      }
+    }
+
+    for (const environmentName of lineMatches(newEnvironmentRe, line)) {
+      if (
+        isPublicLatexName(environmentName) &&
+        !docMeta.environments.includes(environmentName)
+      ) {
+        docMeta.environments.push(environmentName)
+      }
+    }
+
+    for (const theoremName of lineMatches(newTheoremRe, line)) {
+      if (
+        isPublicLatexName(theoremName) &&
+        !docMeta.environments.includes(theoremName)
+      ) {
+        docMeta.environments.push(theoremName)
       }
     }
   }
@@ -115,10 +139,33 @@ function* lineMatches(matchRe, line, separator) {
  */
 async function extractMetaFromProjectDocs(projectDocs) {
   const projectMeta = {}
-  for (const doc of Object.values(projectDocs)) {
-    projectMeta[doc._id] = await extractMetaFromDoc(doc.lines)
+  for (const [docPath, doc] of Object.entries(projectDocs)) {
+    const docMeta = await extractMetaFromDoc(doc.lines)
+
+    if (isClassOrStyleFile(docPath)) {
+      docMeta.bibitems = []
+    }
+
+    projectMeta[doc._id] = docMeta
   }
   return projectMeta
+}
+
+/**
+ * @param {string} docPath
+ * @returns {boolean}
+ */
+function isClassOrStyleFile(docPath) {
+  const extension = path.extname(docPath).toLowerCase()
+  return extension === '.cls' || extension === '.sty'
+}
+
+/**
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isPublicLatexName(value) {
+  return !value.includes('@')
 }
 
 /**
