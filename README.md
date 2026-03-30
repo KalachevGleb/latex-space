@@ -1,96 +1,139 @@
-<h1 align="center">
-  <br>
-  <a href="https://www.overleaf.com"><img src="doc/logo.png" alt="Overleaf" width="300"></a>
-</h1>
+# LatexSpace: Independent fork of Overleaf initially created for use in a peer review system
 
-<h4 align="center">An open-source online real-time collaborative LaTeX editor.</h4>
+Independent Overleaf CE fork adapted for journal peer review systems and advanced self-hosted installations.
 
-<p align="center">
-  <a href="https://github.com/overleaf/overleaf/wiki">Wiki</a> •
-  <a href="https://www.overleaf.com/for/enterprises">Server Pro</a> •
-  <a href="#contributing">Contributing</a> •
-  <a href="https://mailchi.mp/overleaf.com/community-edition-and-server-pro">Mailing List</a> •
-  <a href="#authors">Authors</a> •
-  <a href="#license">License</a>
-</p>
+This project is based on the Overleaf CE architecture, but this branch adds custom capabilities and removes limits/subscription-related logic that is not relevant for this fork.
 
-<img src="doc/screenshot.png" alt="A screenshot of a project being edited in Overleaf Community Edition">
-<p align="center">
-  Figure 1: A screenshot of a project being edited in Overleaf Community Edition.
-</p>
+## What this version is
 
-## Community Edition
+- Base platform: `overleaf/overleaf` (Community Edition).
+- Purpose: collaborative LaTeX editing platform with peer-review workflow integration.
+- Fork additions:
+  - Service-to-Service API (`/service/*`, Basic Auth, no browser session required).
+  - Review panel and comments API extensions.
+  - Project/file protection and user permission controls.
+  - Improved localization (including Russian language support).
 
-[Overleaf](https://www.overleaf.com) is an open-source online real-time collaborative LaTeX editor. We run a hosted version at [www.overleaf.com](https://www.overleaf.com), but you can also run your own local version, and contribute to the development of Overleaf.
+Important: resources from the upstream Overleaf repository are useful only as a reference for the base platform. For this fork, prioritize documentation from this repository.
 
-## Custom Edition Deployment
+## Architecture (short)
 
-This repository includes a simplified deployment system for custom Overleaf installations:
+This is a monorepo with microservices:
 
-**Quick Start:**
+- `services/web` - main HTTP service (UI, API, orchestration).
+- `services/real-time` - WebSocket layer for collaboration.
+- `services/document-updater` - applies document updates (OT pipeline).
+- `services/docstore` and `services/filestore` - document and file storage.
+- `services/clsi` - LaTeX to PDF compilation (via Docker TeX Live image).
+- `services/chat`, `services/project-history`, etc. - comments, history, related features.
+- `libraries/*` - shared libraries used by services.
+
+Basic edit flow:
+1. Client edits go to `real-time`.
+2. `document-updater` applies updates and persists them.
+3. Updates are broadcast to connected clients.
+
+## Repository structure
+
+```text
+.
+|-- services/                    # microservices
+|-- libraries/                   # shared libraries
+|-- develop/                     # dev environment (docker compose + bin/* scripts)
+|-- server-ce/                   # production image build files
+|-- scripts/
+|   |-- prepare_install.sh       # build deployment package
+|   `-- install_overleaf.sh      # install package on server
+|-- api_doc/                     # API docs for this fork
+|-- CLAUDE.md                    # AI-facing development guidance
+`-- README.deployment.md         # deployment process details
+```
+
+## Run mode 1: local development
+
+Recommended mode for development with hot reload.
+
+1) Build images:
 ```bash
-# 1. Prepare deployment package
-./scripts/prepare_install.sh
+cd develop
+bin/build
+```
 
-# 2. Deploy on target server
+2) (Optional, but usually needed for compilation) build TeX Live image:
+```bash
+docker build texlive -t texlive-full
+```
+
+3) Start services:
+```bash
+# all services in dev mode
+bin/dev
+
+# minimal setup for UI/backend work
+bin/dev web webpack
+```
+
+4) First login:
+- open `http://localhost/launchpad`
+- create the first admin account
+
+Useful commands:
+```bash
+bin/down
+bin/logs
+bin/logs web
+bin/shell web
+```
+
+Additional docs: `SETUP_RU.md`, `README_DEV.md`, `TESTING.md`.
+
+## Run mode 2: deployment package for server install
+
+### On build machine
+
+```bash
+./scripts/prepare_install.sh
+```
+
+The script builds and packages everything into `overleaf-custom.tar.gz` (including Docker images and runtime configuration).
+
+### On target server
+
+1) Prepare `config.json` (you can start from `overleaf_config.json.example`).
+
+2) Install:
+```bash
 ./scripts/install_overleaf.sh overleaf-custom.tar.gz config.json
 ```
 
-See [README.deployment.md](README.deployment.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+After installation, services are managed via `docker compose` in `installDir` (from `config.json`, default `/opt/overleaf`):
 
-> [!CAUTION]
-> Overleaf Community Edition is intended for use in environments where **all** users are trusted. Community Edition is **not** appropriate for scenarios where isolation of users is required due to Sandbox Compiles not being available. When not using Sandboxed Compiles, users have full read and write access to the `sharelatex` container resources (filesystem, network, environment variables) when running LaTeX compiles.
+```bash
+cd <installDir>
+docker compose up -d
+docker compose down
+docker compose logs -f
+```
 
-For more information on Sandbox Compiles check out our [documentation](https://docs.overleaf.com/on-premises/configuration/overleaf-toolkit/server-pro-only-configuration/sandboxed-compiles).
+Details: `README.deployment.md`.
 
-## Enterprise
+## Fork documentation
 
-If you want help installing and maintaining Overleaf in your lab or workplace, we offer an officially supported version called [Overleaf Server Pro](https://www.overleaf.com/for/enterprises). It also includes more features for security (SSO with LDAP or SAML), administration and collaboration (e.g. tracked changes). [Find out more!](https://www.overleaf.com/for/enterprises)
+- `CLAUDE.md` - overview of custom features and architecture details.
+- `api_doc/API_INDEX.md` - full API documentation index.
+- `api_doc/SERVICE_TO_SERVICE_API.md` - key document for `/service/*`.
+- `api_doc/API_DOCUMENTATION_RU.md` - extended API reference (Russian).
+- `claude_dev_reports/` - development reports and change notes.
+- `TESTING.md` - testing scenarios.
 
-## Keeping up to date
+## Compatibility and security
 
-Sign up to the [mailing list](https://mailchi.mp/overleaf.com/community-edition-and-server-pro) to get updates on Overleaf releases and development.
-
-## Installation
-
-We have detailed installation instructions in the [Overleaf Toolkit](https://github.com/overleaf/toolkit/).
-
-## Upgrading
-
-If you are upgrading from a previous version of Overleaf, please see the [Release Notes section on the Wiki](https://github.com/overleaf/overleaf/wiki#release-notes) for all of the versions between your current version and the version you are upgrading to.
-
-## Overleaf Docker Image
-
-This repo contains two dockerfiles, [`Dockerfile-base`](server-ce/Dockerfile-base), which builds the
-`sharelatex/sharelatex-base` image, and [`Dockerfile`](server-ce/Dockerfile) which builds the
-`sharelatex/sharelatex` (or "community") image.
-
-The Base image generally contains the basic dependencies like `wget`, plus `texlive`.
-We split this out because it's a pretty heavy set of
-dependencies, and it's nice to not have to rebuild all of that every time.
-
-The `sharelatex/sharelatex` image extends the base image and adds the actual Overleaf code
-and services.
-
-Use `make build-base` and `make build-community` from `server-ce/` to build these images.
-
-We use the [Phusion base-image](https://github.com/phusion/baseimage-docker)
-(which is extended by our `base` image) to provide us with a VM-like container
-in which to run the Overleaf services. Baseimage uses the `runit` service
-manager to manage services, and we add our init-scripts from the `server-ce/runit`
-folder.
-
-
-## Contributing
-
-Please see the [CONTRIBUTING](CONTRIBUTING.md) file for information on contributing to the development of Overleaf.
-
-## Authors
-
-[The Overleaf Team](https://www.overleaf.com/about)
+- This is an independent codebase, not an official Overleaf Server Pro release.
+- Production concerns (TLS, reverse proxy, backup, monitoring, hardening) must be configured for your infrastructure.
+- Before public deployment in untrusted environments, validate compilation isolation model and container security policies.
 
 ## License
 
-The code in this repository is released under the GNU AFFERO GENERAL PUBLIC LICENSE, version 3. A copy can be found in the [`LICENSE`](LICENSE) file.
+The code is released under AGPL-3.0. See `LICENSE`.
 
-Copyright (c) Overleaf, 2014-2025.
+The base platform and a significant part of the code originate from Overleaf (c) Overleaf, 2014-2025.
