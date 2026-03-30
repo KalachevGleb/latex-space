@@ -42,19 +42,6 @@ const useMoreCommments = (
               const containerTop = container.scrollTop
               const containerBottom = containerTop + container.clientHeight
 
-              // First check for any entries in view by looking for the actual rendered entries
-              for (const entryElt of container.querySelectorAll<HTMLElement>(
-                '.review-panel-entry'
-              )) {
-                const entryTop = entryElt?.offsetTop ?? 0
-                const entryBottom = entryTop + (entryElt?.offsetHeight ?? 0)
-
-                if (entryBottom > containerTop && entryTop < containerBottom) {
-                  // Some part of the entry is in view
-                  return { positionAbove: null, positionBelow: null }
-                }
-              }
-
               // Find the max and min positions in the visible part of the viewport
               const visibleFrom = view.lineBlockAtHeight(containerTop).from
               const visibleTo = view.lineBlockAtHeight(containerBottom).to
