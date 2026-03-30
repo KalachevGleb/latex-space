@@ -328,6 +328,22 @@ describe('FileTypeManager', function () {
         sinon.assert.notCalled(this.isUtf8)
       })
 
+      it('should classify extensions added at runtime as text', async function () {
+        const originalTextExtensions = Settings.textExtensions
+        try {
+          Settings.textExtensions = [...Settings.textExtensions, 'log']
+          const { binary } = await this.FileTypeManager.promises.getType(
+            '/file.log',
+            'utf8.tex',
+            null
+          )
+
+          binary.should.equal(false)
+        } finally {
+          Settings.textExtensions = originalTextExtensions
+        }
+      })
+
       it('should recognise new binary files as binary', async function () {
         const { binary } = await this.FileTypeManager.promises.getType(
           '/file.py',

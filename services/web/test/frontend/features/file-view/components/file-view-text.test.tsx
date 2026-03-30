@@ -27,4 +27,25 @@ describe('<FileViewText/>', function () {
 
     await screen.findByText('Text file content', { exact: false })
   })
+
+  it('renders fallback utf-8 preview for unknown extensions', async function () {
+    fetchMock.head('express:/project/:project_id/blob/:hash', {
+      status: 201,
+      headers: { 'Content-Length': 100 },
+    })
+    fetchMock.get('express:/project/:project_id/blob/:hash', {
+      body: new TextEncoder().encode('Fallback utf8 content').buffer,
+    })
+
+    renderWithEditorContext(
+      <FileViewText
+        file={textFile}
+        onError={() => {}}
+        onLoad={() => {}}
+        strictUtf8
+      />
+    )
+
+    await screen.findByText('Fallback utf8 content', { exact: false })
+  })
 })

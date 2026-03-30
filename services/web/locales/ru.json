@@ -967,6 +967,8 @@
   "max_doc_length_description": "Максимальный размер текстовых документов в МБ (мегабайтах)",
   "max_upload_size": "Макс. размер загружаемого файла (МБ)",
   "max_upload_size_description": "Максимальный размер загружаемого файла в МБ (мегабайтах)",
+  "additional_text_extensions": "Дополнительные текстовые расширения",
+  "additional_text_extensions_description": "Список дополнительных текстовых расширений через запятую (без точки), например: log,py,sh",
   "maximum_files_uploaded_together": "Совместная загрузка до максимум __max__ файлов",
   "may": "Май",
   "maybe_later": "Может быть, позже",

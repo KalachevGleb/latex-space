@@ -70,11 +70,18 @@ const defaultTextExtensions = [
 
 const parseTextExtensions = function (extensions) {
   if (extensions) {
-    return extensions.split(',').map(ext => ext.trim())
+    return extensions
+      .split(',')
+      .map(ext => ext.trim().toLowerCase())
+      .filter(Boolean)
   } else {
     return []
   }
 }
+
+const additionalTextExtensions = parseTextExtensions(
+  process.env.ADDITIONAL_TEXT_EXTENSIONS
+)
 
 const httpPermissionsPolicy = {
   blocked: [
@@ -839,9 +846,8 @@ module.exports = {
 
   compileBodySizeLimitMb: process.env.COMPILE_BODY_SIZE_LIMIT_MB || 7,
 
-  textExtensions: defaultTextExtensions.concat(
-    parseTextExtensions(process.env.ADDITIONAL_TEXT_EXTENSIONS)
-  ),
+  textExtensions: defaultTextExtensions.concat(additionalTextExtensions),
+  additionalTextExtensions,
 
   // case-insensitive file names that is editable (doc) in the editor
   editableFilenames: ['latexmkrc', '.latexmkrc', 'makefile', 'gnumakefile'],

@@ -7,6 +7,7 @@ import TpdsProjectFlusher from '../ThirdPartyDataStore/TpdsProjectFlusher.js'
 import EditorRealTimeController from '../Editor/EditorRealTimeController.js'
 import SystemMessageManager from '../SystemMessages/SystemMessageManager.mjs'
 import SystemSettingsManager from '../SystemSettings/SystemSettingsManager.mjs'
+import TextExtensionsManager from '../Uploads/TextExtensionsManager.js'
 
 const AdminController = {
   _sendDisconnectAllUsersMessage: delay => {
@@ -50,6 +51,10 @@ const AdminController = {
         await SystemSettingsManager.promises.getSetting('maxDocLength')
       const maxUploadSize =
         await SystemSettingsManager.promises.getSetting('maxUploadSize')
+      const additionalTextExtensions =
+        await SystemSettingsManager.promises.getSetting(
+          'additionalTextExtensions'
+        )
 
       res.render('admin/index', {
         title: 'System Admin',
@@ -63,6 +68,9 @@ const AdminController = {
         adminEmail: adminEmail || 'placeholder@example.com',
         maxDocLength: Number(maxDocLength) || 2,
         maxUploadSize: Number(maxUploadSize) || 50,
+        additionalTextExtensions: Array.isArray(additionalTextExtensions)
+          ? additionalTextExtensions.join(', ')
+          : '',
         serviceApiEnabled: Settings.serviceApi?.enabled || false,
       })
     } catch (error) {
@@ -225,6 +233,18 @@ const AdminController = {
           Settings.maxUploadSize = maxUploadSize * 1024 * 1024
         }
       }
+
+      const additionalTextExtensions =
+        TextExtensionsManager.parseAdditionalTextExtensions(
+          req.body.additionalTextExtensions
+        )
+      await SystemSettingsManager.promises.setSetting(
+        'additionalTextExtensions',
+        additionalTextExtensions
+      )
+      TextExtensionsManager.applyAdditionalTextExtensions(
+        additionalTextExtensions
+      )
       
       logger.info(
         {
@@ -233,6 +253,7 @@ const AdminController = {
           adminEmail: Settings.adminEmail,
           maxDocLength: Settings.max_doc_length,
           maxUploadSize: Settings.maxUploadSize,
+          additionalTextExtensions: Settings.additionalTextExtensions,
         },
         'updated runtime settings'
       )

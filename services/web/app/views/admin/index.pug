@@ -136,6 +136,16 @@ block content
 														onchange='markFormDirty()'
 													)
 													p.small #{translate("max_upload_size_description")}
+												.form-group
+													label.form-label(for='additional-text-extensions') #{translate("additional_text_extensions")}
+													input#additional-text-extensions.form-control(
+														type='text'
+														name='additionalTextExtensions'
+														value=additionalTextExtensions
+														placeholder='log,py,sh'
+														onchange='markFormDirty()'
+													)
+													p.small #{translate("additional_text_extensions_description")}
 												button.btn.btn-primary(type='submit') #{translate("save_settings")}
 										script(nonce=scriptNonce).
 											var formDirty = false;

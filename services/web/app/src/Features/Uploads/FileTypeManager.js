@@ -16,12 +16,6 @@ const FILE_IGNORE_MATCHER = new Minimatch(Settings.fileIgnorePattern, {
   dot: true,
 })
 
-const TEXT_EXTENSIONS = new Set(Settings.textExtensions.map(ext => `.${ext}`))
-const EDITABLE_FILENAMES = Settings.editableFilenames
-
-// allow 3 bytes for every character
-const MAX_TEXT_FILE_SIZE = 3 * Settings.max_doc_length
-
 async function isDirectory(path) {
   const stats = await fs.stat(path)
   return stats.isDirectory()
@@ -70,7 +64,7 @@ async function getType(name, fsPath, existingFileType) {
   }
 
   const stat = await fs.stat(fsPath)
-  if (stat.size > MAX_TEXT_FILE_SIZE) {
+  if (stat.size > _getMaxTextFileSize()) {
     return { binary: true }
   }
 
@@ -93,10 +87,33 @@ function shouldIgnore(path) {
 function _isTextFilename(filename) {
   const basename = Path.basename(filename)
   const extension = Path.extname(filename).toLowerCase()
+  const textExtensions = _getTextExtensions()
+  const editableFilenames = _getEditableFilenames()
   return (
-    TEXT_EXTENSIONS.has(extension) ||
-    EDITABLE_FILENAMES.includes(basename.toLowerCase())
+    textExtensions.has(extension) || editableFilenames.includes(basename.toLowerCase())
   )
+}
+
+function _getTextExtensions() {
+  const textExtensions = Array.isArray(Settings.textExtensions)
+    ? Settings.textExtensions
+    : []
+  return new Set(
+    textExtensions
+      .map(ext => `.${String(ext).trim().toLowerCase()}`)
+      .filter(ext => ext !== '.')
+  )
+}
+
+function _getEditableFilenames() {
+  return Array.isArray(Settings.editableFilenames)
+    ? Settings.editableFilenames.map(name => name.toLowerCase())
+    : []
+}
+
+function _getMaxTextFileSize() {
+  // allow 3 bytes for every character
+  return 3 * Settings.max_doc_length
 }
 
 function _detectEncoding(bytes) {
@@ -113,6 +130,7 @@ function _detectEncoding(bytes) {
 module.exports = {
   shouldIgnore,
   isEditable,
+  isTextFilename: _isTextFilename,
   getType: callbackify(getType),
   isDirectory: callbackify(isDirectory),
   promises: {

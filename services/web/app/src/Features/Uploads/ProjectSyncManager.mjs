@@ -2,6 +2,7 @@ import logger from '@overleaf/logger'
 import fs from 'node:fs/promises'
 import Path from 'path'
 import ArchiveManager from './ArchiveManager.js'
+import FileTypeManager from './FileTypeManager.js'
 import EditorController from '../Editor/EditorController.js'
 import ProjectEntityUpdateHandler from '../Project/ProjectEntityUpdateHandler.js'
 import ProjectGetter from '../Project/ProjectGetter.js'
@@ -246,27 +247,10 @@ async function executeSyncOperations(
 }
 
 /**
- * Document extensions (text files)
- */
-const DOC_EXTENSIONS = new Set([
-  '.tex',
-  '.latex',
-  '.sty',
-  '.cls',
-  '.bst',
-  '.bib',
-  '.bibtex',
-  '.txt',
-  '.md',
-  '.markdown',
-])
-
-/**
  * Upsert a file from ZIP to project (preserves history and comments)
  */
 async function upsertFileFromZip(projectId, userId, zipFile, source) {
-  const ext = Path.extname(zipFile.name).toLowerCase()
-  const isDoc = DOC_EXTENSIONS.has(ext)
+  const isDoc = FileTypeManager.isTextFilename(zipFile.name)
 
   if (isDoc) {
     // Read file content as lines
