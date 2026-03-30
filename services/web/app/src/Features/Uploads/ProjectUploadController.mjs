@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import fsPromises from 'node:fs/promises'
 import Path from 'node:path'
 import FileSystemImportManager from './FileSystemImportManager.js'
+import FileTypeManager from './FileTypeManager.js'
 import ProjectUploadManager from './ProjectUploadManager.js'
 import ProjectSyncManager from './ProjectSyncManager.mjs'
 import SessionManager from '../Authentication/SessionManager.js'
@@ -228,22 +229,6 @@ async function syncProjectFromZip(req, res, next) {
 }
 
 /**
- * Document extensions (text files)
- */
-const DOC_EXTENSIONS = new Set([
-  '.tex',
-  '.latex',
-  '.sty',
-  '.cls',
-  '.bst',
-  '.bib',
-  '.bibtex',
-  '.txt',
-  '.md',
-  '.markdown',
-])
-
-/**
  * Upload file by path (Service API)
  * Automatically creates folders if they don't exist
  * Preserves history when replacing existing files
@@ -274,8 +259,7 @@ async function uploadFileByPath(req, res, next) {
       : `/${filePath}`
 
     // Determine if this is a document or binary file
-    const ext = Path.extname(name).toLowerCase()
-    const isDoc = DOC_EXTENSIONS.has(ext)
+    const isDoc = FileTypeManager.isTextFilename(name)
 
     let entityId, entityType, hash, isNew
 

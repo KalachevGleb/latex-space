@@ -8,6 +8,7 @@ import logger from '@overleaf/logger'
 import HistoryManager from './app/src/Features/History/HistoryManager.js'
 import SiteAdminHandler from './app/src/infrastructure/SiteAdminHandler.js'
 import SystemSettingsManager from './app/src/Features/SystemSettings/SystemSettingsManager.mjs'
+import TextExtensionsManager from './app/src/Features/Uploads/TextExtensionsManager.js'
 import http from 'node:http'
 import https from 'node:https'
 import * as Serializers from './app/src/infrastructure/LoggerSerializers.js'
@@ -85,6 +86,8 @@ try {
   const adminEmail = await SystemSettingsManager.promises.getSetting('adminEmail')
   const maxDocLength = await SystemSettingsManager.promises.getSetting('maxDocLength')
   const maxUploadSize = await SystemSettingsManager.promises.getSetting('maxUploadSize')
+  const additionalTextExtensions =
+    await SystemSettingsManager.promises.getSetting('additionalTextExtensions')
   
   if (disableChat !== undefined && disableChat !== null) {
     Settings.disableChat = Boolean(disableChat)
@@ -101,12 +104,14 @@ try {
   if (maxUploadSize) {
     Settings.maxUploadSize = parseInt(maxUploadSize, 10) * 1024 * 1024
   }
+  TextExtensionsManager.applyAdditionalTextExtensions(additionalTextExtensions)
   
   logger.info(
     { 
       disableChat: Settings.disableChat, 
       disableLinkSharing: Settings.disableLinkSharing,
       adminEmail: Settings.adminEmail,
+      additionalTextExtensions: Settings.additionalTextExtensions,
     }, 
     'loaded dynamic settings from database'
   )

@@ -3,19 +3,21 @@ import { useProjectContext } from '../../../shared/context/project-context'
 import { debugConsole } from '@/utils/debugging'
 import useAbortController from '../../../shared/hooks/use-abort-controller'
 import { BinaryFile } from '@/features/file-view/types/binary-file'
-
-const MAX_FILE_SIZE = 2 * 1024 * 1024
+import getMeta from '@/utils/meta'
 
 export default function FileViewText({
   file,
   onLoad,
   onError,
+  strictUtf8 = false,
 }: {
   file: BinaryFile
   onLoad: () => void
   onError: () => void
+  strictUtf8?: boolean
 }) {
   const { projectId } = useProjectContext()
+  const fallbackMaxFileSize = getMeta('ol-maxDocLength') || 2 * 1024 * 1024
 
   const [textPreview, setTextPreview] = useState('')
   const [shouldShowDots, setShouldShowDots] = useState(false)
@@ -42,9 +44,12 @@ export default function FileViewText({
       .then(fileSize => {
         let truncated = false
         const headers = new Headers()
-        if (fileSize && Number(fileSize) > MAX_FILE_SIZE) {
+        if (strictUtf8 && fileSize && Number(fileSize) > fallbackMaxFileSize) {
+          throw new Error('File too large for utf-8 fallback preview')
+        }
+        if (!strictUtf8 && fileSize && Number(fileSize) > fallbackMaxFileSize) {
           truncated = true
-          headers.set('Range', `bytes=0-${MAX_FILE_SIZE}`)
+          headers.set('Range', `bytes=0-${fallbackMaxFileSize}`)
         }
         fetchDataTimeout = window.setTimeout(
           () => fetchDataController.abort(),
@@ -52,6 +57,20 @@ export default function FileViewText({
         )
         const signal = fetchDataController.signal
         return fetch(path, { signal, headers }).then(response => {
+          if (strictUtf8) {
+            return response.arrayBuffer().then(arrayBuffer => {
+              let text = ''
+              try {
+                text = new TextDecoder('utf-8', { fatal: true }).decode(arrayBuffer)
+              } catch (error) {
+                throw new Error('Could not decode file as utf-8')
+              }
+              setTextPreview(text)
+              onLoad()
+              setShouldShowDots(false)
+            })
+          }
+
           return response.text().then(text => {
             if (truncated) {
               text = text.replace(/\n.*$/, '')
@@ -78,6 +97,8 @@ export default function FileViewText({
     file.hash,
     onError,
     onLoad,
+    strictUtf8,
+    fallbackMaxFileSize,
     inFlight,
     fetchContentLengthController,
     fetchDataController,

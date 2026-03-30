@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
   adminEmail: 'placeholder@example.com', // Email администратора
   maxDocLength: 2, // Максимальный размер документа в МБ
   maxUploadSize: 50, // Максимальный размер загружаемого файла в МБ
+  additionalTextExtensions: [], // Дополнительные текстовые расширения
 }
 
 async function getSetting(key) {

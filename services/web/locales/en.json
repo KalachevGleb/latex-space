@@ -142,6 +142,8 @@
   "max_doc_length_description": "Maximum size of text documents in MB (megabytes)",
   "max_upload_size": "Max upload size (MB)",
   "max_upload_size_description": "Maximum file upload size in MB (megabytes)",
+  "additional_text_extensions": "Additional text extensions",
+  "additional_text_extensions_description": "Comma-separated list of extra text file extensions (without dots), for example: log,py,sh",
   "flush_project_to_tpds": "Flush project to TPDS",
   "message": "Message",
   "only_administrators_can_create_new_user_accounts": "Only administrators can create new user accounts.",
