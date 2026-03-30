@@ -284,6 +284,35 @@ describe('autocomplete', { scrollBehavior: false }, function () {
       .should('match', /^\\begin\{abstract}/)
   })
 
+  it('renames matching \\end when changing an existing \\begin environment', function () {
+    const scope = mockScope()
+
+    cy.mount(
+      <TestContainer>
+        <EditorProviders scope={scope}>
+          <CodeMirrorEditor />
+        </EditorProviders>
+      </TestContainer>
+    )
+
+    cy.get('.cm-line').eq(16).as('line')
+    cy.get('@line').click()
+    cy.get('@line').type(
+      '\\begin{{}equation}{Enter}y=x^2{Enter}\\end{{}equation}'
+    )
+
+    cy.get('.cm-line').eq(16).click()
+    cy.get('.cm-line')
+      .eq(16)
+      .type(`${'{leftArrow}'.repeat(5)}ali`, { delay: 50 })
+    cy.findAllByRole('option').contains('\\begin{align}').click()
+
+    cy.get('.cm-line').eq(16).should('have.text', '\\begin{align}')
+    cy.get('.cm-line').eq(17).should('have.text', 'y=x^2')
+    cy.get('.cm-line').eq(18).should('have.text', '\\end{align}')
+    cy.contains('\\end{equation}').should('not.exist')
+  })
+
   it('includes environments declared via \\newtheorem in begin autocomplete', function () {
     const scope = mockScope()
 
@@ -326,6 +355,9 @@ describe('autocomplete', { scrollBehavior: false }, function () {
       commands: [],
       labels: new Set<string>(),
       packageNames: new Set(['foo']),
+      bibitems: new Set<string>(),
+      macros: new Set<string>(),
+      environments: new Set<string>(),
     }
 
     const MetadataProvider: FC<React.PropsWithChildren> = ({ children }) => {
@@ -751,6 +783,9 @@ describe('autocomplete', { scrollBehavior: false }, function () {
       ],
       labels: new Set<string>(),
       packageNames: new Set<string>('amsmath'),
+      bibitems: new Set<string>(),
+      macros: new Set<string>(),
+      environments: new Set<string>(),
     }
 
     const MetadataProvider: FC<React.PropsWithChildren> = ({ children }) => {

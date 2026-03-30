@@ -25,6 +25,7 @@ export const markDecorations = ViewPlugin.define(
       const decorations: Range<Decoration>[] = []
 
       const theoremStyles = parseTheoremStyles(state, tree)
+      const cursorPos = state.selection.main.head
 
       for (const { from, to } of view.visibleRanges) {
         tree?.iterate({
@@ -141,6 +142,35 @@ export const markDecorations = ViewPlugin.define(
                 )
               }
             } else if (nodeRef.type.is('$Environment')) {
+              const beginEnvNode = nodeRef.node.getChild('BeginEnv')
+              const endEnvNode = nodeRef.node.getChild('EndEnv')
+              const beginNameNode = beginEnvNode
+                ?.getChild('EnvNameGroup')
+                ?.getChild('OpenBrace')?.nextSibling
+              const endNameNode = endEnvNode
+                ?.getChild('EnvNameGroup')
+                ?.getChild('OpenBrace')?.nextSibling
+
+              if (
+                beginNameNode &&
+                endNameNode &&
+                !beginNameNode.type.is('CloseBrace') &&
+                !endNameNode.type.is('CloseBrace') &&
+                ((cursorPos >= beginEnvNode.from && cursorPos <= beginEnvNode.to) ||
+                  (cursorPos >= endEnvNode.from && cursorPos <= endEnvNode.to))
+              ) {
+                decorations.push(
+                  Decoration.mark({
+                    class: 'cm-matchingBracket',
+                  }).range(beginEnvNode.from, beginEnvNode.to)
+                )
+                decorations.push(
+                  Decoration.mark({
+                    class: 'cm-matchingBracket',
+                  }).range(endEnvNode.from, endEnvNode.to)
+                )
+              }
+
               const environmentName = getUnstarredEnvironmentName(
                 nodeRef.node,
                 state

@@ -4,7 +4,10 @@ import {
   CompletionSource,
   ifIn,
 } from '@codemirror/autocomplete'
-import { customEndCompletions } from './completions/environments'
+import {
+  customEndCompletions,
+  applyBeginCompletion,
+} from './completions/environments'
 import { customCommandCompletions } from './completions/doc-commands'
 import {
   customEnvironmentCompletions,
@@ -27,7 +30,6 @@ import {
   applySnippet,
   extendOverUnpairedClosingBrace,
 } from './completions/apply'
-import { snippet } from './completions/data/environments'
 import { syntaxTree } from '@codemirror/language'
 
 function blankCompletions(): Completions {
@@ -445,7 +447,7 @@ export const beginEnvironmentCompletionSource: CompletionSource = context => {
 
   const completion = {
     label: `\\begin{${name}} …`,
-    apply: applySnippet(snippet(name)),
+    apply: applyBeginCompletion(name),
     extend: extendOverUnpairedClosingBrace,
     boost: -99,
   }
