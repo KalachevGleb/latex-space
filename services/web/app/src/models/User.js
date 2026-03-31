@@ -64,6 +64,7 @@ const UserSchema = new Schema(
     lastTrial: { type: Date },
     loginCount: { type: Number, default: 0 },
     holdingAccount: { type: Boolean, default: false },
+    invitedToRegister: { type: Boolean, default: false },
     ace: {
       mode: { type: String, default: 'none' },
       theme: { type: String, default: 'textmate' },
