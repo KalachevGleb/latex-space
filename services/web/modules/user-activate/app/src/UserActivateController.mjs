@@ -2,11 +2,12 @@ import Path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import UserGetter from '../../../../app/src/Features/User/UserGetter.js'
 import UserRegistrationHandler from '../../../../app/src/Features/User/UserRegistrationHandler.js'
+import SystemSettingsManager from '../../../../app/src/Features/SystemSettings/SystemSettingsManager.mjs'
 import ErrorController from '../../../../app/src/Features/Errors/ErrorController.mjs'
+import { User } from '../../../../app/src/models/User.js'
 import { expressify } from '@overleaf/promise-utils'
 import Settings from '@overleaf/settings'
-import OError from '@overleaf/o-error'
-import { ObjectId, db } from '../../../../app/src/infrastructure/mongodb.js'
+import { db } from '../../../../app/src/infrastructure/mongodb.js'
 
 const __dirname = Path.dirname(fileURLToPath(import.meta.url))
 
@@ -14,6 +15,47 @@ function registerNewUser(req, res, next) {
   res.render(Path.resolve(__dirname, '../views/user/register'))
 }
 
+function isEmailAlreadyRegisteredError(error) {
+  return (
+    error?.name === 'EmailAlreadyRegistered' ||
+    error?.message === 'EmailAlreadyRegistered'
+  )
+}
+
+async function sendActivationEmailResponse(email, res) {
+  const { user, setNewPasswordUrl } =
+    await UserRegistrationHandler.promises.registerNewUserAndSendActivationEmail(
+      email
+    )
+  await User.updateOne(
+    { _id: user._id },
+    { $set: { invitedToRegister: true } }
+  ).exec()
+
+  const emailEnabled =
+    Settings.email &&
+    Settings.email.parameters &&
+    Settings.email.parameters.host
+
+  if (!emailEnabled) {
+    const activationUrl = setNewPasswordUrl.replace(
+      Settings.siteUrl || 'http://localhost:3000',
+      ''
+    )
+    return res.json({
+      email: user.email,
+      setNewPasswordUrl,
+      redir: activationUrl,
+    })
+  }
+
+  return res.json({
+    email: user.email,
+    setNewPasswordUrl,
+  })
+}
+
+/** Admin bulk invite: POST /admin/register (unchanged contract). */
 async function register(req, res, next) {
   const { email } = req.body
   if (email == null || email === '') {
@@ -21,15 +63,12 @@ async function register(req, res, next) {
   }
 
   try {
-    // Сначала проверяем, существует ли уже активированный пользователь
     const existingUser = await UserGetter.promises.getUserByAnyEmail(email, {
       _id: 1,
       loginCount: 1,
-      hashedPassword: 1,
     })
 
     if (existingUser && existingUser.loginCount > 0) {
-      // Пользователь уже активирован (входил в систему)
       return res.status(409).json({
         message: {
           type: 'error',
@@ -38,37 +77,88 @@ async function register(req, res, next) {
       })
     }
 
-    const { user, setNewPasswordUrl } =
-      await UserRegistrationHandler.promises.registerNewUserAndSendActivationEmail(
-        email
-      )
-
-    // Проверяем, настроен ли email
-    const emailEnabled =
-      Settings.email &&
-      Settings.email.parameters &&
-      Settings.email.parameters.host
-
-    // Если email не настроен, сразу перенаправляем на форму установки пароля
-    if (!emailEnabled) {
-      const activationUrl = setNewPasswordUrl.replace(
-        Settings.siteUrl || 'http://localhost:3000',
-        ''
-      )
-      return res.json({
-        email: user.email,
-        setNewPasswordUrl,
-        redir: activationUrl, // Frontend перенаправит на эту страницу
+    await sendActivationEmailResponse(email, res)
+  } catch (error) {
+    if (isEmailAlreadyRegisteredError(error)) {
+      return res.status(409).json({
+        message: {
+          type: 'error',
+          text: 'This email is already registered. Please log in instead.',
+        },
       })
     }
+    throw error
+  }
+}
 
-    res.json({
-      email: user.email,
-      setNewPasswordUrl,
+/**
+ * Public signup: POST /signup
+ * - If open registration is enabled: same as legacy self-register.
+ * - If disabled: only emails that were invited (or holding account) and not yet activated.
+ */
+async function signup(req, res, next) {
+  const { email } = req.body
+  if (email == null || email === '') {
+    return res.sendStatus(422)
+  }
+
+  let registrationEnabled = false
+  try {
+    registrationEnabled =
+      (await SystemSettingsManager.promises.getSetting('registrationEnabled')) ||
+      false
+  } catch {
+    registrationEnabled = true
+  }
+
+  const existingUser = await UserGetter.promises.getUserByAnyEmail(email, {
+    _id: 1,
+    loginCount: 1,
+    holdingAccount: 1,
+    invitedToRegister: 1,
+  })
+
+  if (!registrationEnabled) {
+    if (!existingUser) {
+      return res.status(403).json({
+        message: {
+          type: 'error',
+          text: 'This email has not been invited. Please contact an administrator.',
+        },
+      })
+    }
+    if (existingUser.loginCount > 0) {
+      return res.status(409).json({
+        message: {
+          type: 'error',
+          text: 'This email is already registered. Please log in instead.',
+        },
+      })
+    }
+    const isInvited =
+      Boolean(existingUser.invitedToRegister) ||
+      existingUser.holdingAccount === true
+    if (!isInvited) {
+      return res.status(403).json({
+        message: {
+          type: 'error',
+          text: 'This email has not been invited. Please contact an administrator.',
+        },
+      })
+    }
+  } else if (existingUser && existingUser.loginCount > 0) {
+    return res.status(409).json({
+      message: {
+        type: 'error',
+        text: 'This email is already registered. Please log in instead.',
+      },
     })
+  }
+
+  try {
+    await sendActivationEmailResponse(email, res)
   } catch (error) {
-    // Проверяем, существует ли пользователь
-    if (error.message === 'EmailAlreadyRegistered') {
+    if (isEmailAlreadyRegisteredError(error)) {
       return res.status(409).json({
         message: {
           type: 'error',
@@ -221,6 +311,7 @@ async function getUsersList(req, res) {
 export default {
   registerNewUser,
   register: expressify(register),
+  signup: expressify(signup),
   activateAccountPage: expressify(activateAccountPage),
   getUsersList: expressify(getUsersList),
 }

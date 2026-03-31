@@ -17,6 +17,9 @@ export default {
     webRouter.get('/user/activate', UserActivateController.activateAccountPage)
     AuthenticationController.addEndpointToLoginWhitelist('/user/activate')
 
+    webRouter.post('/signup', UserActivateController.signup)
+    AuthenticationController.addEndpointToLoginWhitelist('/signup')
+
     webRouter.get(
       '/admin/register',
       AuthorizationMiddleware.ensureUserIsSiteAdmin,

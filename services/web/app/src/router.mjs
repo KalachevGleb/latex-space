@@ -70,7 +70,6 @@ import { plainTextResponse } from './infrastructure/Response.js'
 import SocketDiagnostics from './Features/SocketDiagnostics/SocketDiagnostics.mjs'
 import ClsiCacheController from './Features/Compile/ClsiCacheController.mjs'
 import AsyncLocalStorage from './infrastructure/AsyncLocalStorage.js'
-import SystemSettingsMiddleware from './Features/SystemSettings/SystemSettingsMiddleware.mjs'
 
 const { renderUnsupportedBrowserPage, unsupportedBrowserMiddleware } =
   UnsupportedBrowserMiddleware
@@ -269,11 +268,7 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
   webRouter.get('/restricted', AuthorizationMiddleware.restricted)
 
   if (Features.hasFeature('registration-page')) {
-    webRouter.get(
-      '/register',
-      SystemSettingsMiddleware.ensureRegistrationEnabled,
-      UserPagesController.registerPage
-    )
+    webRouter.get('/register', UserPagesController.registerPage)
     AuthenticationController.addEndpointToLoginWhitelist('/register')
   }
 

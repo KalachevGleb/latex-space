@@ -1,6 +1,7 @@
 import { expressify } from '@overleaf/promise-utils'
 import UserRegistrationHandler from './UserRegistrationHandler.js'
 import UserGetter from './UserGetter.js'
+import { User } from '../../models/User.js'
 import EmailHelper from '../Helpers/EmailHelper.js'
 import logger from '@overleaf/logger'
 
@@ -44,6 +45,10 @@ async function inviteUser(req, res) {
     await UserRegistrationHandler.promises.registerNewUserAndSendActivationEmail(
       email
     )
+  await User.updateOne(
+    { _id: user._id },
+    { $set: { invitedToRegister: true } }
+  ).exec()
 
   logger.info({ userId: user._id, email: user.email }, 'Service API: user invited')
 
