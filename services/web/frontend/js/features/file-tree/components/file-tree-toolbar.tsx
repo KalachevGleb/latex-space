@@ -120,9 +120,16 @@ function FileTreeToolbarRight() {
           <button
             className="btn"
             onClick={() => {
-              setHideProtectedFiles(!hideProtectedFiles)
-              // Dispatch custom event to notify other components
-              window.dispatchEvent(new Event('hide-protected-files-changed'))
+              setHideProtectedFiles(currentValue => {
+                const nextValue = !currentValue
+                // Notify same-window listeners with the computed next value.
+                window.dispatchEvent(
+                  new CustomEvent('hide-protected-files-changed', {
+                    detail: { hideProtectedFiles: nextValue },
+                  })
+                )
+                return nextValue
+              })
             }}
             tabIndex={-1}
           >
