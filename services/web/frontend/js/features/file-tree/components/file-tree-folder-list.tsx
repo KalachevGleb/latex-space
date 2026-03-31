@@ -51,8 +51,15 @@ function FileTreeFolderList({
         setHideProtectedFiles(e.newValue === 'true')
       }
     }
-    // Also listen for custom events in same window
-    const handleCustomChange = () => {
+    // Also listen for custom events in the same window.
+    const handleCustomChange = (
+      e: Event & { detail?: { hideProtectedFiles?: boolean } }
+    ) => {
+      if (typeof e.detail?.hideProtectedFiles === 'boolean') {
+        setHideProtectedFiles(e.detail.hideProtectedFiles)
+        return
+      }
+      // Backward compatibility for legacy event payloads.
       try {
         const stored = localStorage.getItem('hide-protected-files')
         setHideProtectedFiles(stored === 'true')
