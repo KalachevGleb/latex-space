@@ -1213,13 +1213,6 @@ response = requests.post('http://localhost/service/project/new',
 )
 ```
 
-**Преимущества**:
-- ✅ Нет необходимости управлять сессией
-- ✅ Нет необходимости в CSRF токенах
-- ✅ Проще для автоматизации
-- ✅ Лучше для service-to-service интеграции
-- ✅ Меньше накладных расходов (меньше запросов)
-
 ## Дополнительная информация
 
 ### Связанные документы
@@ -1227,11 +1220,4 @@ response = requests.post('http://localhost/service/project/new',
 - [API_DOCUMENTATION_RU.md](API_DOCUMENTATION_RU.md) - Полная документация Web API
 - [API_QUICK_REFERENCE.md](API_QUICK_REFERENCE.md) - Краткий справочник endpoints
 - [API_README.md](API_README.md) - Руководство по началу работы
-
-### Поддержка
-
-Для вопросов и проблем:
-- GitHub Issues: https://github.com/overleaf/overleaf
-- Community Edition Wiki: https://github.com/overleaf/overleaf/wiki
-
 
