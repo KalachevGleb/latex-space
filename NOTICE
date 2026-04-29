@@ -1,0 +1,10 @@
+This project, LaTeX Space, is an independent fork of Overleaf Community Edition
+(https://github.com/overleaf/overleaf).
+
+Original work: Overleaf, 2014-2025
+Modifications: Gleb Kalachev, 2025-present
+
+This fork is not affiliated with, endorsed by, or sponsored by Overleaf.
+Further synchronization with the upstream repository is not planned.
+
+Licensed under AGPL-3.0. See LICENSE for details.
