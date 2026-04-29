@@ -1234,9 +1234,4 @@ response = requests.post('http://localhost/service/project/new',
 - GitHub Issues: https://github.com/overleaf/overleaf
 - Community Edition Wiki: https://github.com/overleaf/overleaf/wiki
 
----
-
-**Версия**: 1.0
-**Дата**: 2026-01-24
-**Совместимость**: Overleaf CE (latest main branch)
 

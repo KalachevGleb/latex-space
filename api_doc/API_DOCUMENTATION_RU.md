@@ -2101,26 +2101,3 @@ Content-Type: application/json
 5. **Validация**: Всегда валидируйте входные данные на стороне клиента
 6. **Secrets**: Не храните пароли и токены в plaintext
 
----
-
-## Поддержка
-
-Для вопросов и проблем:
-- GitHub Issues: https://github.com/overleaf/overleaf
-- Community Edition Wiki: https://github.com/overleaf/overleaf/wiki
-
-**Версия документации**: 2.1
-**Дата**: 2026-01-24
-**Overleaf CE Version**: Compatible with latest main branch
-
-**Новые возможности в v2.1:**
-- ✨ **Service-to-Service API** - интеграция без браузерной сессии
-- Все Web API endpoints доступны через `/service/` префикс
-- Аутентификация через HTTP Basic Auth + `X-Overleaf-User-Id`
-
-**Возможности v2.0:**
-- Защита проектов от удаления
-- Защищённые файлы (read-only)
-- Управление правами пользователей (full/basic)
-- UI для скрытия/показа защищённых файлов
-
