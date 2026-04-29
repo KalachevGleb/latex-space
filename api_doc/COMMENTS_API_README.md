@@ -322,9 +322,3 @@ python3 api_doc/example_get_comments.py <project_id> <email> <password>
 
 3. Проверьте, что проект существует и у вас есть к нему доступ
 
-## Версия
-
-- **Дата создания**: 25 декабря 2024
-- **Версия Overleaf**: Community Edition (custom)
-- **Статус**: ✅ Готово к использованию
-
