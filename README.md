@@ -121,16 +121,15 @@ Details: `README.deployment.md`.
 
 - `CLAUDE.md` - overview of custom features and architecture details.
 - `api_doc/API_INDEX.md` - full API documentation index.
-- `api_doc/SERVICE_TO_SERVICE_API.md` - key document for `/service/*`.
+- `api_doc/SERVICE_TO_SERVICE_API.md` - key document for `/service/*` API.
 - `api_doc/API_DOCUMENTATION_RU.md` - extended API reference (Russian).
-- `claude_dev_reports/` - development reports and change notes.
 - `TESTING.md` - testing scenarios.
 
 ## Compatibility and security
 
-- This is an independent codebase, not an official Overleaf Server Pro release.
+- This is an independent codebase, not an official Overleaf Community Edition or Server Pro release. It will not be synchronized with the upstream repository. Even though some features may look similar to the Server Pro (e.g. sandboxed compilation), the implementation may turn out to be completely different. Therefore, it is not recommended to rely on the Server Pro documentation if you are using these features.
 - Production concerns (TLS, reverse proxy, backup, monitoring, hardening) must be configured for your infrastructure.
-- Before public deployment in untrusted environments, validate compilation isolation model and container security policies.
+- Before public deployment in untrusted environments, validate compilation isolation model and container security policies. 
 
 ## License
 
