@@ -1,11 +1,12 @@
 import { FC, useMemo } from 'react'
 import { useFileTreeData } from '@/shared/context/file-tree-data-context'
-import { Ranges, useRangesContext } from '../context/ranges-context'
+import { useRangesContext } from '../context/ranges-context'
 import { useTranslation } from 'react-i18next'
 import { ReviewPanelOverviewFile } from './review-panel-overview-file'
 import ReviewPanelEmptyState from './review-panel-empty-state'
 import useProjectRanges from '../hooks/use-project-ranges'
 import getMeta from '@/utils/meta'
+import { buildRangesForDocs } from '../utils/build-ranges-for-docs'
 
 export const ReviewPanelOverview: FC = () => {
   const { t } = useTranslation()
@@ -14,25 +15,16 @@ export const ReviewPanelOverview: FC = () => {
 
   const { projectRanges, error } = useProjectRanges()
 
-  const rangesForDocs = useMemo(() => {
-    if (docs && docRanges && projectRanges) {
-      const rangesForDocs = new Map<string, Ranges>()
-      const otMigrationStage = getMeta('ol-otMigrationStage')
-
-      for (const doc of docs) {
-        const ranges =
-          doc.doc.id === docRanges.docId
-            ? docRanges
-            : projectRanges.get(otMigrationStage === 1 ? doc.path : doc.doc.id)
-
-        if (ranges) {
-          rangesForDocs.set(doc.doc.id, ranges)
-        }
-      }
-
-      return rangesForDocs
-    }
-  }, [docRanges, docs, projectRanges])
+  const rangesForDocs = useMemo(
+    () =>
+      buildRangesForDocs(
+        docs,
+        docRanges,
+        projectRanges,
+        getMeta('ol-otMigrationStage')
+      ),
+    [docRanges, docs, projectRanges]
+  )
 
   const showEmptyState = useMemo((): boolean => {
     if (!rangesForDocs) {
