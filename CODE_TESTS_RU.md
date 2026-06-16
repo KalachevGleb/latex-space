@@ -79,6 +79,11 @@ npm run test:unit -- --grep="DiffCodec"
   обогащённые статусом resolved (серверная сторона бага «обзор только текущий файл»).
 - `Comments/TrackChangesController.test.mjs` — вкл/выкл track changes и приём изменений (accept).
 
+**Backend (web, Mocha + SandboxedModule — `services/web/test/unit/src/`)**
+- `Project/ProjectEntityMongoUpdateHandlerProtectionTests.js` — защита файлов: запрет
+  изменения/удаления файлов из `protectedFiles` с обходом для Service API (через
+  `AsyncLocalStorage.isServiceAuth`).
+
 **Backend acceptance (web, Mocha — `services/web/test/acceptance/src/`)**
 - `ServiceApiPermissionsTests.mjs` — Service-to-Service API (`/service/*`): аутентификация
   (нет/неверные креды, выключенный API, создание проекта от имени `X-Overleaf-User-Id`) и
