@@ -1,19 +1,27 @@
 import React, { FC, useMemo } from 'react'
 import { useThreadsContext } from '../context/threads-context'
+import { useRangesContext } from '../context/ranges-context'
 import { useTranslation } from 'react-i18next'
 import { ReviewPanelResolvedThread } from './review-panel-resolved-thread'
 import useProjectRanges from '../hooks/use-project-ranges'
 import { useFileTreeData } from '@/shared/context/file-tree-data-context'
-import { Change, CommentOperation } from '../../../../../types/change'
 import { ThreadId } from '../../../../../types/review-panel/review-panel'
 import LoadingSpinner from '@/shared/components/loading-spinner'
 import OLBadge from '@/shared/components/ol/ol-badge'
 import getMeta from '@/utils/meta'
+import {
+  buildCommentsMap,
+  selectResolvedThreads,
+} from '../utils/resolved-comments'
 
 export const ReviewPanelResolvedThreadsMenu: FC = () => {
   const { t } = useTranslation()
   const threads = useThreadsContext()
   const { docs } = useFileTreeData()
+  // The currently-open document's live ranges. Its comments may not yet be
+  // flushed to the docstore-backed project ranges, so merge them in to make
+  // sure resolved comments in the open file are not missing from this menu.
+  const docRanges = useRangesContext()
 
   const { projectRanges, loading } = useProjectRanges()
 
@@ -27,53 +35,35 @@ export const ReviewPanelResolvedThreadsMenu: FC = () => {
       )?.doc.name
       if (docName !== undefined) {
         for (const comment of ranges.comments) {
-          const threadId = comment.op.t
-          docNameForThread.set(threadId, docName)
+          docNameForThread.set(comment.op.t, docName)
+        }
+      }
+    }
+
+    // Current document last, so its (live) name wins over the snapshot.
+    if (docRanges) {
+      const docName = docs?.find(
+        doc => doc.doc.id === docRanges.docId
+      )?.doc.name
+      if (docName !== undefined) {
+        for (const comment of docRanges.comments) {
+          docNameForThread.set(comment.op.t, docName)
         }
       }
     }
 
     return docNameForThread
-  }, [docs, projectRanges])
+  }, [docs, projectRanges, docRanges])
 
-  const allComments = useMemo(() => {
-    const allComments = new Map<
-      string,
-      Change<CommentOperation> & { resolved?: boolean }
-    >()
+  const allComments = useMemo(
+    () => buildCommentsMap([...(projectRanges?.values() ?? []), docRanges]),
+    [projectRanges, docRanges]
+  )
 
-    // eslint-disable-next-line no-unused-vars
-    for (const [_, ranges] of projectRanges?.entries() ?? []) {
-      for (const comment of ranges.comments) {
-        allComments.set(comment.op.t, comment)
-      }
-    }
-
-    return allComments
-  }, [projectRanges])
-
-  const resolvedThreads = useMemo(() => {
-    if (!threads) {
-      return []
-    }
-
-    const allResolvedThreads = []
-    for (const [id, thread] of Object.entries(threads)) {
-      // sharejs-text-ot has "resolved" on the thread; history-ot has "resolved" on the comment
-      if (thread.resolved || allComments.get(id)?.resolved) {
-        allResolvedThreads.push({ thread, id })
-      }
-    }
-    allResolvedThreads.sort((a, b) => {
-      // TODO: add "resolved_at"/"resolved_by" to history-ot comments?
-      if (!a.thread.resolved_at || !b.thread.resolved_at) {
-        return 0
-      }
-      return Date.parse(b.thread.resolved_at) - Date.parse(a.thread.resolved_at)
-    })
-
-    return allResolvedThreads.filter(({ id }) => allComments.has(id))
-  }, [threads, allComments])
+  const resolvedThreads = useMemo(
+    () => selectResolvedThreads(threads, allComments),
+    [threads, allComments]
+  )
 
   if (loading) {
     return <LoadingSpinner className="ms-auto me-auto" />
