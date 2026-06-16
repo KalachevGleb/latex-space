@@ -75,6 +75,9 @@ npm run test:unit -- --grep="DiffCodec"
   настройки и контроль регистрации.
 - `ServerAdmin/ServiceApiController.test.mjs` — админ-настройки Service API.
 - `Comments/CommentsController.test.mjs` — расширенный Comments API (треды, сообщения, позиции).
+- `Comments/RangesController.test.mjs` — `/project/:id/ranges`: отдаёт диапазоны **всех** документов,
+  обогащённые статусом resolved (серверная сторона бага «обзор только текущий файл»).
+- `Comments/TrackChangesController.test.mjs` — вкл/выкл track changes и приём изменений (accept).
 
 **Backend acceptance (web, Mocha — `services/web/test/acceptance/src/`)**
 - `ServiceApiPermissionsTests.mjs` — Service-to-Service API (`/service/*`): аутентификация
