@@ -123,7 +123,8 @@ Details: `README.deployment.md`.
 - `api_doc/API_INDEX.md` - full API documentation index.
 - `api_doc/SERVICE_TO_SERVICE_API.md` - key document for `/service/*` API.
 - `api_doc/API_DOCUMENTATION_RU.md` - extended API reference (Russian).
-- `TESTING.md` - testing scenarios.
+- `TESTING.md` - deployment testing scenarios.
+- `CODE_TESTS_RU.md` - automated code tests (unit/component): how to run, what's covered, review-panel bug diagnosis.
 
 ## Compatibility and security
 
