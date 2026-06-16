@@ -26,6 +26,19 @@ npm run cypress:run-ct    # frontend компонентные тесты (реа
 MOCHA_GREP="ServiceAuth" npm run test:unit:app
 ```
 
+### web — приёмочные (acceptance) тесты
+
+Поднимают web в одном процессе с тестом + реальные Mongo/Redis, а остальные
+сервисы (docstore, document-updater, chat, …) подменяются заглушками. Поэтому
+сквозь весь стек реально проверяются права доступа, проекты, коллабораторы и
+треды-комментарии (реальная Mongo). Запускать в dev-окружении (Docker):
+
+```bash
+cd services/web
+npm run test:acceptance:app
+MOCHA_GREP="Service-to-Service API" npm run test:acceptance:app   # только этот набор
+```
+
 ### document-updater и другие сервисы
 
 ```bash
@@ -49,6 +62,14 @@ npm run test:unit -- --grep="DiffCodec"
   настройки и контроль регистрации.
 - `ServerAdmin/ServiceApiController.test.mjs` — админ-настройки Service API.
 - `Comments/CommentsController.test.mjs` — расширенный Comments API (треды, сообщения, позиции).
+
+**Backend acceptance (web, Mocha — `services/web/test/acceptance/src/`)**
+- `ServiceApiPermissionsTests.mjs` — Service-to-Service API (`/service/*`): аутентификация
+  (нет/неверные креды, выключенный API, создание проекта от имени `X-Overleaf-User-Id`) и
+  **матрица прав**: для каждой роли (owner / editor / reviewer / readOnly / посторонний)
+  «тыкаем» в каждый review/comment-эндпоинт и проверяем, что срабатывают только разрешённые;
+  плюс жизненный цикл комментария (создать → ответить → resolve → reopen → редактировать →
+  удалить) разными пользователями.
 
 **Backend (document-updater, Mocha)**
 - `test/unit/js/DiffCodec/DiffCodecHistoryOTTests.js` — построение диффов в режиме исправлений
