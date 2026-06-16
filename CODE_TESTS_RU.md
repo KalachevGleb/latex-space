@@ -39,6 +39,19 @@ npm run test:acceptance:app
 MOCHA_GREP="Service-to-Service API" npm run test:acceptance:app   # только этот набор
 ```
 
+### Полный сквозной (E2E) тест — браузер на живом стеке
+
+`server-ce/test` запускает **весь стек в Docker** (web + document-updater +
+docstore + chat + real-time + Mongo/Redis) и гоняет браузерные Cypress-тесты.
+Только здесь реально проверяются редактирование текста, tracked changes и
+позиции комментариев сквозь живые сервисы. Запуск (macOS+Docker):
+
+```bash
+cd server-ce/test
+npm run cypress:run     # headless
+npm run cypress:open    # интерактивно
+```
+
 ### document-updater и другие сервисы
 
 ```bash
@@ -70,6 +83,13 @@ npm run test:unit -- --grep="DiffCodec"
   «тыкаем» в каждый review/comment-эндпоинт и проверяем, что срабатывают только разрешённые;
   плюс жизненный цикл комментария (создать → ответить → resolve → reopen → редактировать →
   удалить) разными пользователями.
+
+**Полный E2E (server-ce, Cypress в браузере — `server-ce/test/`)**
+- `review-comments-track-changes.spec.ts` — на живом стеке: добавление комментария
+  и его появление в панели; resolve → попадание в меню «Resolved» с кнопкой re-open →
+  reopen → видимость во вкладке «Обзор»; ответ коллаборатора на комментарий; tracked change
+  в режиме Reviewing и его принятие; read-only доступ у viewer. (Первый драфт — гонять на
+  Mac+Docker, селекторы/тайминги могут потребовать мелкой правки на первом прогоне.)
 
 **Backend (document-updater, Mocha)**
 - `test/unit/js/DiffCodec/DiffCodecHistoryOTTests.js` — построение диффов в режиме исправлений
