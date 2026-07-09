@@ -1,0 +1,10 @@
+src/**
+scripts/**
+node_modules/**
+tsconfig.json
+.gitignore
+out/extension.js.map
+out/smoke.js
+out/smoke-rt.js
+**/*.vsix
+out/test-diff.js

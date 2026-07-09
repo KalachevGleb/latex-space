@@ -1,0 +1,539 @@
+{
+  "name": "latexspace",
+  "displayName": "LatexSpace",
+  "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
+  "version": "0.5.0",
+  "publisher": "peer-review",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:.latexspace/project.json",
+    "workspaceContains:.overleaf/project.json"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "LatexSpace",
+      "properties": {
+        "latexspace.serverUrl": {
+          "type": "string",
+          "default": "http://localhost",
+          "description": "Адрес сервера LatexSpace (например, https://latex.example.org)"
+        },
+        "latexspace.userEmail": {
+          "type": "string",
+          "default": "",
+          "description": "E-mail вашей учётной записи (та же, что в браузере)"
+        },
+        "latexspace.compile.mode": {
+          "type": "string",
+          "enum": [
+            "server",
+            "local"
+          ],
+          "enumDescriptions": [
+            "Компиляция на сервере (результат идентичен веб-версии)",
+            "Локальная компиляция через latexmk (требуется установленный TeX Live)"
+          ],
+          "default": "server",
+          "description": "Где компилировать проект"
+        },
+        "latexspace.compile.compiler": {
+          "type": "string",
+          "enum": [
+            "pdflatex",
+            "xelatex",
+            "lualatex",
+            "latex"
+          ],
+          "default": "pdflatex",
+          "description": "Компилятор LaTeX"
+        },
+        "latexspace.compile.draft": {
+          "type": "boolean",
+          "default": false,
+          "description": "Черновой режим компиляции (быстрее, без картинок)"
+        },
+        "latexspace.compile.stopOnFirstError": {
+          "type": "boolean",
+          "default": false,
+          "description": "Останавливать компиляцию на первой ошибке"
+        },
+        "latexspace.compile.rootFile": {
+          "type": "string",
+          "default": "",
+          "description": "Главный .tex-файл (пусто — определить автоматически)"
+        },
+        "latexspace.compile.localCommand": {
+          "type": "string",
+          "default": "latexmk",
+          "description": "Команда локальной компиляции"
+        },
+        "latexspace.compile.localArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Дополнительные аргументы локальной компиляции"
+        },
+        "latexspace.sync.autoPush": {
+          "type": "boolean",
+          "default": true,
+          "description": "Автоматически отправлять изменения на сервер при сохранении файла"
+        },
+        "latexspace.sync.autoPull": {
+          "type": "boolean",
+          "default": true,
+          "description": "Автоматически забирать изменения с сервера (фоновый опрос)"
+        },
+        "latexspace.sync.pollIntervalSeconds": {
+          "type": "number",
+          "default": 15,
+          "minimum": 5,
+          "description": "Интервал опроса сервера, сек"
+        },
+        "latexspace.sync.deepReconcileEveryNPolls": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "description": "Каждые N опросов делать полную сверку содержимого (0 — отключить)"
+        },
+        "latexspace.ui.hiddenFilePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "_*.in",
+            "*.authors.tsv",
+            "*.abstract.*.tex",
+            "*.keywords.*.txt",
+            "*.title.*.tex"
+          ],
+          "description": "Служебные файлы журнала, скрываемые из проводника (files.exclude); синхронизация их не затрагивает"
+        },
+        "latexspace.sync.ignore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".build/**",
+            ".git/**",
+            ".vscode/**",
+            "node_modules/**",
+            "**/.DS_Store",
+            "*.aux",
+            "*.log",
+            "*.out",
+            "*.toc",
+            "*.lof",
+            "*.lot",
+            "*.fls",
+            "*.fdb_latexmk",
+            "*.bbl",
+            "*.blg",
+            "*.nav",
+            "*.snm",
+            "*.vrb",
+            "*.synctex.gz",
+            "*.synctex(busy)"
+          ],
+          "description": "Файлы, исключённые из синхронизации (glob-шаблоны относительно корня проекта)"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "latexspace.signIn",
+        "category": "LatexSpace",
+        "title": "Войти…"
+      },
+      {
+        "command": "latexspace.signOut",
+        "category": "LatexSpace",
+        "title": "Выйти (сменить пользователя)"
+      },
+      {
+        "command": "latexspace.openProject",
+        "category": "LatexSpace",
+        "title": "Открыть проект с сервера…"
+      },
+      {
+        "command": "latexspace.openProjectItem",
+        "category": "LatexSpace",
+        "title": "Открыть проект"
+      },
+      {
+        "command": "latexspace.projects.refresh",
+        "category": "LatexSpace",
+        "title": "Обновить список проектов",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "latexspace.syncNow",
+        "category": "LatexSpace",
+        "title": "Синхронизировать сейчас",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "latexspace.pushAll",
+        "category": "LatexSpace",
+        "title": "Полная отправка на сервер (с удалениями)…"
+      },
+      {
+        "command": "latexspace.showConflicts",
+        "category": "LatexSpace",
+        "title": "Конфликты синхронизации…"
+      },
+      {
+        "command": "latexspace.goOnline",
+        "category": "LatexSpace",
+        "title": "Выйти из оффлайн-режима…"
+      },
+      {
+        "command": "latexspace.compile",
+        "category": "LatexSpace",
+        "title": "Компилировать",
+        "icon": "$(play)"
+      },
+      {
+        "command": "latexspace.stopCompile",
+        "category": "LatexSpace",
+        "title": "Остановить компиляцию"
+      },
+      {
+        "command": "latexspace.showPdf",
+        "category": "LatexSpace",
+        "title": "Показать PDF",
+        "icon": "$(file-pdf)"
+      },
+      {
+        "command": "latexspace.showLog",
+        "category": "LatexSpace",
+        "title": "Показать лог компиляции"
+      },
+      {
+        "command": "latexspace.syncToPdf",
+        "category": "LatexSpace",
+        "title": "Показать это место в PDF (SyncTeX)"
+      },
+      {
+        "command": "latexspace.syncMenu",
+        "category": "LatexSpace",
+        "title": "Меню синхронизации"
+      },
+      {
+        "command": "latexspace.comments.refresh",
+        "category": "LatexSpace",
+        "title": "Обновить комментарии",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "latexspace.comments.toggleResolved",
+        "category": "LatexSpace",
+        "title": "Показать/скрыть решённые комментарии",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "latexspace.comments.reply",
+        "category": "LatexSpace",
+        "title": "Ответить…",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "latexspace.comments.resolve",
+        "category": "LatexSpace",
+        "title": "Пометить решённым",
+        "icon": "$(check)"
+      },
+      {
+        "command": "latexspace.comments.reopen",
+        "category": "LatexSpace",
+        "title": "Открыть заново",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "latexspace.comments.open",
+        "category": "LatexSpace",
+        "title": "Перейти к комментарию"
+      },
+      {
+        "command": "latexspace.comments.add",
+        "category": "LatexSpace",
+        "title": "Добавить комментарий к выделению…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "latexspace.trackChanges.toggle",
+        "category": "LatexSpace",
+        "title": "Рецензирование: включить/выключить track changes",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "latexspace.changes.open",
+        "category": "LatexSpace",
+        "title": "Перейти к правке"
+      },
+      {
+        "command": "latexspace.changes.accept",
+        "category": "LatexSpace",
+        "title": "Принять правку",
+        "icon": "$(check)"
+      },
+      {
+        "command": "latexspace.changes.reject",
+        "category": "LatexSpace",
+        "title": "Отклонить правку",
+        "icon": "$(discard)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "latexspace",
+          "title": "LatexSpace",
+          "icon": "media/latexspace.svg"
+        }
+      ]
+    },
+    "views": {
+      "latexspace": [
+        {
+          "id": "latexspaceProjects",
+          "name": "Проекты",
+          "contextualTitle": "Проекты LatexSpace"
+        },
+        {
+          "id": "latexspaceComments",
+          "name": "Комментарии",
+          "contextualTitle": "Комментарии LatexSpace"
+        },
+        {
+          "id": "latexspaceChanges",
+          "name": "Правки (track changes)",
+          "contextualTitle": "Правки LatexSpace"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "latexspaceProjects",
+        "contents": "Вы не вошли в LatexSpace.\n[Войти](command:latexspace.signIn)",
+        "when": "!latexspace.signedIn"
+      },
+      {
+        "view": "latexspaceComments",
+        "contents": "Комментарии появятся после открытия проекта.\n[Открыть проект](command:latexspace.openProject)",
+        "when": "!latexspace.active"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "latexspace.comments.add",
+          "group": "latexspace@1",
+          "when": "latexspace.active && editorHasSelection"
+        },
+        {
+          "command": "latexspace.syncToPdf",
+          "group": "latexspace@2",
+          "when": "latexspace.active && resourceExtname == .tex"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "latexspace.compile",
+          "group": "navigation@1",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.showPdf",
+          "group": "navigation@2",
+          "when": "latexspace.active"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "latexspace.projects.refresh",
+          "when": "view == latexspaceProjects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "latexspace.comments.add",
+          "when": "view == latexspaceComments",
+          "group": "navigation@1"
+        },
+        {
+          "command": "latexspace.comments.refresh",
+          "when": "view == latexspaceComments",
+          "group": "navigation@2"
+        },
+        {
+          "command": "latexspace.comments.toggleResolved",
+          "when": "view == latexspaceComments",
+          "group": "navigation@3"
+        },
+        {
+          "command": "latexspace.trackChanges.toggle",
+          "when": "view == latexspaceChanges",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "latexspace.comments.reply",
+          "when": "view == latexspaceComments && viewItem =~ /^lsThread/",
+          "group": "inline@1"
+        },
+        {
+          "command": "latexspace.comments.resolve",
+          "when": "view == latexspaceComments && viewItem == lsThread-open",
+          "group": "inline@2"
+        },
+        {
+          "command": "latexspace.comments.reopen",
+          "when": "view == latexspaceComments && viewItem == lsThread-resolved",
+          "group": "inline@2"
+        },
+        {
+          "command": "latexspace.changes.accept",
+          "when": "view == latexspaceChanges && viewItem == lsChange",
+          "group": "inline@1"
+        },
+        {
+          "command": "latexspace.changes.reject",
+          "when": "view == latexspaceChanges && viewItem == lsChange",
+          "group": "inline@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "latexspace.comments.open",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.changes.open",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.changes.accept",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.changes.reject",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.comments.add",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.trackChanges.toggle",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.comments.reply",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.comments.resolve",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.comments.reopen",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.syncMenu",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.openProjectItem",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.syncNow",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.pushAll",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.showConflicts",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.goOnline",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.compile",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.stopCompile",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.showPdf",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.showLog",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.syncToPdf",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.comments.refresh",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.comments.toggleResolved",
+          "when": "latexspace.active"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "latexspace.compile",
+        "key": "ctrl+alt+b",
+        "mac": "cmd+alt+b",
+        "when": "latexspace.active"
+      },
+      {
+        "command": "latexspace.syncToPdf",
+        "key": "ctrl+alt+j",
+        "mac": "cmd+alt+j",
+        "when": "latexspace.active && editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.js && npm run typecheck",
+    "watch": "node scripts/build.js --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run build && vsce package"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
+    "@types/node": "^18.19.0",
+    "@types/vscode": "1.85.0",
+    "@vscode/vsce": "^2.32.0",
+    "adm-zip": "^0.5.14",
+    "esbuild": "^0.21.5",
+    "pdfjs-dist": "3.11.174",
+    "typescript": "^5.5.0"
+  }
+}
