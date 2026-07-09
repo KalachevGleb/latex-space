@@ -1,0 +1,77 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--vscode-editor-background, #1e1e1e);
+  color: var(--vscode-foreground, #ccc);
+  font-family: var(--vscode-font-family, sans-serif);
+}
+
+#toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--vscode-editorWidget-background, #252526);
+  border-bottom: 1px solid var(--vscode-editorWidget-border, #454545);
+  font-size: 12px;
+}
+
+#toolbar button {
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #ccc);
+  border: none;
+  border-radius: 3px;
+  min-width: 26px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+#toolbar button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+#status {
+  margin-left: auto;
+  opacity: 0.7;
+}
+
+#pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 40px;
+}
+
+.page-wrap {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  background: white;
+  position: relative;
+}
+
+.page-wrap canvas {
+  display: block;
+}
+
+#hint {
+  opacity: 0.5;
+  margin-left: 12px;
+}
+
+.synctex-highlight {
+  position: absolute;
+  background: rgba(66, 133, 244, 0.28);
+  outline: 1px solid rgba(66, 133, 244, 0.7);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: opacity 0.8s;
+}
+
+.synctex-highlight.fade {
+  opacity: 0;
+}
