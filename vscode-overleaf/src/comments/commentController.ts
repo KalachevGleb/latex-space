@@ -123,7 +123,7 @@ export class LiveCommentController implements vscode.Disposable {
     }
     // цитату в заголовок не выносим — комментируемый текст и так виден
     // прямо над виджетом
-    thread.label = 'Комментарий'
+    thread.label = ''
     thread.contextValue = 'lsOpen'
     thread.canReply = true
     thread.comments = m.messages.map(msg => ({

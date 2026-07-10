@@ -758,6 +758,14 @@ export class RealtimeManager implements vscode.Disposable {
       void this.resyncDoc(binding)
       return
     }
+    // контроль целостности: после применения буфер и модель обязаны
+    // совпадать; расхождение (например, гонка с чужим расширением,
+    // правящим документ) чинится немедленным resync, а не копится
+    if (e.document.getText() !== binding.ot.text) {
+      this.log(`«${rel}»: буфер разошёлся с моделью — пересинхронизация`)
+      void this.resyncDoc(binding)
+      return
+    }
     if (this.trackChangesEnabled) this.fireRangesChanged()
     this.scheduleAutoSave(binding)
   }

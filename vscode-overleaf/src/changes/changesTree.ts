@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import type { LiveRanges } from '../realtime/realtimeManager'
+import { formatCompactDate } from '../util/dates'
 import { aggregateChanges, DisplayChange } from './aggregate'
 
 export type ChangesNode = ChangeFileNode | ChangeNode
@@ -75,23 +76,23 @@ export class ChangesTreeProvider
       return item
     }
     const d = element.display
-    // тип правки ясен по значку — слова в подписи лишние
+    // тип правки ясен по значку — слова и кавычки в подписи лишние
     let label: string
     let icon: vscode.ThemeIcon
     if (d.kind === 'replace') {
-      label = `«${trimText(d.del!.op.d ?? '', 25)}» → «${trimText(d.ins!.op.i ?? '', 25)}»`
+      label = `${trimText(d.del!.op.d ?? '', 25)} → ${trimText(d.ins!.op.i ?? '', 25)}`
       icon = new vscode.ThemeIcon(
         'replace',
         new vscode.ThemeColor('charts.yellow')
       )
     } else if (d.kind === 'insert') {
-      label = `«${trimText(d.ins!.op.i ?? '')}»`
+      label = trimText(d.ins!.op.i ?? '')
       icon = new vscode.ThemeIcon(
         'diff-added',
         new vscode.ThemeColor('charts.green')
       )
     } else {
-      label = `«${trimText(d.del!.op.d ?? '')}»`
+      label = trimText(d.del!.op.d ?? '')
       icon = new vscode.ThemeIcon(
         'diff-removed',
         new vscode.ThemeColor('charts.red')
@@ -100,8 +101,7 @@ export class ChangesTreeProvider
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None)
     item.iconPath = icon
     const meta = d.ins?.metadata ?? d.del?.metadata
-    const ts = meta?.ts ? new Date(meta.ts as string) : undefined
-    item.description = ts ? ts.toLocaleString() : undefined
+    item.description = formatCompactDate(meta?.ts as string | Date | undefined)
     const tooltip = new vscode.MarkdownString(
       d.kind === 'replace'
         ? '**Замена**\n\nБыло:'

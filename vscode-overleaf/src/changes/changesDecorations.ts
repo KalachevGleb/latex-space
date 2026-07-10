@@ -3,15 +3,11 @@ import * as vscode from 'vscode'
 import type { LiveRanges } from '../realtime/realtimeManager'
 import { aggregateChanges } from './aggregate'
 
-function trimText(s: string, n = 30): string {
-  const one = s.replace(/\s+/g, ' ')
-  return one.length > n ? one.slice(0, n - 1) + '…' : one
-}
-
 /**
  * Подсветка tracked changes в редакторе:
- * вставки — зелёная подложка + подчёркивание, удаления — красный маркер
- * с зачёркнутым удалённым текстом (как в review panel веба).
+ * вставки — зелёная подложка + подчёркивание; удаления — узкий красный
+ * маркер на месте удаления (как в веб-редакторе), сам удалённый текст —
+ * в hover и в панели «Правки».
  */
 export class ChangesDecorations implements vscode.Disposable {
   private insertDecoration: vscode.TextEditorDecorationType
@@ -30,9 +26,10 @@ export class ChangesDecorations implements vscode.Disposable {
     })
     this.deleteDecoration = vscode.window.createTextEditorDecorationType({
       before: {
-        color: 'rgba(248, 81, 73, 0.9)',
-        textDecoration: 'line-through',
-        margin: '0 2px 0 2px',
+        contentText: '▎',
+        color: 'rgba(248, 81, 73, 0.95)',
+        fontWeight: 'bold',
+        margin: '0 -2px 0 -2px',
       },
       overviewRulerColor: 'rgba(248, 81, 73, 0.8)',
       overviewRulerLane: vscode.OverviewRulerLane.Left,
@@ -95,9 +92,6 @@ export class ChangesDecorations implements vscode.Disposable {
           const pos = editor.document.positionAt(p)
           deletes.push({
             range: new vscode.Range(pos, pos),
-            renderOptions: {
-              before: { contentText: trimText(dc.del.op.d) },
-            },
             hoverMessage:
               replaceHover ??
               new vscode.MarkdownString(

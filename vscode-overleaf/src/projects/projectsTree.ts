@@ -1,17 +1,30 @@
+import * as fs from 'fs/promises'
+import * as path from 'path'
 import * as vscode from 'vscode'
 import { LatexSpaceClient } from '../api/client'
 import { ProjectListItem } from '../api/types'
+import { getConfig } from '../config'
+import { LATEXSPACE_DIR } from '../sync/state'
+import { IgnoreMatcher } from '../util/glob'
 
 export interface ActiveProjectInfo {
   projectId: string
   projectName: string
+  rootDir: string
   conflicts: number
   offline: boolean
   /** активно real-time соединение — ручная синхронизация не нужна */
   live: boolean
 }
 
-type Node = ActiveNode | ActionNode | ProjectNode | InfoNode
+type Node =
+  | ActiveNode
+  | ActionNode
+  | ProjectNode
+  | InfoNode
+  | FolderNode
+  | FileNode
+  | ProjectsGroupNode
 
 class ActiveNode {
   constructor(readonly info: ActiveProjectInfo) {}
@@ -33,6 +46,17 @@ class ProjectNode {
 class InfoNode {
   constructor(readonly label: string) {}
 }
+
+class FolderNode {
+  constructor(readonly abs: string, readonly name: string) {}
+}
+
+class FileNode {
+  constructor(readonly abs: string, readonly name: string) {}
+}
+
+/** Свёрнутая группа «Другие проекты» под файлами текущего. */
+class ProjectsGroupNode {}
 
 function formatDate(iso?: string): string {
   if (!iso) return ''
@@ -105,7 +129,56 @@ export class ProjectsTreeProvider
     }
   }
 
-  getChildren(element?: Node): Node[] {
+  /** Дёрнуть перерисовку (например, при изменении файлов на диске). */
+  poke(): void {
+    this.changeEmitter.fire()
+  }
+
+  private filesMatcher(): IgnoreMatcher {
+    const cfg = getConfig()
+    return new IgnoreMatcher([
+      `${LATEXSPACE_DIR}/**`,
+      ...cfg.ignore,
+      ...cfg.hiddenFilePatterns,
+    ])
+  }
+
+  /** Файлы и папки каталога проекта (как в проводнике: папки сверху). */
+  private async listDir(dir: string, rootDir: string): Promise<Node[]> {
+    let entries: Array<{ name: string; isDirectory(): boolean }>
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true })
+    } catch {
+      return []
+    }
+    const matcher = this.filesMatcher()
+    const folders: FolderNode[] = []
+    const files: FileNode[] = []
+    for (const e of entries) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue
+      const abs = path.join(dir, e.name)
+      const rel = path.relative(rootDir, abs).split(path.sep).join('/')
+      if (e.isDirectory()) {
+        folders.push(new FolderNode(abs, e.name))
+      } else if (!matcher.ignoresFile(rel)) {
+        files.push(new FileNode(abs, e.name))
+      }
+    }
+    folders.sort((a, b) => a.name.localeCompare(b.name))
+    files.sort((a, b) => a.name.localeCompare(b.name))
+    return [...folders, ...files]
+  }
+
+  async getChildren(element?: Node): Promise<Node[]> {
+    if (element instanceof FolderNode) {
+      return this.listDir(element.abs, this.active?.rootDir ?? element.abs)
+    }
+    if (element instanceof ProjectsGroupNode) {
+      if (this.projects.length === 0) return [new InfoNode('Проектов нет')]
+      return this.projects.map(
+        p => new ProjectNode(p, p.id === this.active?.projectId)
+      )
+    }
     if (element instanceof ActiveNode) {
       const nodes = [
         new ActionNode('Компилировать', 'play', 'latexspace.compile'),
@@ -145,8 +218,18 @@ export class ProjectsTreeProvider
 
     // корень
     if (!this.client) return []
+
+    // проект открыт: показываем ЕГО файлы, а список проектов — свёрнутой
+    // группой ниже (не приходится прыгать в проводник и обратно)
+    if (this.active) {
+      return [
+        new ActiveNode(this.active),
+        ...(await this.listDir(this.active.rootDir, this.active.rootDir)),
+        new ProjectsGroupNode(),
+      ]
+    }
+
     const roots: Node[] = []
-    if (this.active) roots.push(new ActiveNode(this.active))
     if (this.loading && this.projects.length === 0) {
       roots.push(new InfoNode('Загрузка…'))
     } else if (this.lastError && this.projects.length === 0) {
@@ -155,13 +238,44 @@ export class ProjectsTreeProvider
       roots.push(new InfoNode('Проектов нет'))
     } else {
       for (const p of this.projects) {
-        roots.push(new ProjectNode(p, p.id === this.active?.projectId))
+        roots.push(new ProjectNode(p, false))
       }
     }
     return roots
   }
 
   getTreeItem(element: Node): vscode.TreeItem {
+    if (element instanceof FolderNode) {
+      const item = new vscode.TreeItem(
+        vscode.Uri.file(element.abs),
+        vscode.TreeItemCollapsibleState.Collapsed
+      )
+      item.contextValue = 'lsFolder'
+      return item
+    }
+    if (element instanceof FileNode) {
+      const item = new vscode.TreeItem(
+        vscode.Uri.file(element.abs),
+        vscode.TreeItemCollapsibleState.None
+      )
+      item.command = {
+        command: 'vscode.open',
+        title: 'Открыть файл',
+        arguments: [vscode.Uri.file(element.abs)],
+      }
+      item.contextValue = 'lsFile'
+      return item
+    }
+    if (element instanceof ProjectsGroupNode) {
+      const item = new vscode.TreeItem(
+        'Другие проекты',
+        vscode.TreeItemCollapsibleState.Collapsed
+      )
+      item.description = String(this.projects.length || '')
+      item.iconPath = new vscode.ThemeIcon('notebook')
+      item.contextValue = 'lsProjectsGroup'
+      return item
+    }
     if (element instanceof ActiveNode) {
       const item = new vscode.TreeItem(
         element.info.projectName,
