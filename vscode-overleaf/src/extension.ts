@@ -14,7 +14,7 @@ import { CommentsService } from './comments/commentsService'
 import { CommentsTreeProvider, ThreadNode } from './comments/commentsTree'
 import { CommentDecorations } from './comments/decorations'
 import { CompileManager } from './compile/compiler'
-import { PdfPreview } from './compile/pdfPreview'
+import { PdfPreview, registerPdfPanelSerializer } from './compile/pdfPreview'
 import { SyncTexService } from './compile/synctex'
 import {
   buildClient,
@@ -72,7 +72,7 @@ class ProjectSession implements vscode.Disposable {
     readonly offline: boolean
   ) {
     this.sync = new SyncManager(client, state, meta, output)
-    this.preview = new PdfPreview(context)
+    this.preview = new PdfPreview(context, state.rootDir)
     this.compiler = new CompileManager(
       client,
       this.sync,
@@ -128,6 +128,7 @@ class ProjectSession implements vscode.Disposable {
       { dispose: () => treePokeTimer && clearTimeout(treePokeTimer) }
     )
     this.disposables.push(
+      this.preview,
       this.sync,
       this.compiler,
       this.comments,
@@ -190,7 +191,19 @@ class ProjectSession implements vscode.Disposable {
         ),
         watcher.onDidCreate(uri => this.sync.onFsChangeOrCreate(uri)),
         watcher.onDidChange(uri => this.sync.onFsChangeOrCreate(uri)),
-        watcher.onDidDelete(uri => this.sync.onFsDelete(uri)),
+        watcher.onDidDelete(uri => {
+          if (this.sync.isSelfWrite(uri.fsPath)) return
+          const rel = this.sync.relOf(uri)
+          if (rel && this.realtime?.managesRel(rel)) {
+            // live-документ: отвязать (иначе он будет воссоздан с диска)
+            // и передать решение файловой синхронизации
+            void this.realtime.handleLocalFileDeleted(rel).then(content => {
+              if (content) this.sync.notifyDeleted(rel, content)
+            })
+          } else {
+            this.sync.onFsDelete(uri)
+          }
+        }),
         vscode.window.onDidChangeWindowState(e => {
           if (e.focused) void this.sync.pollTick()
         }),
@@ -273,6 +286,7 @@ export async function activate(
   projectsTree = new ProjectsTreeProvider()
   context.subscriptions.push(
     projectsTree,
+    registerPdfPanelSerializer(),
     vscode.window.createTreeView('latexspaceProjects', {
       treeDataProvider: projectsTree,
     })

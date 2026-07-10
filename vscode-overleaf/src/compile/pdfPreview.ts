@@ -2,6 +2,19 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as vscode from 'vscode'
 
+/**
+ * Восстановленные после перезагрузки окна PDF-вкладки бесполезны
+ * (расширение о них не знает) — закрываем их прямо в момент
+ * восстановления. Регистрируется один раз в activate().
+ */
+export function registerPdfPanelSerializer(): vscode.Disposable {
+  return vscode.window.registerWebviewPanelSerializer('latexspacePdf', {
+    deserializeWebviewPanel: async panel => {
+      panel.dispose()
+    },
+  })
+}
+
 export interface PdfSyncClick {
   page: number
   h: number
@@ -20,11 +33,16 @@ export interface PdfHighlight {
 
 /**
  * Панель предпросмотра PDF на pdf.js (webview).
- * Открывается закреплённой вкладкой во второй колонке; содержимое передаётся
- * сообщением (base64), поэтому обновляется после каждой перекомпиляции.
+ * Открывается закреплённой вкладкой во второй колонке. Содержимое
+ * загружается самим webview по URI (никаких мегабайт через postMessage) —
+ * сообщение несёт только адрес файла.
  * Ctrl/Cmd+Click по странице шлёт координаты для обратного SyncTeX.
+ *
+ * Восстановленные после перезагрузки окна вкладки закрывает сериализатор
+ * (registerPdfPanelSerializer в activate) — контроль в момент
+ * восстановления, без сканов и гонок.
  */
-export class PdfPreview {
+export class PdfPreview implements vscode.Disposable {
   private panel?: vscode.WebviewPanel
   private lastPdfPath?: string
   /**
@@ -37,32 +55,18 @@ export class PdfPreview {
   /** обработчик Ctrl/Cmd+Click по PDF (обратный SyncTeX) */
   onSyncToCode?: (click: PdfSyncClick) => void
 
-  constructor(private context: vscode.ExtensionContext) {
-    // после перезагрузки окна VSCode «восстанавливает» вкладку webview
-    // пустой оболочкой, о которой расширение не знает — закрываем такие
-    // зомби-вкладки, чтобы не плодились дубли
-    void this.closeZombiePanels()
+  constructor(
+    private context: vscode.ExtensionContext,
+    private rootDir: string
+  ) {}
+
+  dispose(): void {
+    this.panel?.dispose()
+    this.panel = undefined
   }
 
   get isOpen(): boolean {
     return !!this.panel
-  }
-
-  private async closeZombiePanels(): Promise<void> {
-    if (this.panel) return
-    const zombies = vscode.window.tabGroups.all
-      .flatMap(g => g.tabs)
-      .filter(
-        t =>
-          t.input instanceof vscode.TabInputWebview &&
-          t.input.viewType.includes('latexspacePdf')
-      )
-    if (zombies.length > 0) {
-      await vscode.window.tabGroups.close(zombies, true).then(
-        () => undefined,
-        () => undefined
-      )
-    }
   }
 
   private post(msg: unknown): void {
@@ -76,16 +80,17 @@ export class PdfPreview {
   async showFile(pdfPath: string, title = 'PDF'): Promise<void> {
     this.lastPdfPath = pdfPath
     const panel = await this.ensurePanel(title)
-    let data: Buffer
     try {
-      data = await fs.readFile(pdfPath)
+      await fs.access(pdfPath)
     } catch {
       // PDF ещё не собран — пустое состояние с кнопкой прямо в панели
       this.post({ type: 'empty' })
       return
     }
     panel.title = title
-    this.post({ type: 'load', data: data.toString('base64') })
+    const uri = panel.webview.asWebviewUri(vscode.Uri.file(pdfPath))
+    // метка времени — чтобы webview не взял закэшированную версию
+    this.post({ type: 'load', url: `${uri.toString()}?ts=${Date.now()}` })
   }
 
   async refresh(): Promise<void> {
@@ -109,7 +114,6 @@ export class PdfPreview {
       this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, true)
       return this.panel
     }
-    await this.closeZombiePanels()
     const mediaRoot = vscode.Uri.file(
       path.join(this.context.extensionPath, 'media')
     )
@@ -121,7 +125,7 @@ export class PdfPreview {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [mediaRoot],
+        localResourceRoots: [mediaRoot, vscode.Uri.file(this.rootDir)],
       }
     )
     panel.onDidDispose(() => {
