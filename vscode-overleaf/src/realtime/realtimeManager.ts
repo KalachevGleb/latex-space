@@ -400,6 +400,19 @@ export class RealtimeManager implements vscode.Disposable {
     return parts.join('/')
   }
 
+  /** Сущность (doc/file) по относительному пути — для операций с сервером. */
+  entityByRel(rel: string): { id: string; type: 'doc' | 'file' } | null {
+    for (const [id, e] of this.entities) {
+      if (
+        (e.type === 'doc' || e.type === 'file') &&
+        this.pathOf(id) === rel
+      ) {
+        return { id, type: e.type }
+      }
+    }
+    return null
+  }
+
   private docIdByRel(rel: string): string | null {
     for (const [id, e] of this.entities) {
       if (e.type === 'doc' && this.pathOf(id) === rel) return id

@@ -214,6 +214,9 @@ export class SyncTexService {
       if (!rel.startsWith('..')) {
         const ex = this.compiler.explodedFor(rel)
         if (ex) {
+          // synctex часто «не добивает» до нужного слова на 1–2 строки —
+          // доводим по фактической близости к точке клика
+          line = await this.refineExplodedLine(rel, line, click, pdf)
           const mapped = ex.origLineCol(line, column)
           line = mapped.line1
           column = mapped.col0
@@ -222,6 +225,53 @@ export class SyncTexService {
       }
     }
     return [{ file, line, column }]
+  }
+
+  /**
+   * Доводка обратного SyncTeX в развёрнутом файле: пробуем окрестные
+   * строки (слова) forward-запросами и выбираем ту, чей бокс ближе всего
+   * к точке клика. Стоимость — несколько локальных вызовов synctex (мс).
+   */
+  private async refineExplodedLine(
+    rel: string,
+    line: number,
+    click: PdfSyncClick,
+    pdf: string
+  ): Promise<number> {
+    let best = line
+    let bestScore = Infinity
+    for (let cand = Math.max(1, line - 1); cand <= line + 4; cand++) {
+      try {
+        const out = await this.runSynctex([
+          'view',
+          '-i',
+          `${cand}:1:${rel}`,
+          '-o',
+          pdf,
+        ])
+        const rec = this.parseRecord(out, ['Page', 'h', 'v', 'W', 'H'])
+        if (!rec.Page || parseInt(rec.Page, 10) !== click.page) continue
+        const h = parseFloat(rec.h || '0')
+        const v = parseFloat(rec.v || '0')
+        const w = parseFloat(rec.W || '0')
+        const hh = parseFloat(rec.H || '0')
+        // расстояние до бокса слова: по вертикали (с весом) + по горизонтали
+        const dv = Math.max(0, Math.abs(click.v - (v - hh / 2)) - hh / 2)
+        const dh =
+          click.h < h ? h - click.h : click.h > h + w ? click.h - (h + w) : 0
+        const score = dv * 3 + dh
+        if (score < bestScore) {
+          bestScore = score
+          best = cand
+        }
+      } catch {
+        /* строки может не быть в synctex — пропустить */
+      }
+    }
+    if (best !== line) {
+      this.log(`доводка: строка ${line} → ${best} (score ${bestScore.toFixed(1)})`)
+    }
+    return best
   }
 
   /** Разобрать первую запись вывода synctex (строки "Key:value"). */

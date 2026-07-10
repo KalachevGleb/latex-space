@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -376,6 +376,12 @@
         "command": "latexspace.checkConflicts",
         "category": "LatexSpace",
         "title": "Проверить конфликтующие расширения…"
+      },
+      {
+        "command": "latexspace.pushFile",
+        "category": "LatexSpace",
+        "title": "Отправить файл на сервер",
+        "icon": "$(cloud-upload)"
       }
     ],
     "viewsContainers": {
@@ -513,6 +519,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "latexspace.pushFile",
+          "when": "view == latexspaceProjects && viewItem == lsFileUntracked",
+          "group": "inline@1"
+        },
         {
           "command": "latexspace.comments.reply",
           "when": "view == latexspaceComments && viewItem =~ /^lsThread/",
@@ -655,6 +666,10 @@
         {
           "command": "latexspace.checkConflicts",
           "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.pushFile",
+          "when": "false"
         }
       ]
     },

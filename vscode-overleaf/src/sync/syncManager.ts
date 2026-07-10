@@ -23,7 +23,7 @@ export type SyncStatus =
 
 export interface Conflict {
   rel: string
-  kind: 'modified' | 'deletedOnServer'
+  kind: 'modified' | 'deletedOnServer' | 'deletedLocally'
   serverContent: Buffer | null
 }
 
@@ -58,6 +58,16 @@ export class SyncManager implements vscode.Disposable {
   private freshUntracked = new Set<string>()
   private untrackedTimer?: NodeJS.Timeout
   private muteUntrackedNotice = false
+  /**
+   * Локально удалённые файлы, ждущие решения пользователя
+   * (rel → содержимое для возможного восстановления).
+   * Правило системы: локальное удаление НИКОГДА не «воскрешается»
+   * автоматически — только явные действия «Удалить на сервере» /
+   * «Вернуть файл».
+   */
+  private pendingDeletions = new Map<string, Buffer>()
+  /** удаление сущности на сервере (id по rel даёт realtime-модуль) */
+  entityResolver?: (rel: string) => { id: string; type: 'doc' | 'file' } | null
   private lock: Promise<unknown> = Promise.resolve()
   private pollTimer?: NodeJS.Timeout
   private pollCount = 0
@@ -288,13 +298,22 @@ export class SyncManager implements vscode.Disposable {
       const baseList = await this.state.listBase()
       const newConflicts = new Map<string, Conflict>()
       const applied: string[] = []
-      const resurrected: string[] = []
       const removed: string[] = []
 
       for (const [rel, S] of server) {
         if (this.isRealtimeManaged(rel)) continue
         const B = await this.state.readBase(rel)
         const L = await this.effectiveLocal(rel)
+        if (L === null && B !== null) {
+          // удалён локально — автоматически НЕ восстанавливаем
+          if (contentsEqual(S, B)) {
+            this.notifyLocalDeletion(rel, S)
+          } else {
+            // сервер тем временем изменился — решает пользователь
+            newConflicts.set(rel, { rel, kind: 'deletedLocally', serverContent: S })
+          }
+          continue
+        }
         if (B !== null && contentsEqual(S, B)) {
           // сервер не менялся; локальные правки (если есть) уйдут при push
           continue
@@ -305,12 +324,6 @@ export class SyncManager implements vscode.Disposable {
           await writeFileEnsuringDir(this.state.localPath(rel), S)
           await this.state.writeBase(rel, S)
           applied.push(rel)
-        } else if (L === null && B !== null) {
-          // удалён локально, но изменён на сервере → восстанавливаем серверную версию
-          this.markSelfWrite(this.state.localPath(rel))
-          await writeFileEnsuringDir(this.state.localPath(rel), S)
-          await this.state.writeBase(rel, S)
-          resurrected.push(rel)
         } else if (contentsEqual(L, S)) {
           // уже совпали (например, наш же push)
           await this.state.writeBase(rel, S)
@@ -366,16 +379,11 @@ export class SyncManager implements vscode.Disposable {
       for (const rel of server.keys()) this.untracked.delete(rel)
 
       this.conflicts = newConflicts
-      if (applied.length || resurrected.length || removed.length) {
+      if (applied.length || removed.length) {
         this.log(
-          `pull v${version}: обновлено ${applied.length}, восстановлено ${resurrected.length}, удалено ${removed.length}`
+          `pull v${version}: обновлено ${applied.length}, удалено ${removed.length}`
         )
         // перечитать буферы для обновлённых открытых файлов делает сам VSCode
-      }
-      if (resurrected.length) {
-        void vscode.window.showInformationMessage(
-          `LatexSpace: файлы, удалённые локально, изменились на сервере и были восстановлены: ${resurrected.join(', ')}`
-        )
       }
       if (newConflicts.size > 0) {
         this.log(
@@ -597,6 +605,20 @@ export class SyncManager implements vscode.Disposable {
 
   async showConflictDiff(conflict: Conflict): Promise<void> {
     const localUri = vscode.Uri.file(this.state.localPath(conflict.rel))
+    if (conflict.kind === 'deletedLocally') {
+      // локального файла нет — показать серверную версию
+      const remotePath = await this.state.writeRemoteCopy(
+        conflict.rel,
+        conflict.serverContent ?? Buffer.alloc(0)
+      )
+      void vscode.window.showInformationMessage(
+        `«${conflict.rel}» удалён локально, но изменён на сервере. Это серверная версия — выберите: вернуть её или удалить файл и на сервере.`
+      )
+      await vscode.window.showTextDocument(vscode.Uri.file(remotePath), {
+        preview: true,
+      })
+      return
+    }
     if (conflict.kind === 'deletedOnServer') {
       void vscode.window.showInformationMessage(
         `«${conflict.rel}» удалён на сервере, но изменён локально. Выберите: оставить локальную версию (файл будет создан на сервере заново) или удалить локально.`
@@ -618,6 +640,14 @@ export class SyncManager implements vscode.Disposable {
 
   async resolveTakeServer(conflict: Conflict): Promise<void> {
     const abs = this.state.localPath(conflict.rel)
+    if (conflict.kind === 'deletedLocally') {
+      // вернуть серверную версию удалённого локально файла
+      if (conflict.serverContent) {
+        this.pendingDeletions.set(conflict.rel, conflict.serverContent)
+        await this.restoreDeleted(conflict.rel)
+      }
+      return
+    }
     if (conflict.kind === 'deletedOnServer') {
       this.markSelfWrite(abs)
       await this.state.moveToTrash(conflict.rel)
@@ -642,6 +672,11 @@ export class SyncManager implements vscode.Disposable {
   }
 
   async resolveKeepLocal(conflict: Conflict): Promise<void> {
+    if (conflict.kind === 'deletedLocally') {
+      // «локальная версия» = файла нет → удалить и на сервере
+      await this.deleteOnServer(conflict.rel)
+      return
+    }
     const L = await readFileOrNull(this.state.localPath(conflict.rel))
     if (L === null) {
       this.conflicts.delete(conflict.rel)
@@ -734,7 +769,91 @@ export class SyncManager implements vscode.Disposable {
     )
   }
 
+  // ---------- локальные удаления ----------
+
+  /**
+   * Файл удалён локально, на сервере остался. Показать (один раз) выбор:
+   * удалить и на сервере или вернуть файл. Содержимое для восстановления
+   * снимается сейчас (из сервера/базы) — «воскрешения» без спроса нет.
+   */
+  private notifyLocalDeletion(rel: string, content: Buffer): void {
+    if (this.pendingDeletions.has(rel)) return
+    this.pendingDeletions.set(rel, content)
+    void vscode.window
+      .showWarningMessage(
+        `LatexSpace: «${rel}» удалён локально, но на сервере остался.`,
+        'Удалить на сервере',
+        'Вернуть файл'
+      )
+      .then(pick => {
+        if (pick === 'Удалить на сервере') void this.deleteOnServer(rel)
+        else if (pick === 'Вернуть файл') void this.restoreDeleted(rel)
+        // закрыто без выбора — файл остаётся удалённым локально,
+        // решение можно принять позже через конфликты/полную отправку
+      })
+  }
+
+  /** Явное удаление файла на сервере (по id сущности из realtime-модели). */
+  async deleteOnServer(rel: string): Promise<void> {
+    const entity = this.entityResolver?.(rel)
+    if (!entity) {
+      void vscode.window.showWarningMessage(
+        `LatexSpace: не удалось определить id «${rel}» на сервере (нужно live-подключение). Используйте «Полную отправку на сервер» из меню «…» панели.`
+      )
+      return
+    }
+    try {
+      await this.client.deleteEntity(this.meta.projectId, entity.type, entity.id)
+      await this.state.deleteBase(rel)
+      this.pendingDeletions.delete(rel)
+      this.conflicts.delete(rel)
+      this.log(`удалён на сервере: ${rel}`)
+      void vscode.window.showInformationMessage(
+        `LatexSpace: «${rel}» удалён и на сервере.`
+      )
+      this.fireStatus()
+      this.pullEmitter.fire()
+    } catch (err) {
+      void vscode.window.showErrorMessage(
+        `LatexSpace: не удалось удалить «${rel}» на сервере: ${err instanceof Error ? err.message : err}`
+      )
+    }
+  }
+
+  /** Вернуть локально удалённый файл (из снимка серверного содержимого). */
+  async restoreDeleted(rel: string): Promise<void> {
+    const content = this.pendingDeletions.get(rel)
+    if (!content) return
+    this.markSelfWrite(this.state.localPath(rel))
+    await writeFileEnsuringDir(this.state.localPath(rel), content)
+    await this.state.writeBase(rel, content)
+    this.pendingDeletions.delete(rel)
+    this.conflicts.delete(rel)
+    this.log(`возвращён с сервера: ${rel}`)
+    this.fireStatus()
+    this.pullEmitter.fire()
+  }
+
   // ---------- обработчики файловых событий ----------
+
+  /** Файл отсутствует в базовой копии (не синхронизирован с сервером)? */
+  async isUntrackedFile(rel: string): Promise<boolean> {
+    if (this.matcher().ignoresFile(rel)) return false
+    return (await this.state.readBase(rel)) === null
+  }
+
+  /** Явная отправка одного файла (кнопка у файла в панели). */
+  async sendFile(rel: string): Promise<void> {
+    await this.pushFile(rel)
+    if (await this.state.readBase(rel)) {
+      this.untracked.delete(rel)
+      void vscode.window.showInformationMessage(
+        `LatexSpace: «${rel}» отправлен на сервер.`
+      )
+    }
+    this.fireStatus()
+    this.pullEmitter.fire()
+  }
 
   /** push для существующих на сервере файлов; новые — в список untracked */
   private schedulePushPolicy(rel: string, delayMs: number): void {
@@ -766,16 +885,7 @@ export class SyncManager implements vscode.Disposable {
     if (!rel || this.matcher().ignoresFile(rel)) return
     this.untracked.delete(rel)
     void this.state.readBase(rel).then(base => {
-      if (base !== null) {
-        void vscode.window
-          .showInformationMessage(
-            `LatexSpace: «${rel}» удалён локально, но на сервере остался.`,
-            'Удалить и на сервере (полная отправка)…'
-          )
-          .then(pick => {
-            if (pick) void vscode.commands.executeCommand('latexspace.pushAll')
-          })
-      }
+      if (base !== null) this.notifyLocalDeletion(rel, base)
     })
   }
 }

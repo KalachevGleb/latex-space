@@ -417,6 +417,18 @@ export class LatexSpaceClient {
     return res.entities ?? []
   }
 
+  /** Удалить документ/файл на сервере (тот же роут, что у браузера). */
+  async deleteEntity(
+    projectId: string,
+    type: 'doc' | 'file',
+    entityId: string
+  ): Promise<void> {
+    await this.request<unknown>(`/project/${projectId}/${type}/${entityId}`, {
+      method: 'DELETE',
+      expect: 'none',
+    })
+  }
+
   async downloadZip(projectId: string): Promise<Buffer> {
     return this.request<Buffer>(`/project/${projectId}/download/zip`, {
       expect: 'buffer',

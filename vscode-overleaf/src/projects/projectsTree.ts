@@ -51,8 +51,13 @@ class FolderNode {
   constructor(readonly abs: string, readonly name: string) {}
 }
 
-class FileNode {
-  constructor(readonly abs: string, readonly name: string) {}
+export class FileNode {
+  constructor(
+    readonly abs: string,
+    readonly name: string,
+    readonly rel: string,
+    readonly untracked: boolean
+  ) {}
 }
 
 /** Свёрнутая группа «Другие проекты» под файлами текущего. */
@@ -134,6 +139,9 @@ export class ProjectsTreeProvider
     this.changeEmitter.fire()
   }
 
+  /** Файл не синхронизирован с сервером? (даёт SyncManager) */
+  isUntracked?: (rel: string) => Promise<boolean>
+
   private filesMatcher(): IgnoreMatcher {
     const cfg = getConfig()
     return new IgnoreMatcher([
@@ -161,7 +169,8 @@ export class ProjectsTreeProvider
       if (e.isDirectory()) {
         folders.push(new FolderNode(abs, e.name))
       } else if (!matcher.ignoresFile(rel)) {
-        files.push(new FileNode(abs, e.name))
+        const untracked = (await this.isUntracked?.(rel)) ?? false
+        files.push(new FileNode(abs, e.name, rel, untracked))
       }
     }
     folders.sort((a, b) => a.name.localeCompare(b.name))
@@ -263,7 +272,13 @@ export class ProjectsTreeProvider
         title: 'Открыть файл',
         arguments: [vscode.Uri.file(element.abs)],
       }
-      item.contextValue = 'lsFile'
+      if (element.untracked) {
+        item.description = 'не на сервере'
+        item.tooltip = `${element.rel}\nФайла нет на сервере — отправьте кнопкой ↑ или оставьте локальным.`
+        item.contextValue = 'lsFileUntracked'
+      } else {
+        item.contextValue = 'lsFile'
+      }
       return item
     }
     if (element instanceof ProjectsGroupNode) {
