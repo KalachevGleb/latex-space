@@ -211,12 +211,42 @@
     resizeTimer = setTimeout(() => layout(true), 200)
   })
 
+  // ---------- пустое состояние (PDF ещё не собран) ----------
+
+  let emptyEl = null
+  function showEmpty() {
+    setStatus('')
+    if (emptyEl) return
+    emptyEl = document.createElement('div')
+    emptyEl.id = 'empty-state'
+    const text = document.createElement('p')
+    text.textContent = 'PDF ещё не собран'
+    const btn = document.createElement('button')
+    btn.textContent = '▶ Компилировать'
+    btn.addEventListener('click', () => vscode.postMessage({ type: 'compile' }))
+    emptyEl.appendChild(text)
+    emptyEl.appendChild(btn)
+    pagesEl.appendChild(emptyEl)
+  }
+  function hideEmpty() {
+    if (emptyEl) {
+      emptyEl.remove()
+      emptyEl = null
+    }
+  }
+
   window.addEventListener('message', event => {
     const msg = event.data
     if (!msg) return
-    if (msg.type === 'load') loadPdf(msg.data)
-    else if (msg.type === 'highlight') showHighlight(msg)
+    if (msg.type === 'load') {
+      hideEmpty()
+      loadPdf(msg.data)
+    } else if (msg.type === 'highlight') showHighlight(msg)
+    else if (msg.type === 'empty') showEmpty()
   })
 
   setStatus('ожидание PDF…')
+  // сообщения, отправленные до загрузки этого скрипта, теряются —
+  // расширение копит их в очереди и шлёт после 'ready'
+  vscode.postMessage({ type: 'ready' })
 })()

@@ -9,6 +9,7 @@ import {
   ChangesNode,
   ChangesTreeProvider,
 } from './changes/changesTree'
+import { LiveCommentController } from './comments/commentController'
 import { CommentsService } from './comments/commentsService'
 import { CommentsTreeProvider, ThreadNode } from './comments/commentsTree'
 import { CommentDecorations } from './comments/decorations'
@@ -52,6 +53,7 @@ class ProjectSession implements vscode.Disposable {
   readonly compiler: CompileManager
   readonly preview: PdfPreview
   readonly comments: CommentsService
+  readonly commentCtl?: LiveCommentController
   readonly tree: CommentsTreeProvider
   readonly decorations: CommentDecorations
   readonly synctex: SyncTexService
@@ -122,8 +124,13 @@ class ProjectSession implements vscode.Disposable {
     )
 
     if (!offline) {
+      // инлайн-комментарии в редакторе (нативный Comments API)
+      this.commentCtl = new LiveCommentController(this.comments, state.rootDir)
+      this.disposables.push(this.commentCtl)
       // реальное время: правки уходят по мере набора, чужие приходят сразу
       this.realtime = new RealtimeManager(client, state, meta, output)
+      this.commentCtl.managesRel = rel =>
+        this.realtime?.managesRel(rel) ?? false
       this.realtime.noteSelfWrite = abs => this.sync.noteSelfWrite(abs)
       this.realtime.onTreeChanged = () =>
         void this.sync.pull().catch(() => undefined)
@@ -383,6 +390,40 @@ export async function activate(
       }
     }),
     cmd('latexspace.comments.add', () => addCommentCommand(needSession())),
+    // инлайн-виджет Comments API: создание треда из «+» на gutter'е
+    cmd('latexspace.commentCreate', async reply => {
+      await createCommentFromWidget(
+        needOnline(),
+        reply as vscode.CommentReply
+      )
+    }),
+    cmd('latexspace.commentReplyInline', async reply => {
+      const s = needOnline()
+      const r = reply as vscode.CommentReply
+      const threadId = s.commentCtl?.threadIdOf(r.thread)
+      if (!threadId) throw new Error('Тред не найден')
+      await s.comments.reply(threadId, r.text)
+      await s.comments.refresh(true)
+    }),
+    cmd('latexspace.commentResolveInline', async thread => {
+      const s = needOnline()
+      const t = thread as vscode.CommentThread
+      const threadId = s.commentCtl?.threadIdOf(t)
+      const model = threadId ? s.comments.threadById(threadId) : undefined
+      if (!model) throw new Error('Тред не найден')
+      await s.comments.resolve(model)
+    }),
+    // Ctrl/Cmd+S в .tex: компиляция (сохранение выполняется в её начале)
+    cmd('latexspace.saveAndCompile', async () => {
+      if (!session || session.compiler.isCompiling) {
+        await vscode.workspace.saveAll(false)
+        return
+      }
+      await vscode.commands.executeCommand('latexspace.compile')
+    }),
+    cmd('latexspace.sendNewFiles', () =>
+      needOnline().sync.pickAndSendUntracked()
+    ),
     cmd('latexspace.trackChanges.toggle', () => {
       const s = needSession()
       if (!s.realtime || !s.realtime.isLive()) {
@@ -481,8 +522,124 @@ export async function activate(
     })
   )
 
+  // context key для горячей клавиши Ctrl/Cmd+S → компиляция
+  const updateCompileOnSaveCtx = () =>
+    void vscode.commands.executeCommand(
+      'setContext',
+      'latexspace.compileOnSave',
+      getConfig().compileOnSave
+    )
+  updateCompileOnSaveCtx()
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('latexspace.compile.onSave')) {
+        updateCompileOnSaveCtx()
+      }
+    })
+  )
+
   await initAppClient()
   await tryActivateProject()
+}
+
+// ---------- конфликтующие функции других расширений ----------
+
+/** Настройки-триггеры автосборки/автодействий при сохранении. */
+const AUTO_TRIGGER_PATTERNS = [
+  /auto ?build/i,
+  /auto ?compile/i,
+  /(build|compile)\.?on ?save/i,
+  /on ?save.*(build|compile)/i,
+  /auto.*preview|preview.*auto/i,
+]
+
+interface ConflictSetting {
+  fullKey: string
+  disableValue: unknown
+  extName: string
+}
+
+/**
+ * Найти у УСТАНОВЛЕННЫХ расширений включённые настройки автокомпиляции
+ * и подобных триггеров (по манифестам, а не по зашитому списку — покрывает
+ * LaTeX Workshop, mathematic.vscode-latex и будущие). Отключаются только
+ * эти функции; подсветка, сниппеты и прочее не затрагиваются.
+ */
+function findConflictingAutoTriggers(scope?: vscode.Uri): ConflictSetting[] {
+  const found: ConflictSetting[] = []
+  const cfg = vscode.workspace.getConfiguration(undefined, scope)
+  for (const ext of vscode.extensions.all) {
+    if (ext.id.startsWith('vscode.') || ext.id === 'peer-review.latexspace') {
+      continue
+    }
+    const pkg = ext.packageJSON as {
+      displayName?: string
+      contributes?: { configuration?: unknown }
+    }
+    const conf = pkg?.contributes?.configuration
+    const blocks = (Array.isArray(conf) ? conf : conf ? [conf] : []) as Array<{
+      properties?: Record<string, { type?: string; enum?: unknown[]; default?: unknown }>
+    }>
+    for (const block of blocks) {
+      for (const [fullKey, schema] of Object.entries(block?.properties ?? {})) {
+        if (!AUTO_TRIGGER_PATTERNS.some(p => p.test(fullKey))) continue
+        let disableValue: unknown
+        if (schema?.type === 'boolean') disableValue = false
+        else if (Array.isArray(schema?.enum) && schema.enum.includes('never')) {
+          disableValue = 'never'
+        } else continue
+        const effective = cfg.get(fullKey) ?? schema?.default
+        if (effective === disableValue || effective === undefined) continue
+        if (schema?.type === 'boolean' && effective === false) continue
+        found.push({
+          fullKey,
+          disableValue,
+          extName: pkg.displayName || ext.id,
+        })
+      }
+    }
+  }
+  return found
+}
+
+async function suggestDisablingConflicts(state: ProjectState): Promise<void> {
+  const folder = vscode.workspace.getWorkspaceFolder(
+    vscode.Uri.file(state.rootDir)
+  )
+  const found = findConflictingAutoTriggers(folder?.uri)
+  if (found.length === 0) return
+  const signature = found.map(f => f.fullKey).sort().join(',')
+  const PROMPT_KEY = 'latexspace.conflictPrompted'
+  if (extContext.workspaceState.get<string>(PROMPT_KEY) === signature) return
+  const names = [...new Set(found.map(f => f.extName))].join(', ')
+  output.appendLine(
+    `Конфликтующие автотриггеры: ${found.map(f => f.fullKey).join(', ')}`
+  )
+  const pick = await vscode.window.showWarningMessage(
+    `LatexSpace: у расширений «${names}» включена автокомпиляция/автодействия при сохранении — они создают лишние файлы и мешают синхронизации. Отключить только эти функции в настройках рабочей области? Подсветка синтаксиса и остальные возможности расширений сохранятся.`,
+    `Отключить (${found.length})`,
+    'Не отключать'
+  )
+  await extContext.workspaceState.update(PROMPT_KEY, signature)
+  if (pick !== `Отключить (${found.length})`) return
+  const cfg = vscode.workspace.getConfiguration(undefined, folder?.uri)
+  for (const f of found) {
+    try {
+      await cfg.update(
+        f.fullKey,
+        f.disableValue,
+        vscode.ConfigurationTarget.Workspace
+      )
+      output.appendLine(`  ${f.fullKey} → ${JSON.stringify(f.disableValue)}`)
+    } catch (err) {
+      output.appendLine(
+        `  не удалось изменить ${f.fullKey}: ${err instanceof Error ? err.message : err}`
+      )
+    }
+  }
+  void vscode.window.showInformationMessage(
+    'LatexSpace: конфликтующие автофункции отключены (настройки рабочей области).'
+  )
 }
 
 /**
@@ -627,6 +784,7 @@ async function activateProjectFolder(
   )
 
   await applyHiddenFilePatterns(state)
+  void suggestDisablingConflicts(state)
 
   // первый запуск после открытия проекта — открыть главный файл
   if (meta.openMainOnActivate) {
@@ -936,6 +1094,47 @@ async function openProjectById(
 
 // ---------- добавление комментария ----------
 
+/**
+ * Создание треда из инлайн-виджета Comments API («+» на gutter'е):
+ * цитата — выделенный диапазон треда (или строка целиком), текст — из
+ * поля ввода виджета. Временный тред VSCode закрывается — управляемый
+ * появится из модели после refresh.
+ */
+async function createCommentFromWidget(
+  s: ProjectSession,
+  reply: vscode.CommentReply
+): Promise<void> {
+  const thread = reply.thread
+  try {
+    if (!s.realtime?.isLive()) {
+      throw new Error('Добавление комментариев доступно только при live-подключении.')
+    }
+    const doc = await vscode.workspace.openTextDocument(thread.uri)
+    const rel = s.sync.relOf(thread.uri)
+    if (!rel) throw new Error('Файл вне папки проекта')
+    let range = thread.range ?? new vscode.Range(0, 0, 0, 0)
+    if (range.isEmpty) {
+      // «+» нажали без выделения — комментируем строку целиком
+      range = doc.lineAt(range.start.line).range
+    }
+    const quoted = doc.getText(range)
+    const threadId = genObjectId()
+    await s.comments.createThread(threadId, reply.text)
+    const anchored = s.realtime.addCommentAnchor(
+      rel,
+      doc.offsetAt(range.start),
+      quoted,
+      threadId
+    )
+    if (!anchored) {
+      throw new Error('Не удалось поставить якорь: документ не подключён live.')
+    }
+    await s.comments.refresh(true)
+  } finally {
+    thread.dispose()
+  }
+}
+
 function genObjectId(): string {
   return [...Array(24)]
     .map(() => Math.floor(Math.random() * 16).toString(16))
@@ -1001,6 +1200,11 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
       action: () =>
         vscode.commands.executeCommand('latexspace.trackChanges.toggle'),
     })
+    items.push({
+      label: '$(cloud-upload) Полная отправка на сервер (с удалениями)…',
+      description: 'файловая синхронизация: новые файлы и удаления',
+      action: () => s.sync.pushFullSync(),
+    })
   } else {
     items.push(
       {
@@ -1013,6 +1217,12 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
         action: () => s.sync.pushFullSync(),
       }
     )
+  }
+  if (!s.offline && s.sync.getUntrackedCount() > 0) {
+    items.unshift({
+      label: `$(new-file) Новые файлы (${s.sync.getUntrackedCount()}) — отправить на сервер…`,
+      action: () => s.sync.pickAndSendUntracked(),
+    })
   }
   if (!s.offline && info.conflicts > 0) {
     items.unshift({

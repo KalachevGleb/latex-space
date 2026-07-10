@@ -25,6 +25,13 @@ export interface PdfHighlight {
 export class PdfPreview {
   private panel?: vscode.WebviewPanel
   private lastPdfPath?: string
+  /**
+   * Webview готов принимать сообщения (получен 'ready' от viewer.js).
+   * postMessage сразу после создания панели теряется — скрипт ещё не
+   * повесил слушатель, — поэтому до готовности сообщения копятся в очереди.
+   */
+  private ready = false
+  private queue: unknown[] = []
   /** обработчик Ctrl/Cmd+Click по PDF (обратный SyncTeX) */
   onSyncToCode?: (click: PdfSyncClick) => void
 
@@ -34,6 +41,14 @@ export class PdfPreview {
     return !!this.panel
   }
 
+  private post(msg: unknown): void {
+    if (this.panel && this.ready) {
+      void this.panel.webview.postMessage(msg)
+    } else {
+      this.queue.push(msg)
+    }
+  }
+
   async showFile(pdfPath: string, title = 'PDF'): Promise<void> {
     this.lastPdfPath = pdfPath
     const panel = await this.ensurePanel(title)
@@ -41,16 +56,12 @@ export class PdfPreview {
     try {
       data = await fs.readFile(pdfPath)
     } catch {
-      void vscode.window.showWarningMessage(
-        'PDF ещё не создан — скомпилируйте проект.'
-      )
+      // PDF ещё не собран — пустое состояние с кнопкой прямо в панели
+      this.post({ type: 'empty' })
       return
     }
     panel.title = title
-    void panel.webview.postMessage({
-      type: 'load',
-      data: data.toString('base64'),
-    })
+    this.post({ type: 'load', data: data.toString('base64') })
   }
 
   async refresh(): Promise<void> {
@@ -66,7 +77,7 @@ export class PdfPreview {
       await this.showFile(this.lastPdfPath)
     }
     this.panel?.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, true)
-    void this.panel?.webview.postMessage({ type: 'highlight', ...pos })
+    this.post({ type: 'highlight', ...pos })
   }
 
   private async ensurePanel(title: string): Promise<vscode.WebviewPanel> {
@@ -90,9 +101,18 @@ export class PdfPreview {
     )
     panel.onDidDispose(() => {
       this.panel = undefined
+      this.ready = false
+      this.queue = []
     })
     panel.webview.onDidReceiveMessage(msg => {
-      if (msg?.type === 'syncToCode' && this.onSyncToCode) {
+      if (msg?.type === 'ready') {
+        this.ready = true
+        const pending = this.queue
+        this.queue = []
+        for (const m of pending) void panel.webview.postMessage(m)
+      } else if (msg?.type === 'compile') {
+        void vscode.commands.executeCommand('latexspace.compile')
+      } else if (msg?.type === 'syncToCode' && this.onSyncToCode) {
         this.onSyncToCode({
           page: Number(msg.page),
           h: Number(msg.h),
