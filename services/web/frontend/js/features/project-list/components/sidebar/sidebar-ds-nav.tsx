@@ -159,6 +159,9 @@ function SidebarDsNav() {
             </>
           )}
         </nav>
+        <a href="/vscode-plugin" className="d-block mb-2 small">
+          {t('vscode_plugin')}
+        </a>
         <div className="ds-nav-ds-name" translate="no">
           <span>Digital Science</span>
         </div>

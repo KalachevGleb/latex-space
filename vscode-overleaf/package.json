@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -15,7 +15,8 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "workspaceContains:.latexspace/project.json",
-    "workspaceContains:.overleaf/project.json"
+    "workspaceContains:.overleaf/project.json",
+    "onUri"
   ],
   "contributes": {
     "configuration": {
@@ -545,7 +546,8 @@
     "build": "node scripts/build.js && npm run typecheck",
     "watch": "node scripts/build.js --watch",
     "typecheck": "tsc --noEmit",
-    "package": "npm run build && vsce package"
+    "package": "npm run build && vsce package",
+    "deploy:web": "npm run package && mkdir -p ../services/web/public/vscode && cp latexspace-$npm_package_version.vsix ../services/web/public/vscode/latexspace.vsix"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",

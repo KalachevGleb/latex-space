@@ -1,0 +1,36 @@
+extends ../layout-marketing
+
+block content
+	main#main-content.content.content-alt
+		.container
+			.row
+				.col-lg-8.offset-lg-2
+					.card
+						.card-body
+							.page-header
+								h1 #{translate('vscode_plugin_title')}
+							p #{translate('vscode_plugin_intro')}
+							p
+								a.btn.btn-primary.btn-lg(
+									href='/vscode/latexspace.vsix'
+									download='latexspace.vsix'
+								) #{translate('vscode_plugin_download_vsix')}
+							h3 #{translate('vscode_plugin_how_to_install')}
+							ol
+								li #{translate('vscode_plugin_step_download')}
+								li #{translate('vscode_plugin_step_install_ui')}
+								li
+									| #{translate('vscode_plugin_step_install_cli')}
+									pre.mt-2: code.
+										code --install-extension latexspace.vsix
+										cursor --install-extension latexspace.vsix
+								li #{translate('vscode_plugin_step_signin')}
+							h3 #{translate('vscode_plugin_after_install')}
+							p.d-flex.gap-2
+								a.btn.btn-secondary(
+									href=`vscode://peer-review.latexspace/open?server=${encodeURIComponent(settings.siteUrl)}`
+								) #{translate('vscode_plugin_open_in_vscode')}
+								a.btn.btn-secondary(
+									href=`cursor://peer-review.latexspace/open?server=${encodeURIComponent(settings.siteUrl)}`
+								) #{translate('vscode_plugin_open_in_cursor')}
+							p.text-muted.small #{translate('vscode_plugin_open_note')}

@@ -22,6 +22,11 @@ export default {
       HomeController.externalPage('planned_maintenance', 'Planned Maintenance')
     )
 
+    webRouter.get(
+      '/vscode-plugin',
+      HomeController.externalPage('vscode_plugin', 'VS Code / Cursor')
+    )
+
     webRouter.get('/university', UniversityController.getIndexPage)
     return webRouter.get('/university/*', UniversityController.getPage)
   },
