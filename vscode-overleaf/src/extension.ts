@@ -286,7 +286,15 @@ export async function activate(
       const ok = await setCredentialsFlow(context)
       if (ok) {
         await initAppClient()
-        if (!session) await tryActivateProject()
+        if (session) {
+          // пересоздать сессию проекта с новыми учётными данными
+          const { state, meta } = session
+          session.dispose()
+          session = undefined
+          await activateProjectFolder(state, meta)
+        } else {
+          await tryActivateProject()
+        }
       }
     }),
     cmd('latexspace.signOut', async () => {
@@ -513,12 +521,39 @@ export function deactivate(): void {
 
 async function initAppClient(): Promise<void> {
   appClient = await buildClientSilent(extContext)
+  if (appClient) attachAuthRejectedHandler(appClient)
   projectsTree.setClient(appClient)
   await vscode.commands.executeCommand(
     'setContext',
     'latexspace.signedIn',
     !!appClient
   )
+}
+
+// ---------- отклонённый вход (пароль сменился / учётка отключена) ----------
+
+let authPromptVisible = false
+
+/**
+ * Сервер отклонил учётные данные: клиент уже остановил автоповторы
+ * (защита от rate limiter логина) — предлагаем войти заново.
+ */
+function attachAuthRejectedHandler(client: LatexSpaceClient): void {
+  client.onAuthRejected = () => {
+    if (authPromptVisible) return
+    authPromptVisible = true
+    void vscode.window
+      .showWarningMessage(
+        'LatexSpace: сервер отклонил вход — возможно, пароль изменился. Фоновая синхронизация остановлена до повторного входа.',
+        'Войти…'
+      )
+      .then(pick => {
+        authPromptVisible = false
+        if (pick === 'Войти…') {
+          void vscode.commands.executeCommand('latexspace.signIn')
+        }
+      })
+  }
 }
 
 // ---------- активация проекта в открытой папке ----------
@@ -574,6 +609,7 @@ async function activateProjectFolder(
     )
     return
   }
+  attachAuthRejectedHandler(client)
 
   const wasOffline = extContext.workspaceState.get<boolean>(OFFLINE_KEY, false)
   let offline = wasOffline
