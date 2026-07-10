@@ -148,8 +148,10 @@ export class SyncTexService {
   }
 
   private runSynctex(args: string[]): Promise<string> {
+    // cwd — каталог последней локальной компиляции (может быть теневым)
+    const cwd = this.compiler.lastCompileCwd ?? this.state.rootDir
     return new Promise((resolve, reject) => {
-      const child = spawn('synctex', args, { cwd: this.state.rootDir })
+      const child = spawn('synctex', args, { cwd })
       let out = ''
       let err = ''
       child.stdout.on('data', d => (out += d.toString()))
@@ -164,6 +166,13 @@ export class SyncTexService {
   private async forwardLocal(rel: string, line: number, column: number) {
     const pdf = this.localPdfPath()
     if (!pdf) throw new Error('нет локальной сборки')
+    // компиляция шла по «развёрнутой» копии — пересчитать позицию
+    const ex = this.compiler.explodedFor(rel)
+    if (ex) {
+      const mapped = ex.newLineCol(line, Math.max(0, column - 1))
+      line = mapped.line1
+      column = mapped.col0 + 1
+    }
     const out = await this.runSynctex([
       'view',
       '-i',
@@ -194,13 +203,25 @@ export class SyncTexService {
     ])
     const rec = this.parseRecord(out, ['Input', 'Line', 'Column'])
     if (!rec.Input) return []
-    return [
-      {
-        file: rec.Input,
-        line: parseInt(rec.Line || '1', 10),
-        column: Math.max(0, parseInt(rec.Column || '0', 10)),
-      },
-    ]
+    let file = rec.Input
+    let line = parseInt(rec.Line || '1', 10)
+    let column = Math.max(0, parseInt(rec.Column || '0', 10))
+    // путь может указывать в теневую копию — вернуть к исходнику
+    const cwd = this.compiler.lastCompileCwd
+    if (cwd && cwd !== this.state.rootDir) {
+      const abs = path.isAbsolute(file) ? file : path.join(cwd, file)
+      const rel = path.relative(cwd, abs).split(path.sep).join('/')
+      if (!rel.startsWith('..')) {
+        const ex = this.compiler.explodedFor(rel)
+        if (ex) {
+          const mapped = ex.origLineCol(line, column)
+          line = mapped.line1
+          column = mapped.col0
+        }
+        file = rel
+      }
+    }
+    return [{ file, line, column }]
   }
 
   /** Разобрать первую запись вывода synctex (строки "Key:value"). */

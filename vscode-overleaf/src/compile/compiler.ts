@@ -1,12 +1,15 @@
 import { ChildProcess, spawn } from 'child_process'
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import { LatexSpaceClient } from '../api/client'
 import { getConfig } from '../config'
-import { ProjectMeta, ProjectState } from '../sync/state'
+import { ExplodedFile, explodeTex } from '../latex/explode'
+import { LATEXSPACE_DIR, ProjectMeta, ProjectState } from '../sync/state'
 import { SyncManager } from '../sync/syncManager'
+import { walkDir, writeFileEnsuringDir } from '../util/fsutil'
+import { IgnoreMatcher } from '../util/glob'
 import { issuesToDiagnostics, parseLatexLog } from './logParser'
 import { PdfPreview } from './pdfPreview'
 
@@ -40,6 +43,10 @@ export class CompileManager implements vscode.Disposable {
   /** кэш авто-детекта локального TeX Live (undefined — ещё не проверяли) */
   private localToolchainFound?: boolean
   private fallbackNoticeShown = false
+  /** маппинги «развёрнутых» исходников (точный SyncTeX): rel → mapping */
+  private exploded = new Map<string, { hash: string; file: ExplodedFile }>()
+  /** рабочий каталог последней локальной компиляции (для synctex CLI) */
+  lastCompileCwd?: string
 
   constructor(
     private client: LatexSpaceClient,
@@ -143,6 +150,77 @@ export class CompileManager implements vscode.Disposable {
   /** Сбросить кэш авто-детекта (например, пользователь поставил TeX Live). */
   resetToolchainCache(): void {
     this.localToolchainFound = undefined
+  }
+
+  /** Каталог теневой (развёрнутой) копии исходников. */
+  get explodedDir(): string {
+    return path.join(this.state.rootDir, LATEXSPACE_DIR, 'exploded')
+  }
+
+  /**
+   * Маппинг развёрнутого файла (если последняя локальная компиляция шла
+   * по теневой копии) — для пересчёта позиций SyncTeX.
+   */
+  explodedFor(rel: string): ExplodedFile | undefined {
+    if (this.lastCompileCwd !== this.explodedDir) return undefined
+    return this.exploded.get(rel)?.file
+  }
+
+  /**
+   * Подготовить теневую копию: .tex — «развернуть» (пробелы → переносы
+   * в безопасных местах, см. latex/explode.ts), остальные файлы —
+   * скопировать при изменении. Кэш по md5 содержимого.
+   */
+  private async prepareExploded(): Promise<void> {
+    const cfg = getConfig()
+    const matcher = new IgnoreMatcher([
+      `${LATEXSPACE_DIR}/**`,
+      ...cfg.ignore,
+    ])
+    const files = await walkDir(this.state.rootDir, matcher)
+    const seen = new Set<string>()
+    for (const rel of files) {
+      seen.add(rel)
+      const srcAbs = path.join(this.state.rootDir, rel)
+      const dstAbs = path.join(this.explodedDir, rel)
+      try {
+        if (rel.endsWith('.tex')) {
+          const text = (await fs.readFile(srcAbs)).toString('utf8')
+          const hash = createHash('md5').update(text).digest('hex')
+          const prev = this.exploded.get(rel)
+          if (prev?.hash !== hash) {
+            const ex = explodeTex(text, cfg.splitEnvironments)
+            this.exploded.set(rel, { hash, file: ex })
+            await writeFileEnsuringDir(dstAbs, Buffer.from(ex.text, 'utf8'))
+          }
+        } else {
+          const s = await fs.stat(srcAbs)
+          const d = await fs.stat(dstAbs).catch(() => null)
+          if (!d || d.mtimeMs < s.mtimeMs || d.size !== s.size) {
+            await fs.mkdir(path.dirname(dstAbs), { recursive: true })
+            await fs.copyFile(srcAbs, dstAbs)
+          }
+        }
+      } catch (err) {
+        this.output.appendLine(
+          `[compile] exploded «${rel}»: ${err instanceof Error ? err.message : err}`
+        )
+      }
+    }
+    // убрать исчезнувшие файлы
+    try {
+      const existing = await walkDir(this.explodedDir, new IgnoreMatcher([]))
+      for (const rel of existing) {
+        if (!seen.has(rel)) {
+          await fs.rm(path.join(this.explodedDir, rel), { force: true })
+        }
+      }
+    } catch {
+      /* каталог мог не существовать */
+    }
+    for (const rel of [...this.exploded.keys()]) {
+      if (!seen.has(rel)) this.exploded.delete(rel)
+    }
   }
 
   /** Заголовок PDF-вкладки: «Preview — <имя главного файла>.pdf». */
@@ -300,6 +378,14 @@ export class CompileManager implements vscode.Disposable {
       return
     }
     await fs.mkdir(this.state.outDir, { recursive: true })
+    // точный SyncTeX: компиляция по «развёрнутой» теневой копии
+    const fine = cfg.syncFineGrained
+    let cwd = this.state.rootDir
+    if (fine) {
+      await this.prepareExploded()
+      cwd = this.explodedDir
+    }
+    this.lastCompileCwd = cwd
     const engineFlag =
       cfg.compiler === 'xelatex'
         ? '-pdfxe'
@@ -323,7 +409,7 @@ export class CompileManager implements vscode.Disposable {
     const exitCode: number = await new Promise<number>((resolve, reject) => {
       let spawned = false
       const child = spawn(cfg.localCommand, args, {
-        cwd: this.state.rootDir,
+        cwd,
         env: process.env,
       })
       this.localProcess = child
@@ -349,8 +435,8 @@ export class CompileManager implements vscode.Disposable {
     this.lastLocalRoot = rootFile
     const base = path.basename(rootFile, '.tex')
     // некоторые движки/пакеты пишут артефакты в cwd, игнорируя -outdir —
-    // убираем их из корня проекта в каталог сборки
-    await this.sweepRootArtifacts(base)
+    // убираем их из cwd компиляции в каталог сборки
+    await this.sweepRootArtifacts(base, cwd)
     const producedPdf = path.join(this.state.outDir, `${base}.pdf`)
     const producedLog = path.join(this.state.outDir, `${base}.log`)
 
@@ -361,12 +447,28 @@ export class CompileManager implements vscode.Disposable {
     } catch {
       /* лога может не быть */
     }
-    const issueCount = logText
-      ? issuesToDiagnostics(
-          parseLatexLog(logText),
-          this.state.rootDir,
-          this.diagnostics
-        )
+    let issues = logText ? parseLatexLog(logText) : []
+    if (fine && issues.length) {
+      // позиции ошибок относятся к развёрнутым файлам — вернуть к исходным
+      issues = issues.map(iss => {
+        const abs = path.isAbsolute(iss.file)
+          ? iss.file
+          : path.resolve(cwd, iss.file)
+        const rel = path
+          .relative(this.explodedDir, abs)
+          .split(path.sep)
+          .join('/')
+        if (rel.startsWith('..')) return iss
+        const ex = this.exploded.get(rel)?.file
+        return {
+          ...iss,
+          file: rel,
+          line: ex ? ex.origLineCol(iss.line, 0).line1 : iss.line,
+        }
+      })
+    }
+    const issueCount = issues.length
+      ? issuesToDiagnostics(issues, this.state.rootDir, this.diagnostics)
       : 0
 
     let hasPdf = false
@@ -394,13 +496,16 @@ export class CompileManager implements vscode.Disposable {
     }
   }
 
-  private async sweepRootArtifacts(jobname: string): Promise<void> {
+  private async sweepRootArtifacts(
+    jobname: string,
+    fromDir = this.state.rootDir
+  ): Promise<void> {
     const names = [
       ...ARTIFACT_EXTS.map(ext => `${jobname}.${ext}`),
       'texput.log',
     ]
     for (const name of names) {
-      const src = path.join(this.state.rootDir, name)
+      const src = path.join(fromDir, name)
       try {
         await fs.access(src)
         await fs.rename(src, path.join(this.state.outDir, name))
