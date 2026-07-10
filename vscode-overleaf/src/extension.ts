@@ -346,11 +346,11 @@ export async function activate(
       await s.compiler.compile()
     }),
     cmd('latexspace.stopCompile', () => needSession().compiler.stop()),
-    cmd('latexspace.showPdf', () => {
+    cmd('latexspace.showPdf', async () => {
       const s = needSession()
       return s.preview.showFile(
         s.compiler.pdfPath,
-        `PDF — ${s.meta.projectName}`
+        await s.compiler.previewTitle()
       )
     }),
     cmd('latexspace.showLog', () => needSession().compiler.showLog()),
@@ -405,9 +405,11 @@ export async function activate(
       await s.comments.reply(threadId, r.text)
       await s.comments.refresh(true)
     }),
-    cmd('latexspace.commentResolveInline', async thread => {
+    cmd('latexspace.commentResolveInline', async arg => {
       const s = needOnline()
-      const t = thread as vscode.CommentThread
+      // из кнопки виджета приходит CommentReply, из других мест — сам тред
+      const maybeReply = arg as Partial<vscode.CommentReply>
+      const t = (maybeReply?.thread ?? arg) as vscode.CommentThread
       const threadId = s.commentCtl?.threadIdOf(t)
       const model = threadId ? s.comments.threadById(threadId) : undefined
       if (!model) throw new Error('Тред не найден')
@@ -423,6 +425,9 @@ export async function activate(
     }),
     cmd('latexspace.sendNewFiles', () =>
       needOnline().sync.pickAndSendUntracked()
+    ),
+    cmd('latexspace.checkConflicts', () =>
+      suggestDisablingConflicts(needSession().state, true)
     ),
     cmd('latexspace.trackChanges.toggle', () => {
       const s = needSession()
@@ -487,8 +492,14 @@ export async function activate(
     })
   )
 
-  // Ctrl/Cmd+Click в .tex → показать место в PDF (SyncTeX), не мешая
-  // обычному Go to Definition
+  // Ctrl/Cmd+Click в .tex → показать место в PDF (SyncTeX).
+  // ВАЖНО: definition-провайдер вызывается и при Ctrl+НАВЕДЕНИИ (подсветка
+  // ссылки) — без фильтра PDF прокручивался бы сам по себе. Поэтому
+  // синхронизацию запускаем только когда за вызовом провайдера следует
+  // реальный клик мышью в то же место (перемещение курсора).
+  let pendingSyncClick:
+    | { uri: string; pos: vscode.Position; ts: number }
+    | undefined
   context.subscriptions.push(
     vscode.languages.registerDefinitionProvider(
       [
@@ -498,21 +509,39 @@ export async function activate(
       {
         provideDefinition(doc, pos) {
           if (!session || !session.preview.isOpen) return undefined
-          void (async () => {
-            const editor = vscode.window.activeTextEditor
-            if (editor && editor.document === doc) {
-              // курсор мог ещё не переместиться к месту клика
-              const fakeEditor = {
-                document: doc,
-                selection: new vscode.Selection(pos, pos),
-              } as vscode.TextEditor
-              await session!.synctex.forward(fakeEditor)
-            }
-          })()
+          pendingSyncClick = {
+            uri: doc.uri.toString(),
+            pos,
+            ts: Date.now(),
+          }
           return undefined
         },
       }
-    )
+    ),
+    vscode.window.onDidChangeTextEditorSelection(e => {
+      const p = pendingSyncClick
+      if (!p) return
+      if (e.kind !== vscode.TextEditorSelectionChangeKind.Mouse) return
+      if (Date.now() - p.ts > 400) {
+        pendingSyncClick = undefined
+        return
+      }
+      const active = e.selections[0]?.active
+      if (
+        !active ||
+        e.textEditor.document.uri.toString() !== p.uri ||
+        active.line !== p.pos.line ||
+        Math.abs(active.character - p.pos.character) > 2
+      ) {
+        return
+      }
+      pendingSyncClick = undefined
+      const fakeEditor = {
+        document: e.textEditor.document,
+        selection: new vscode.Selection(p.pos, p.pos),
+      } as vscode.TextEditor
+      void session?.synctex.forward(fakeEditor)
+    })
   )
 
   // deep links со страницы LatexSpace: vscode://peer-review.latexspace/open
@@ -602,15 +631,26 @@ function findConflictingAutoTriggers(scope?: vscode.Uri): ConflictSetting[] {
   return found
 }
 
-async function suggestDisablingConflicts(state: ProjectState): Promise<void> {
+async function suggestDisablingConflicts(
+  state: ProjectState,
+  force = false
+): Promise<void> {
   const folder = vscode.workspace.getWorkspaceFolder(
     vscode.Uri.file(state.rootDir)
   )
   const found = findConflictingAutoTriggers(folder?.uri)
-  if (found.length === 0) return
+  if (found.length === 0) {
+    if (force) {
+      void vscode.window.showInformationMessage(
+        'LatexSpace: включённых конфликтующих автофункций у других расширений не найдено.'
+      )
+    }
+    return
+  }
   const signature = found.map(f => f.fullKey).sort().join(',')
   const PROMPT_KEY = 'latexspace.conflictPrompted'
-  if (extContext.workspaceState.get<string>(PROMPT_KEY) === signature) return
+  if (!force && extContext.workspaceState.get<string>(PROMPT_KEY) === signature)
+    return
   const names = [...new Set(found.map(f => f.extName))].join(', ')
   output.appendLine(
     `Конфликтующие автотриггеры: ${found.map(f => f.fullKey).join(', ')}`
@@ -785,6 +825,10 @@ async function activateProjectFolder(
 
   await applyHiddenFilePatterns(state)
   void suggestDisablingConflicts(state)
+  // установили/включили новое расширение — перепроверить автотриггеры
+  extContext.subscriptions.push(
+    vscode.extensions.onDidChange(() => void suggestDisablingConflicts(state))
+  )
 
   // первый запуск после открытия проекта — открыть главный файл
   if (meta.openMainOnActivate) {
@@ -1233,8 +1277,8 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
   items.push(
     {
       label: '$(file-pdf) Показать PDF',
-      action: () =>
-        s.preview.showFile(s.compiler.pdfPath, `PDF — ${s.meta.projectName}`),
+      action: async () =>
+        s.preview.showFile(s.compiler.pdfPath, await s.compiler.previewTitle()),
     },
     {
       label: '$(output) Журнал',

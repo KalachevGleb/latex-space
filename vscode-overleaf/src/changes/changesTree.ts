@@ -75,22 +75,23 @@ export class ChangesTreeProvider
       return item
     }
     const d = element.display
+    // тип правки ясен по значку — слова в подписи лишние
     let label: string
     let icon: vscode.ThemeIcon
     if (d.kind === 'replace') {
-      label = `Замена: «${trimText(d.del!.op.d ?? '', 25)}» → «${trimText(d.ins!.op.i ?? '', 25)}»`
+      label = `«${trimText(d.del!.op.d ?? '', 25)}» → «${trimText(d.ins!.op.i ?? '', 25)}»`
       icon = new vscode.ThemeIcon(
-        'diff-modified',
+        'replace',
         new vscode.ThemeColor('charts.yellow')
       )
     } else if (d.kind === 'insert') {
-      label = `Вставка: «${trimText(d.ins!.op.i ?? '')}»`
+      label = `«${trimText(d.ins!.op.i ?? '')}»`
       icon = new vscode.ThemeIcon(
         'diff-added',
         new vscode.ThemeColor('charts.green')
       )
     } else {
-      label = `Удаление: «${trimText(d.del!.op.d ?? '')}»`
+      label = `«${trimText(d.del!.op.d ?? '')}»`
       icon = new vscode.ThemeIcon(
         'diff-removed',
         new vscode.ThemeColor('charts.red')

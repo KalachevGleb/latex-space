@@ -145,6 +145,17 @@ export class CompileManager implements vscode.Disposable {
     this.localToolchainFound = undefined
   }
 
+  /** Заголовок PDF-вкладки: «Preview — <имя главного файла>.pdf». */
+  async previewTitle(): Promise<string> {
+    const root =
+      getConfig().rootFile ||
+      this.lastLocalRoot ||
+      (await this.findRootFile().catch(() => undefined)) ||
+      'main.tex'
+    const base = path.basename(root).replace(/\.tex$/i, '')
+    return `Preview — ${base}.pdf`
+  }
+
   private detectLocalToolchain(cmd: string): Promise<boolean> {
     return new Promise(resolve => {
       let child: ChildProcess
@@ -214,7 +225,7 @@ export class CompileManager implements vscode.Disposable {
       : 0
 
     if (res.status === 'success') {
-      await this.preview.showFile(this.pdfPath, `PDF — ${this.meta.projectName}`)
+      await this.preview.showFile(this.pdfPath, await this.previewTitle())
       vscode.window.setStatusBarMessage(
         `$(check) LatexSpace: компиляция успешна${issueCount ? ` (${issueCount} замечаний в логе)` : ''}`,
         5000
@@ -228,7 +239,7 @@ export class CompileManager implements vscode.Disposable {
       )
       if (pick === 'Открыть лог') await this.showLog()
       if (pick === 'Показать PDF')
-        await this.preview.showFile(this.pdfPath, `PDF — ${this.meta.projectName}`)
+        await this.preview.showFile(this.pdfPath, await this.previewTitle())
     }
   }
 
@@ -367,7 +378,7 @@ export class CompileManager implements vscode.Disposable {
     }
 
     if (hasPdf) {
-      await this.preview.showFile(this.pdfPath, `PDF — ${this.meta.projectName}`)
+      await this.preview.showFile(this.pdfPath, await this.previewTitle())
     }
     if (exitCode === 0) {
       vscode.window.setStatusBarMessage(

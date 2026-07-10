@@ -35,10 +35,32 @@ export class PdfPreview {
   /** обработчик Ctrl/Cmd+Click по PDF (обратный SyncTeX) */
   onSyncToCode?: (click: PdfSyncClick) => void
 
-  constructor(private context: vscode.ExtensionContext) {}
+  constructor(private context: vscode.ExtensionContext) {
+    // после перезагрузки окна VSCode «восстанавливает» вкладку webview
+    // пустой оболочкой, о которой расширение не знает — закрываем такие
+    // зомби-вкладки, чтобы не плодились дубли
+    void this.closeZombiePanels()
+  }
 
   get isOpen(): boolean {
     return !!this.panel
+  }
+
+  private async closeZombiePanels(): Promise<void> {
+    if (this.panel) return
+    const zombies = vscode.window.tabGroups.all
+      .flatMap(g => g.tabs)
+      .filter(
+        t =>
+          t.input instanceof vscode.TabInputWebview &&
+          t.input.viewType.includes('latexspacePdf')
+      )
+    if (zombies.length > 0) {
+      await vscode.window.tabGroups.close(zombies, true).then(
+        () => undefined,
+        () => undefined
+      )
+    }
   }
 
   private post(msg: unknown): void {
@@ -85,6 +107,7 @@ export class PdfPreview {
       this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, true)
       return this.panel
     }
+    await this.closeZombiePanels()
     const mediaRoot = vscode.Uri.file(
       path.join(this.context.extensionPath, 'media')
     )

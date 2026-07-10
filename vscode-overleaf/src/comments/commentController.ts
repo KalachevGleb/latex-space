@@ -121,9 +121,9 @@ export class LiveCommentController implements vscode.Disposable {
     } else if (!thread.range?.isEqual(range)) {
       thread.range = range
     }
-    thread.label = m.quoted
-      ? `«${m.quoted.replace(/\s+/g, ' ').slice(0, 40)}»`
-      : 'Комментарий'
+    // цитату в заголовок не выносим — комментируемый текст и так виден
+    // прямо над виджетом
+    thread.label = 'Комментарий'
     thread.contextValue = 'lsOpen'
     thread.canReply = true
     thread.comments = m.messages.map(msg => ({
