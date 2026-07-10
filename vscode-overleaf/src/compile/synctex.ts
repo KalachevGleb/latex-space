@@ -2,10 +2,20 @@ import { spawn } from 'child_process'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import { LatexSpaceClient } from '../api/client'
+import { ExplodedFile } from '../latex/explode'
 import { revealDocumentSmart } from '../util/editors'
 import { ProjectMeta, ProjectState } from '../sync/state'
 import { CompileManager } from './compiler'
 import { PdfPreview, PdfSyncClick } from './pdfPreview'
+
+interface BackwardPos {
+  file: string
+  line: number
+  column: number
+  /** маппинг развёрнутого файла и строка synctex в нём — для доводки */
+  ex?: ExplodedFile
+  exLine?: number
+}
 
 /**
  * SyncTeX в обе стороны.
@@ -60,7 +70,7 @@ export class SyncTexService {
   /** PDF → код: перейти к исходнику по клику в PDF. */
   async backward(click: PdfSyncClick): Promise<void> {
     try {
-      const positions =
+      const positions: BackwardPos[] =
         (this.compiler.lastMode ?? (await this.compiler.resolveMode())) ===
         'server'
           ? await this.syncServerBackward(click)
@@ -77,23 +87,17 @@ export class SyncTexService {
       }
       if (rel.startsWith('..')) return
       const abs = path.join(this.state.rootDir, rel)
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(abs))
-      const lineIdx = Math.min(
-        Math.max(0, (pos.line || 1) - 1),
-        doc.lineCount - 1
-      )
+      const lineIdx = Math.max(0, (pos.line || 1) - 1)
       const colIdx = Math.max(0, (pos.column || 1) - 1)
-      // доводка по слову под курсором мыши: один запуск synctex, затем
-      // поиск этого слова в соседних строках исходника; найдено —
-      // выделяем его, нет — используем позицию synctex как есть
-      const found = this.findWordNear(doc, click.word, lineIdx, colIdx)
+      // доводка по слову под курсором мыши: в развёрнутом файле строка =
+      // слово, поэтому ищем токен в строках exLine..exLine+2 (synctex
+      // никогда не опережает — только отстаёт) и выделяем его в исходнике
+      const found =
+        pos.ex && pos.exLine
+          ? this.refineInExploded(pos.ex, pos.exLine, click.word)
+          : undefined
       const range = found
-        ? new vscode.Range(
-            found.line,
-            found.col,
-            found.line,
-            found.col + (click.word?.length ?? 0)
-          )
+        ? new vscode.Range(found.line, found.col, found.line, found.col + found.len)
         : new vscode.Range(
             new vscode.Position(lineIdx, colIdx),
             new vscode.Position(lineIdx, colIdx)
@@ -109,36 +113,37 @@ export class SyncTexService {
   }
 
   /**
-   * Найти слово в окне ±3 строк от позиции synctex (сначала сама строка,
-   * затем по расширяющемуся радиусу); на строке — вхождение, ближайшее
-   * к колонке synctex.
+   * Доводка позиции по слову из PDF в развёрнутом файле (строка = слово).
+   * Смотрим строки exLine..exLine+2 — только вперёд, synctex отстаёт,
+   * но не опережает. Сравнение целыми токенами (буква|цифра)+, поэтому
+   * предлог «в» не найдётся внутри чужого слова. Если слово не нашлось,
+   * но среди строк есть команда или формула — переходим на неё: текст
+   * отрисованной формулы с исходником всё равно не соотнести.
+   * Возвращает позицию в ИСХОДНОМ файле (line/col — 0-базные).
    */
-  private findWordNear(
-    doc: vscode.TextDocument,
-    word: string | undefined,
-    lineIdx: number,
-    colIdx: number
-  ): { line: number; col: number } | undefined {
+  private refineInExploded(
+    ex: ExplodedFile,
+    exLine1: number,
+    word: string | undefined
+  ): { line: number; col: number; len: number } | undefined {
+    const lines = ex.text.split('\n')
+    const last = Math.min(exLine1 + 2, lines.length)
     const w = word?.trim()
-    if (!w || w.length < 2) return undefined
-    const nearestInLine = (line: number): number => {
-      const text = doc.lineAt(line).text
-      let best = -1
-      let bestDist = Infinity
-      for (let i = text.indexOf(w); i !== -1; i = text.indexOf(w, i + 1)) {
-        const dist = Math.abs(i - colIdx)
-        if (dist < bestDist) {
-          bestDist = dist
-          best = i
+    if (w) {
+      for (let l = exLine1; l <= last; l++) {
+        for (const m of lines[l - 1].matchAll(/[\p{L}\p{N}]+/gu)) {
+          if (m[0] === w) {
+            const o = ex.origLineCol(l, m.index)
+            return { line: o.line1 - 1, col: o.col0, len: w.length }
+          }
         }
       }
-      return best
     }
-    for (let dl = 0; dl <= 3; dl++) {
-      for (const cand of dl === 0 ? [lineIdx] : [lineIdx + dl, lineIdx - dl]) {
-        if (cand < 0 || cand >= doc.lineCount) continue
-        const col = nearestInLine(cand)
-        if (col !== -1) return { line: cand, col }
+    for (let l = exLine1; l <= last; l++) {
+      const text = lines[l - 1]
+      if (/\\[a-zA-Z]|\$/.test(text)) {
+        const o = ex.origLineCol(l, 0)
+        return { line: o.line1 - 1, col: o.col0, len: text.length }
       }
     }
     return undefined
@@ -243,7 +248,7 @@ export class SyncTexService {
     ]
   }
 
-  private async backwardLocal(click: PdfSyncClick) {
+  private async backwardLocal(click: PdfSyncClick): Promise<BackwardPos[]> {
     const pdf = this.localPdfPath()
     if (!pdf) throw new Error('нет локальной сборки')
     const out = await this.runSynctex([
@@ -256,6 +261,7 @@ export class SyncTexService {
     let file = rec.Input
     let line = parseInt(rec.Line || '1', 10)
     let column = Math.max(0, parseInt(rec.Column || '0', 10))
+    let exInfo: { ex: ExplodedFile; exLine: number } | undefined
     // путь может указывать в теневую копию — вернуть к исходнику
     const cwd = this.compiler.lastCompileCwd
     if (cwd && cwd !== this.state.rootDir) {
@@ -264,6 +270,7 @@ export class SyncTexService {
       if (!rel.startsWith('..')) {
         const ex = this.compiler.explodedFor(rel)
         if (ex) {
+          exInfo = { ex, exLine: line }
           const mapped = ex.origLineCol(line, column)
           line = mapped.line1
           column = mapped.col0
@@ -271,7 +278,7 @@ export class SyncTexService {
         file = rel
       }
     }
-    return [{ file, line, column }]
+    return [{ file, line, column, ...exInfo }]
   }
 
   /** Разобрать первую запись вывода synctex (строки "Key:value"). */
