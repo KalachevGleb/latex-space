@@ -2,7 +2,6 @@ import { spawn } from 'child_process'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import { LatexSpaceClient } from '../api/client'
-import { getConfig } from '../config'
 import { revealDocumentSmart } from '../util/editors'
 import { ProjectMeta, ProjectState } from '../sync/state'
 import { CompileManager } from './compiler'
@@ -34,8 +33,11 @@ export class SyncTexService {
     const line = editor.selection.active.line + 1
     const column = editor.selection.active.character + 1
     try {
+      // режим последней компиляции: локальный PDF ↔ локальный synctex,
+      // серверный PDF ↔ серверный SyncTeX API
       const positions =
-        getConfig().compileMode === 'server'
+        (this.compiler.lastMode ?? (await this.compiler.resolveMode())) ===
+        'server'
           ? await this.syncServerForward(rel, line, column)
           : await this.forwardLocal(rel, line, column)
       if (!positions.length) {
@@ -59,7 +61,8 @@ export class SyncTexService {
   async backward(click: PdfSyncClick): Promise<void> {
     try {
       const positions =
-        getConfig().compileMode === 'server'
+        (this.compiler.lastMode ?? (await this.compiler.resolveMode())) ===
+        'server'
           ? await this.syncServerBackward(click)
           : await this.backwardLocal(click)
       const pos = positions[0]

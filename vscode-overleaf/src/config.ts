@@ -9,7 +9,7 @@ export function getConfig() {
   return {
     serverUrl: cfg.get<string>('serverUrl', 'http://localhost'),
     userEmail: cfg.get<string>('userEmail', ''),
-    compileMode: cfg.get<'server' | 'local'>('compile.mode', 'server'),
+    compileMode: cfg.get<'auto' | 'server' | 'local'>('compile.mode', 'auto'),
     compiler: cfg.get<string>('compile.compiler', 'pdflatex'),
     draft: cfg.get<boolean>('compile.draft', false),
     stopOnFirstError: cfg.get<boolean>('compile.stopOnFirstError', false),

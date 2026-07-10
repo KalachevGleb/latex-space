@@ -331,9 +331,9 @@ export async function activate(
     cmd('latexspace.goOnline', () => goOnline()),
     cmd('latexspace.compile', async () => {
       const s = needSession()
-      if (s.offline && getConfig().compileMode === 'server') {
+      if (s.offline && (await s.compiler.resolveMode()) === 'server') {
         throw new Error(
-          'В оффлайн-режиме доступна только локальная компиляция (latexspace.compile.mode = "local").'
+          'В оффлайн-режиме доступна только локальная компиляция — установите TeX Live (latexmk).'
         )
       }
       await s.compiler.compile()
