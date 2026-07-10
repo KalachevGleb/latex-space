@@ -51,13 +51,39 @@
 
 ## Установка
 
+Пользователям: страница **`/vscode-plugin`** на сервере LatexSpace —
+кнопка скачивания .vsix и инструкция (ссылка есть в боковой панели
+списка проектов и в меню аккаунта). Файл раздаётся статически из
+`services/web/public/vscode/latexspace.vsix`.
+
+Сборка из исходников:
+
 ```bash
 cd vscode-overleaf
 npm install
-npm run package          # соберёт latexspace-0.2.0.vsix
+npm run package          # соберёт latexspace-<версия>.vsix
+npm run deploy:web       # + положит его в services/web/public/vscode/
 ```
 
-VSCode/Cursor: `Extensions → … → Install from VSIX…`.
+VSCode/Cursor: `Extensions → … → Install from VSIX…` или
+`code --install-extension latexspace.vsix` /
+`cursor --install-extension latexspace.vsix`.
+
+### Deep links (после установки)
+
+Расширение регистрирует URI-обработчик:
+
+- `vscode://peer-review.latexspace/open?server=<url>` — вход (адрес
+  сервера подставится) и выбор проекта; кнопки «Открыть в VS Code /
+  Cursor» на странице `/vscode-plugin` используют именно это.
+- `vscode://peer-review.latexspace/open?server=<url>&projectId=<id>&name=<имя>` —
+  открыть конкретный проект (задел для кнопки «Открыть в VSCode» у
+  проекта в веб-интерфейсе).
+
+Для Cursor схема `cursor://` вместо `vscode://`. Ссылки работают только
+при установленном расширении: «в один клик установить по ссылке» умеет
+только VS Code Marketplace (`vscode:extension/<id>`), куда расширение
+пока не публикуется.
 
 ## Начало работы
 

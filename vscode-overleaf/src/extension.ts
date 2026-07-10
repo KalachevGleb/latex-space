@@ -466,8 +466,44 @@ export async function activate(
     )
   )
 
+  // deep links со страницы LatexSpace: vscode://peer-review.latexspace/open
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri: uri => void handleIncomingUri(uri),
+    })
+  )
+
   await initAppClient()
   await tryActivateProject()
+}
+
+/**
+ * Обработка vscode:// (cursor://) ссылок:
+ *   …/open?server=<url>              — вход и выбор проекта
+ *   …/open?server=<url>&projectId=…&name=… — открыть конкретный проект
+ */
+async function handleIncomingUri(uri: vscode.Uri): Promise<void> {
+  try {
+    const params = new URLSearchParams(uri.query)
+    const server = params.get('server')?.trim().replace(/\/+$/, '')
+    await vscode.commands.executeCommand('workbench.view.extension.latexspace')
+    if (!appClient) {
+      const ok = await setCredentialsFlow(extContext, server || undefined)
+      if (!ok) return
+      await initAppClient()
+      if (!appClient) return
+    }
+    const projectId = params.get('projectId')
+    if (projectId) {
+      await openProjectById(projectId, params.get('name') || 'project')
+    } else if (!session) {
+      await pickAndOpenProject()
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    output.appendLine(`[error] uri handler: ${msg}`)
+    void vscode.window.showErrorMessage(`LatexSpace: ${msg}`)
+  }
 }
 
 export function deactivate(): void {

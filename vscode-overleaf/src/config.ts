@@ -63,14 +63,15 @@ export async function clearStoredPassword(
  * Пароль хранится в SecretStorage VSCode.
  */
 export async function setCredentialsFlow(
-  context: vscode.ExtensionContext
+  context: vscode.ExtensionContext,
+  presetServerUrl?: string
 ): Promise<boolean> {
   const cfg = vscode.workspace.getConfiguration('latexspace')
 
   const serverUrl = await vscode.window.showInputBox({
     title: 'LatexSpace (шаг 1/3): адрес сервера',
     prompt: 'Например, https://latex.example.org',
-    value: cfg.get<string>('serverUrl', 'http://localhost'),
+    value: presetServerUrl || cfg.get<string>('serverUrl', 'http://localhost'),
     ignoreFocusOut: true,
     validateInput: v =>
       /^https?:\/\//.test(v.trim()) ? undefined : 'Укажите URL с http(s)://',

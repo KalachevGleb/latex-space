@@ -25,6 +25,9 @@ export function AccountMenuItems({
       <NavDropdownLinkItem href="/user/settings">
         {t('account_settings')}
       </NavDropdownLinkItem>
+      <NavDropdownLinkItem href="/vscode-plugin">
+        {t('vscode_plugin')}
+      </NavDropdownLinkItem>
       <NavDropdownDivider />
       <DropdownListItem>
         {
