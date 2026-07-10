@@ -83,8 +83,22 @@ export class SyncTexService {
         doc.lineCount - 1
       )
       const colIdx = Math.max(0, (pos.column || 1) - 1)
-      const p = new vscode.Position(lineIdx, colIdx)
-      await revealDocumentSmart(vscode.Uri.file(abs), new vscode.Range(p, p))
+      // доводка по слову под курсором мыши: один запуск synctex, затем
+      // поиск этого слова в соседних строках исходника; найдено —
+      // выделяем его, нет — используем позицию synctex как есть
+      const found = this.findWordNear(doc, click.word, lineIdx, colIdx)
+      const range = found
+        ? new vscode.Range(
+            found.line,
+            found.col,
+            found.line,
+            found.col + (click.word?.length ?? 0)
+          )
+        : new vscode.Range(
+            new vscode.Position(lineIdx, colIdx),
+            new vscode.Position(lineIdx, colIdx)
+          )
+      await revealDocumentSmart(vscode.Uri.file(abs), range)
     } catch (err) {
       this.log(`backward: ${err instanceof Error ? err.message : err}`)
       vscode.window.setStatusBarMessage(
@@ -92,6 +106,42 @@ export class SyncTexService {
         4000
       )
     }
+  }
+
+  /**
+   * Найти слово в окне ±3 строк от позиции synctex (сначала сама строка,
+   * затем по расширяющемуся радиусу); на строке — вхождение, ближайшее
+   * к колонке synctex.
+   */
+  private findWordNear(
+    doc: vscode.TextDocument,
+    word: string | undefined,
+    lineIdx: number,
+    colIdx: number
+  ): { line: number; col: number } | undefined {
+    const w = word?.trim()
+    if (!w || w.length < 2) return undefined
+    const nearestInLine = (line: number): number => {
+      const text = doc.lineAt(line).text
+      let best = -1
+      let bestDist = Infinity
+      for (let i = text.indexOf(w); i !== -1; i = text.indexOf(w, i + 1)) {
+        const dist = Math.abs(i - colIdx)
+        if (dist < bestDist) {
+          bestDist = dist
+          best = i
+        }
+      }
+      return best
+    }
+    for (let dl = 0; dl <= 3; dl++) {
+      for (const cand of dl === 0 ? [lineIdx] : [lineIdx + dl, lineIdx - dl]) {
+        if (cand < 0 || cand >= doc.lineCount) continue
+        const col = nearestInLine(cand)
+        if (col !== -1) return { line: cand, col }
+      }
+    }
+    return undefined
   }
 
   private serverSyncParams(): {
@@ -214,9 +264,6 @@ export class SyncTexService {
       if (!rel.startsWith('..')) {
         const ex = this.compiler.explodedFor(rel)
         if (ex) {
-          // synctex часто «не добивает» до нужного слова на 1–2 строки —
-          // доводим по фактической близости к точке клика
-          line = await this.refineExplodedLine(rel, line, click, pdf)
           const mapped = ex.origLineCol(line, column)
           line = mapped.line1
           column = mapped.col0
@@ -225,53 +272,6 @@ export class SyncTexService {
       }
     }
     return [{ file, line, column }]
-  }
-
-  /**
-   * Доводка обратного SyncTeX в развёрнутом файле: пробуем окрестные
-   * строки (слова) forward-запросами и выбираем ту, чей бокс ближе всего
-   * к точке клика. Стоимость — несколько локальных вызовов synctex (мс).
-   */
-  private async refineExplodedLine(
-    rel: string,
-    line: number,
-    click: PdfSyncClick,
-    pdf: string
-  ): Promise<number> {
-    let best = line
-    let bestScore = Infinity
-    for (let cand = Math.max(1, line - 1); cand <= line + 4; cand++) {
-      try {
-        const out = await this.runSynctex([
-          'view',
-          '-i',
-          `${cand}:1:${rel}`,
-          '-o',
-          pdf,
-        ])
-        const rec = this.parseRecord(out, ['Page', 'h', 'v', 'W', 'H'])
-        if (!rec.Page || parseInt(rec.Page, 10) !== click.page) continue
-        const h = parseFloat(rec.h || '0')
-        const v = parseFloat(rec.v || '0')
-        const w = parseFloat(rec.W || '0')
-        const hh = parseFloat(rec.H || '0')
-        // расстояние до бокса слова: по вертикали (с весом) + по горизонтали
-        const dv = Math.max(0, Math.abs(click.v - (v - hh / 2)) - hh / 2)
-        const dh =
-          click.h < h ? h - click.h : click.h > h + w ? click.h - (h + w) : 0
-        const score = dv * 3 + dh
-        if (score < bestScore) {
-          bestScore = score
-          best = cand
-        }
-      } catch {
-        /* строки может не быть в synctex — пропустить */
-      }
-    }
-    if (best !== line) {
-      this.log(`доводка: строка ${line} → ${best} (score ${bestScore.toFixed(1)})`)
-    }
-    return best
   }
 
   /** Разобрать первую запись вывода synctex (строки "Key:value"). */

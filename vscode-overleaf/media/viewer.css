@@ -99,3 +99,29 @@ html, body {
 #empty-state button:hover {
   background: var(--vscode-button-hoverBackground, #1177bb);
 }
+
+/* текстовый слой pdf.js: прозрачный текст поверх canvas — выделение и
+   определение слова под курсором */
+.textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  caret-color: CanvasText;
+}
+
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer ::selection {
+  background: rgba(66, 133, 244, 0.35);
+}
