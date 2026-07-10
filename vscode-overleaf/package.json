@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -438,6 +438,21 @@
           "command": "latexspace.signOut",
           "when": "view == latexspaceProjects && latexspace.signedIn",
           "group": "navigation@2"
+        },
+        {
+          "command": "latexspace.sendNewFiles",
+          "when": "view == latexspaceProjects && latexspace.active",
+          "group": "1_sync@1"
+        },
+        {
+          "command": "latexspace.pushAll",
+          "when": "view == latexspaceProjects && latexspace.active",
+          "group": "1_sync@2"
+        },
+        {
+          "command": "latexspace.checkConflicts",
+          "when": "view == latexspaceProjects && latexspace.active",
+          "group": "2_tools@1"
         },
         {
           "command": "latexspace.comments.add",

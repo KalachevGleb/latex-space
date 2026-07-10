@@ -1305,11 +1305,6 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
       action: () => output.show(true),
     },
     {
-      label: '$(extensions) Проверить конфликтующие расширения…',
-      description: 'автокомпиляция и т.п. у других расширений',
-      action: () => suggestDisablingConflicts(s.state, true),
-    },
-    {
       label: '$(account) Сменить учётные данные…',
       action: () => vscode.commands.executeCommand('latexspace.signIn'),
     }
