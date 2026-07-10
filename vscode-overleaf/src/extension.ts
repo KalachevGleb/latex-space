@@ -108,6 +108,25 @@ class ProjectSession implements vscode.Disposable {
 
     const statusBar = new StatusBarUi(this.sync, this.compiler, offline)
     this.statusBar = statusBar
+
+    // обновление дерева файлов в панели «Проекты» при изменениях на диске
+    let treePokeTimer: NodeJS.Timeout | undefined
+    const pokeFilesTree = () => {
+      if (treePokeTimer) clearTimeout(treePokeTimer)
+      treePokeTimer = setTimeout(() => projectsTree.poke(), 700)
+    }
+    const filesWatcher = vscode.workspace.createFileSystemWatcher(
+      '**/*',
+      false,
+      true,
+      false
+    )
+    this.disposables.push(
+      filesWatcher,
+      filesWatcher.onDidCreate(pokeFilesTree),
+      filesWatcher.onDidDelete(pokeFilesTree),
+      { dispose: () => treePokeTimer && clearTimeout(treePokeTimer) }
+    )
     this.disposables.push(
       this.sync,
       this.compiler,
@@ -200,6 +219,7 @@ class ProjectSession implements vscode.Disposable {
     projectsTree.setActive({
       projectId: this.meta.projectId,
       projectName: this.meta.projectName,
+      rootDir: this.state.rootDir,
       conflicts: this.sync.getStatusInfo().conflicts,
       offline: this.offline,
       live: this.realtime?.isLive() ?? false,
@@ -1283,6 +1303,11 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
     {
       label: '$(output) Журнал',
       action: () => output.show(true),
+    },
+    {
+      label: '$(extensions) Проверить конфликтующие расширения…',
+      description: 'автокомпиляция и т.п. у других расширений',
+      action: () => suggestDisablingConflicts(s.state, true),
     },
     {
       label: '$(account) Сменить учётные данные…',
