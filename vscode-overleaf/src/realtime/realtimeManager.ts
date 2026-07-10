@@ -73,6 +73,8 @@ export class RealtimeManager implements vscode.Disposable {
   noteSelfWrite?: (absPath: string) => void
   /** режим рецензирования: наши операции идут как tracked changes */
   trackChangesEnabled = false
+  /** режим рецензирования переключён (в т.ч. удалённо из веба) */
+  onTrackChangesChanged?: (enabled: boolean) => void
   private rangesTimer?: NodeJS.Timeout
 
   constructor(
@@ -478,6 +480,7 @@ export class RealtimeManager implements vscode.Disposable {
         // проектный переключатель рецензирования из веба
         if (typeof args[0] === 'boolean') {
           this.trackChangesEnabled = args[0]
+          this.onTrackChangesChanged?.(args[0])
           this.fireRangesChanged()
         }
         break
