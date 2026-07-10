@@ -14,7 +14,8 @@
   let scale = 1.0
   let fitWidth = true
   let rendering = false
-  const pageStates = [] // {num, wrap, canvas, rendered, page, viewport, pageHeightPt, pageWidthPt}
+  let pendingLayout = false
+  const pageStates = [] // {num, wrap, canvas, viewport, pageWidthPt, pageHeightPt}
 
   const dpr = Math.max(1, window.devicePixelRatio || 1)
 
@@ -22,97 +23,110 @@
     statusEl.textContent = text || ''
   }
 
-  function currentFitScale(page) {
-    const viewport = page.getViewport({ scale: 1 })
-    const available = pagesEl.clientWidth - 32
-    return Math.max(0.3, available / viewport.width)
-  }
-
-  async function renderPage(state) {
-    if (state.rendered || !pdfDoc) return
-    state.rendered = true
-    const page = state.page || (state.page = await pdfDoc.getPage(state.num))
-    const effScale = fitWidth ? currentFitScale(page) : scale
-    const viewport = page.getViewport({ scale: effScale })
-    state.viewport = viewport
-    state.pageWidthPt = page.view[2] - page.view[0]
-    state.pageHeightPt = page.view[3] - page.view[1]
-    const canvas = state.canvas
-    canvas.width = Math.floor(viewport.width * dpr)
-    canvas.height = Math.floor(viewport.height * dpr)
-    canvas.style.width = Math.floor(viewport.width) + 'px'
-    canvas.style.height = Math.floor(viewport.height) + 'px'
-    state.wrap.style.width = canvas.style.width
-    state.wrap.style.height = canvas.style.height
-    const ctx = canvas.getContext('2d')
-    await page.render({
-      canvasContext: ctx,
-      viewport,
-      transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
-    }).promise
-  }
-
-  const observer = new IntersectionObserver(
-    entries => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          const idx = Number(entry.target.dataset.page) - 1
-          const state = pageStates[idx]
-          if (state) renderPage(state).catch(console.error)
-        }
-      }
-    },
-    { root: null, rootMargin: '600px 0px' }
-  )
-
-  async function layout(preserveScroll) {
-    if (!pdfDoc || rendering) return
-    rendering = true
-    const scrollRatio =
-      preserveScroll && document.documentElement.scrollHeight > 0
-        ? window.scrollY / document.documentElement.scrollHeight
-        : 0
-
-    observer.disconnect()
-    pagesEl.textContent = ''
-    pageStates.length = 0
-
-    // размеры-заглушки по первой странице, чтобы скролл был стабильным
-    const first = await pdfDoc.getPage(1)
-    const effScale = fitWidth ? currentFitScale(first) : scale
-    const vp1 = first.getViewport({ scale: effScale })
-    zoomLabel.textContent = Math.round(effScale * 100) + '%'
-
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      const wrap = document.createElement('div')
-      wrap.className = 'page-wrap'
-      wrap.dataset.page = String(i)
-      wrap.style.width = Math.floor(vp1.width) + 'px'
-      wrap.style.height = Math.floor(vp1.height) + 'px'
-      const canvas = document.createElement('canvas')
-      canvas.style.width = Math.floor(vp1.width) + 'px'
-      canvas.style.height = Math.floor(vp1.height) + 'px'
-      wrap.appendChild(canvas)
-      pagesEl.appendChild(wrap)
-      pageStates.push({
-        num: i,
-        wrap,
-        canvas,
-        rendered: false,
-        page: i === 1 ? first : null,
-        viewport: null,
-        pageWidthPt: 0,
-        pageHeightPt: 0,
-      })
-      observer.observe(wrap)
+  /**
+   * Панель может быть создана скрытой (ширина 0) — тогда рендер по нулевой
+   * ширине даёт пустые страницы. Просто ждём, пока появится размер.
+   */
+  async function waitForSize() {
+    while (pagesEl.clientWidth === 0) {
+      await new Promise(r => setTimeout(r, 200))
     }
-    pageInfoEl.textContent = 'страниц: ' + pdfDoc.numPages
+  }
 
-    rendering = false
-    if (preserveScroll) {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, scrollRatio * document.documentElement.scrollHeight)
-      })
+  /**
+   * Полная отрисовка: все страницы по порядку, каждая — canvas + текстовый
+   * слой (выделение текста и слово под курсором для SyncTeX). Никакой
+   * ленивой отрисовки: загрузили — нарисовали, состояние одно.
+   */
+  async function layout(preserveScroll) {
+    if (!pdfDoc) return
+    if (rendering) {
+      pendingLayout = true
+      return
+    }
+    rendering = true
+    try {
+      await waitForSize()
+      const scrollRatio =
+        preserveScroll && document.documentElement.scrollHeight > 0
+          ? window.scrollY / document.documentElement.scrollHeight
+          : 0
+
+      pagesEl.textContent = ''
+      pageStates.length = 0
+
+      const first = await pdfDoc.getPage(1)
+      const vp0 = first.getViewport({ scale: 1 })
+      const effScale = fitWidth
+        ? Math.max(0.3, (pagesEl.clientWidth - 32) / vp0.width)
+        : scale
+      zoomLabel.textContent = Math.round(effScale * 100) + '%'
+      pageInfoEl.textContent = 'страниц: ' + pdfDoc.numPages
+
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        setStatus(`отрисовка ${i}/${pdfDoc.numPages}…`)
+        const page = i === 1 ? first : await pdfDoc.getPage(i)
+        const viewport = page.getViewport({ scale: effScale })
+
+        const wrap = document.createElement('div')
+        wrap.className = 'page-wrap'
+        wrap.dataset.page = String(i)
+        wrap.style.width = Math.floor(viewport.width) + 'px'
+        wrap.style.height = Math.floor(viewport.height) + 'px'
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.floor(viewport.width * dpr)
+        canvas.height = Math.floor(viewport.height * dpr)
+        canvas.style.width = Math.floor(viewport.width) + 'px'
+        canvas.style.height = Math.floor(viewport.height) + 'px'
+        wrap.appendChild(canvas)
+        pagesEl.appendChild(wrap)
+
+        await page.render({
+          canvasContext: canvas.getContext('2d'),
+          viewport,
+          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+        }).promise
+
+        // текстовый слой: выделение текста + слово под курсором
+        try {
+          const textContent = await page.getTextContent()
+          const layer = document.createElement('div')
+          layer.className = 'textLayer'
+          layer.style.width = canvas.style.width
+          layer.style.height = canvas.style.height
+          layer.style.setProperty('--scale-factor', String(effScale))
+          wrap.appendChild(layer)
+          await pdfjsLib.renderTextLayer({
+            textContentSource: textContent,
+            container: layer,
+            viewport,
+            textDivs: [],
+          }).promise
+        } catch (e) {
+          console.error('text layer:', e)
+        }
+
+        pageStates.push({
+          num: i,
+          wrap,
+          canvas,
+          viewport,
+          pageWidthPt: page.view[2] - page.view[0],
+          pageHeightPt: page.view[3] - page.view[1],
+        })
+      }
+      setStatus('')
+      if (preserveScroll) {
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollRatio * document.documentElement.scrollHeight)
+        })
+      }
+    } finally {
+      rendering = false
+      if (pendingLayout) {
+        pendingLayout = false
+        layout(true)
+      }
     }
   }
 
@@ -131,42 +145,65 @@
       }
       pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise
       await layout(true)
-      setStatus('')
     } catch (err) {
       console.error(err)
       setStatus('ошибка загрузки PDF')
     }
   }
 
+  // ---------- слово под курсором (из текстового слоя) ----------
+
+  function wordAtPoint(x, y) {
+    let range = null
+    if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(x, y)
+    } else if (document.caretPositionFromPoint) {
+      const p = document.caretPositionFromPoint(x, y)
+      if (p) {
+        range = document.createRange()
+        range.setStart(p.offsetNode, p.offset)
+      }
+    }
+    const node = range && range.startContainer
+    if (!node || node.nodeType !== Node.TEXT_NODE) return null
+    const text = node.textContent || ''
+    const isW = ch => /[0-9A-Za-zА-Яа-яЁёÀ-ɏ-]/.test(ch)
+    let s = range.startOffset
+    let e = s
+    while (s > 0 && isW(text[s - 1])) s--
+    while (e < text.length && isW(text[e])) e++
+    const w = text.slice(s, e)
+    return w.length >= 2 ? w : null
+  }
+
   // ---------- обратный SyncTeX: Ctrl/Cmd+Click ----------
 
-  pagesEl.addEventListener('click', async e => {
+  pagesEl.addEventListener('click', e => {
     if (!e.ctrlKey && !e.metaKey) return
     const wrap = e.target.closest('.page-wrap')
     if (!wrap) return
-    const idx = Number(wrap.dataset.page) - 1
-    const state = pageStates[idx]
-    if (!state) return
-    if (!state.rendered) await renderPage(state)
-    if (!state.viewport) return
+    const state = pageStates[Number(wrap.dataset.page) - 1]
+    if (!state || !state.viewport) return
     const rect = state.canvas.getBoundingClientRect()
     const cssX = e.clientX - rect.left
     const cssY = e.clientY - rect.top
     const [pdfX, pdfY] = state.viewport.convertToPdfPoint(cssX, cssY)
     // synctex использует начало координат сверху-слева
-    const h = pdfX
-    const v = state.pageHeightPt - pdfY
-    vscode.postMessage({ type: 'syncToCode', page: state.num, h, v })
+    vscode.postMessage({
+      type: 'syncToCode',
+      page: state.num,
+      h: pdfX,
+      v: state.pageHeightPt - pdfY,
+      word: wordAtPoint(e.clientX, e.clientY),
+    })
   })
 
   // ---------- подсветка позиции (forward SyncTeX) ----------
 
   let highlightEl = null
-  async function showHighlight(msg) {
+  function showHighlight(msg) {
     const state = pageStates[msg.page - 1]
-    if (!state) return
-    if (!state.rendered) await renderPage(state)
-    if (!state.viewport) return
+    if (!state || !state.viewport) return
     const k = state.canvas.getBoundingClientRect().width / state.pageWidthPt
     if (highlightEl) highlightEl.remove()
     const el = document.createElement('div')
@@ -178,7 +215,8 @@
     // v приходит от верхнего края страницы; высота может быть 0 — рисуем полосу
     el.style.left = Math.max(0, (hPt - 2) * k) + 'px'
     el.style.top = Math.max(0, (vPt - (hgtPt || 12)) * k) + 'px'
-    el.style.width = (wPt > 1 ? wPt * k : state.pageWidthPt * k - hPt * k - 8) + 'px'
+    el.style.width =
+      (wPt > 1 ? wPt * k : state.pageWidthPt * k - hPt * k - 8) + 'px'
     el.style.height = ((hgtPt || 12) + 4) * k + 'px'
     state.wrap.appendChild(el)
     highlightEl = el

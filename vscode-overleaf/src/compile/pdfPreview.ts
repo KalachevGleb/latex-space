@@ -6,6 +6,8 @@ export interface PdfSyncClick {
   page: number
   h: number
   v: number
+  /** слово под курсором мыши (из текстового слоя PDF) — для доводки */
+  word?: string
 }
 
 export interface PdfHighlight {
@@ -140,6 +142,7 @@ export class PdfPreview {
           page: Number(msg.page),
           h: Number(msg.h),
           v: Number(msg.v),
+          word: typeof msg.word === 'string' ? msg.word : undefined,
         })
       }
     })
