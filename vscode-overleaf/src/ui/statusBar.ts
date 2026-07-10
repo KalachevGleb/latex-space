@@ -8,6 +8,7 @@ import { SyncManager, SyncStatusInfo } from '../sync/syncManager'
 export class StatusBarUi implements vscode.Disposable {
   private compileItem: vscode.StatusBarItem
   private syncItem: vscode.StatusBarItem
+  private tcItem: vscode.StatusBarItem
   private subs: vscode.Disposable[] = []
   private live = false
   private lastInfo?: SyncStatusInfo
@@ -30,6 +31,13 @@ export class StatusBarUi implements vscode.Disposable {
     )
     this.syncItem.name = 'LatexSpace: синхронизация'
     this.syncItem.command = 'latexspace.syncMenu'
+    this.tcItem = vscode.window.createStatusBarItem(
+      'latexspace.trackChanges',
+      vscode.StatusBarAlignment.Left,
+      98
+    )
+    this.tcItem.name = 'LatexSpace: режим рецензирования'
+    this.tcItem.command = 'latexspace.trackChanges.toggle'
 
     this.setCompileIdle()
     this.applySync(sync.getStatusInfo())
@@ -53,7 +61,33 @@ export class StatusBarUi implements vscode.Disposable {
   dispose(): void {
     this.compileItem.dispose()
     this.syncItem.dispose()
+    this.tcItem.dispose()
     for (const s of this.subs) s.dispose()
+  }
+
+  /**
+   * Постоянный индикатор режима: «Редактирование» / «Рецензирование».
+   * Включённое рецензирование выглядит «зажатым» — с цветной подложкой.
+   */
+  setTrackChanges(available: boolean, on: boolean): void {
+    if (!available) {
+      this.tcItem.hide()
+      return
+    }
+    if (on) {
+      this.tcItem.text = '$(comment-draft) Рецензирование'
+      this.tcItem.tooltip =
+        'Режим рецензирования (track changes) включён: ваши правки записываются как предлагаемые. Нажмите, чтобы выключить.'
+      this.tcItem.backgroundColor = new vscode.ThemeColor(
+        'statusBarItem.warningBackground'
+      )
+    } else {
+      this.tcItem.text = '$(edit) Редактирование'
+      this.tcItem.tooltip =
+        'Обычный режим: правки применяются сразу. Нажмите, чтобы включить рецензирование (track changes).'
+      this.tcItem.backgroundColor = undefined
+    }
+    this.tcItem.show()
   }
 
   private setCompileIdle(): void {

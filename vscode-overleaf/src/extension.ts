@@ -4,7 +4,11 @@ import * as path from 'path'
 import * as vscode from 'vscode'
 import { LatexSpaceClient } from './api/client'
 import { ChangesDecorations } from './changes/changesDecorations'
-import { ChangeNode, ChangesTreeProvider } from './changes/changesTree'
+import {
+  ChangeNode,
+  ChangesNode,
+  ChangesTreeProvider,
+} from './changes/changesTree'
 import { CommentsService } from './comments/commentsService'
 import { CommentsTreeProvider, ThreadNode } from './comments/commentsTree'
 import { CommentDecorations } from './comments/decorations'
@@ -54,6 +58,8 @@ class ProjectSession implements vscode.Disposable {
   readonly realtime?: RealtimeManager
   readonly changesTree: ChangesTreeProvider
   readonly changesDecorations: ChangesDecorations
+  private readonly statusBar: StatusBarUi
+  private readonly changesView: vscode.TreeView<ChangesNode>
   private disposables: vscode.Disposable[] = []
 
   constructor(
@@ -96,8 +102,10 @@ class ProjectSession implements vscode.Disposable {
       treeDataProvider: this.changesTree,
       showCollapseAll: true,
     })
+    this.changesView = changesView
 
     const statusBar = new StatusBarUi(this.sync, this.compiler, offline)
+    this.statusBar = statusBar
     this.disposables.push(
       this.sync,
       this.compiler,
@@ -133,11 +141,13 @@ class ProjectSession implements vscode.Disposable {
       this.sync.realtimeFilter = rel => !!this.realtime?.managesRel(rel)
       this.compiler.beforeServerCompile = () =>
         this.realtime!.flushSynchronized()
+      this.realtime.onTrackChangesChanged = () => this.updateTrackChangesUi()
       this.disposables.push(
         this.realtime,
         this.realtime.onDidChangeState(s => {
           statusBar.setLive(s === 'connected')
           this.publishActiveInfo()
+          this.updateTrackChangesUi()
           void this.comments.refresh(true)
           this.changesTree.refresh()
         })
@@ -176,6 +186,7 @@ class ProjectSession implements vscode.Disposable {
       void this.comments.refresh(true).catch(() => undefined)
     }
     this.publishActiveInfo()
+    this.updateTrackChangesUi()
   }
 
   publishActiveInfo(): void {
@@ -188,8 +199,28 @@ class ProjectSession implements vscode.Disposable {
     })
   }
 
+  /** Индикатор режима: статус-бар, значок панели «Правки», context key. */
+  updateTrackChangesUi(): void {
+    const live = this.realtime?.isLive() ?? false
+    const on = live && !!this.realtime?.trackChangesEnabled
+    void vscode.commands.executeCommand(
+      'setContext',
+      'latexspace.trackChanges',
+      on
+    )
+    this.statusBar.setTrackChanges(live && !this.offline, on)
+    this.changesView.message = on
+      ? 'Рецензирование включено: ваши правки записываются как предлагаемые.'
+      : undefined
+  }
+
   dispose(): void {
     for (const d of this.disposables) d.dispose()
+    void vscode.commands.executeCommand(
+      'setContext',
+      'latexspace.trackChanges',
+      false
+    )
     projectsTree.setActive(undefined)
   }
 }
@@ -259,6 +290,16 @@ export async function activate(
       }
     }),
     cmd('latexspace.signOut', async () => {
+      // закрыть активную сессию проекта — она работает под этой учёткой
+      if (session) {
+        session.dispose()
+        session = undefined
+        await vscode.commands.executeCommand(
+          'setContext',
+          'latexspace.active',
+          false
+        )
+      }
       await clearStoredPassword(context)
       appClient = undefined
       projectsTree.setClient(undefined)
@@ -268,7 +309,7 @@ export async function activate(
         false
       )
       void vscode.window.showInformationMessage(
-        'LatexSpace: пароль удалён. Войдите снова для продолжения работы.'
+        'LatexSpace: вы вышли из учётной записи. Чтобы продолжить (в том числе под другой учётной записью), нажмите «Войти» в панели LatexSpace.'
       )
     }),
     cmd('latexspace.openProject', () => pickAndOpenProject()),
@@ -342,22 +383,24 @@ export async function activate(
         )
       }
       s.realtime.trackChangesEnabled = !s.realtime.trackChangesEnabled
-      vscode.window.setStatusBarMessage(
-        s.realtime.trackChangesEnabled
-          ? '$(edit) LatexSpace: рецензирование включено — ваши правки отслеживаются'
-          : '$(check) LatexSpace: рецензирование выключено',
-        5000
-      )
+      s.updateTrackChangesUi()
     }),
+    // тот же переключатель под другим id — для «зажатого» значка в панели
+    cmd('latexspace.trackChanges.toggleOff', () =>
+      vscode.commands.executeCommand('latexspace.trackChanges.toggle')
+    ),
     cmd('latexspace.changes.open', async node => {
       if (!(node instanceof ChangeNode)) return
       const s = needSession()
       const abs = s.state.localPath(node.rel)
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(abs))
-      const p = Math.min(node.change.op.p, doc.getText().length)
+      const p = Math.min(node.display.p, doc.getText().length)
       const start = doc.positionAt(p)
       const end = doc.positionAt(
-        Math.min(p + (node.change.op.i?.length ?? 0), doc.getText().length)
+        Math.min(
+          p + (node.display.ins?.op.i?.length ?? 0),
+          doc.getText().length
+        )
       )
       await revealDocumentSmart(
         vscode.Uri.file(abs),
@@ -367,27 +410,31 @@ export async function activate(
     cmd('latexspace.changes.accept', async node => {
       if (!(node instanceof ChangeNode)) return
       const s = needSession()
+      const what = node.display.kind === 'replace' ? 'замену' : 'правку'
       const pick = await vscode.window.showWarningMessage(
-        `Принять правку в «${node.rel}»?`,
+        `Принять ${what} в «${node.rel}»?`,
         { modal: true },
         'Принять'
       )
       if (pick !== 'Принять') return
-      await s.client.acceptChanges(s.meta.projectId, node.docId, [
-        node.change.id,
-      ])
-      s.realtime?.applyAcceptedChanges(node.docId, [node.change.id])
+      await s.client.acceptChanges(
+        s.meta.projectId,
+        node.docId,
+        node.display.ids
+      )
+      s.realtime?.applyAcceptedChanges(node.docId, node.display.ids)
     }),
     cmd('latexspace.changes.reject', async node => {
       if (!(node instanceof ChangeNode)) return
       const s = needSession()
+      const what = node.display.kind === 'replace' ? 'замену' : 'правку'
       const pick = await vscode.window.showWarningMessage(
-        `Отклонить правку в «${node.rel}»? Текст вернётся к исходному состоянию.`,
+        `Отклонить ${what} в «${node.rel}»? Текст вернётся к исходному состоянию.`,
         { modal: true },
         'Отклонить'
       )
       if (pick !== 'Отклонить') return
-      await s.realtime?.rejectChanges(node.docId, [node.change.id])
+      await s.realtime?.rejectChanges(node.docId, node.display.ids)
     })
   )
 
@@ -877,7 +924,7 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
       action: () => undefined,
     })
     items.push({
-      label: `$(edit) Рецензирование (track changes): ${s.realtime?.trackChangesEnabled ? 'вкл' : 'выкл'}`,
+      label: `$(comment-draft) Рецензирование (track changes): ${s.realtime?.trackChangesEnabled ? 'вкл' : 'выкл'}`,
       description: 'переключить',
       action: () =>
         vscode.commands.executeCommand('latexspace.trackChanges.toggle'),

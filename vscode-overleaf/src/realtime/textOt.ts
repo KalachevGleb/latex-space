@@ -199,11 +199,16 @@ function tokenize(s: string): string[] {
   return s.match(/\S+|\s+/g) ?? []
 }
 
+/** Разбить на строки (с завершающим \n у каждой, кроме последней). */
+function tokenizeLines(s: string): string[] {
+  return s.match(/[^\n]*\n|[^\n]+$/g) ?? []
+}
+
 /** LCS-диффы по токенам (DP); null — если слишком велико. */
-function tokenDiff(a: string[], b: string[]): Hunk[] | null {
+function tokenDiff(a: string[], b: string[], cap = 1_000_000): Hunk[] | null {
   const n = a.length
   const m = b.length
-  if (n * m > 1_000_000) return null
+  if (n * m > cap) return null
   // таблица длин LCS
   const dp = new Uint32Array((n + 1) * (m + 1))
   const idx = (i: number, j: number) => i * (m + 1) + j
@@ -239,6 +244,37 @@ function tokenDiff(a: string[], b: string[]): Hunk[] | null {
   while (i < n) push('del', a[i++])
   while (j < m) push('ins', b[j++])
   return hunks
+}
+
+/**
+ * Diff середины замены. Сначала пословный; если текст слишком велик для
+ * пословного DP (например, ИИ-агент переписал файл целиком) — построчный,
+ * с пословным уточнением каждой изменённой пары «удалённые строки +
+ * вставленные строки». null — только если даже построчный DP слишком велик.
+ */
+function diffHunks(a: string, b: string): Hunk[] | null {
+  const words = tokenDiff(tokenize(a), tokenize(b))
+  if (words) return words
+  // построчный уровень: DP-таблица по строкам заметно меньше
+  const lines = tokenDiff(tokenizeLines(a), tokenizeLines(b), 4_000_000)
+  if (!lines) return null
+  const out: Hunk[] = []
+  for (let k = 0; k < lines.length; k++) {
+    const h = lines[k]
+    const next = lines[k + 1]
+    if (h.kind !== 'eq' && next && next.kind !== 'eq' && next.kind !== h.kind) {
+      // пара «удалено + вставлено» — уточняем пословно
+      const del = h.kind === 'del' ? h : (next as Hunk)
+      const ins = h.kind === 'ins' ? h : (next as Hunk)
+      const sub = tokenDiff(tokenize(del.text), tokenize(ins.text))
+      if (sub) out.push(...sub)
+      else out.push({ kind: 'del', text: del.text }, { kind: 'ins', text: ins.text })
+      k++
+      continue
+    }
+    out.push(h)
+  }
+  return out
 }
 
 /**
@@ -313,7 +349,7 @@ export function diffReplaceOps(
     return op
   }
 
-  const hunks = tokenDiff(tokenize(midA), tokenize(midB))
+  const hunks = diffHunks(midA, midB)
   if (!hunks) {
     // слишком большая замена — честные удаление и вставка
     op.push({ p: pos, d: midA })

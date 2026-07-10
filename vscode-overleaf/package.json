@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -159,7 +159,8 @@
       {
         "command": "latexspace.signOut",
         "category": "LatexSpace",
-        "title": "Выйти (сменить пользователя)"
+        "title": "Выйти из учётной записи",
+        "icon": "$(sign-out)"
       },
       {
         "command": "latexspace.openProject",
@@ -275,7 +276,13 @@
         "command": "latexspace.trackChanges.toggle",
         "category": "LatexSpace",
         "title": "Рецензирование: включить/выключить track changes",
-        "icon": "$(edit)"
+        "icon": "$(comment-draft)"
+      },
+      {
+        "command": "latexspace.trackChanges.toggleOff",
+        "category": "LatexSpace",
+        "title": "Рецензирование включено — выключить",
+        "icon": "$(comment-unresolved)"
       },
       {
         "command": "latexspace.changes.open",
@@ -367,6 +374,11 @@
           "group": "navigation@1"
         },
         {
+          "command": "latexspace.signOut",
+          "when": "view == latexspaceProjects && latexspace.signedIn",
+          "group": "navigation@2"
+        },
+        {
           "command": "latexspace.comments.add",
           "when": "view == latexspaceComments",
           "group": "navigation@1"
@@ -383,7 +395,12 @@
         },
         {
           "command": "latexspace.trackChanges.toggle",
-          "when": "view == latexspaceChanges",
+          "when": "view == latexspaceChanges && !latexspace.trackChanges",
+          "group": "navigation@1"
+        },
+        {
+          "command": "latexspace.trackChanges.toggleOff",
+          "when": "view == latexspaceChanges && latexspace.trackChanges",
           "group": "navigation@1"
         }
       ],
@@ -438,6 +455,10 @@
         {
           "command": "latexspace.trackChanges.toggle",
           "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.trackChanges.toggleOff",
+          "when": "false"
         },
         {
           "command": "latexspace.comments.reply",

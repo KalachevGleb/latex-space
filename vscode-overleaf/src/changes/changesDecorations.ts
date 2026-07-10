@@ -1,6 +1,7 @@
 import * as path from 'path'
 import * as vscode from 'vscode'
 import type { LiveRanges } from '../realtime/realtimeManager'
+import { aggregateChanges } from './aggregate'
 
 function trimText(s: string, n = 30): string {
   const one = s.replace(/\s+/g, ' ')
@@ -70,27 +71,38 @@ export class ChangesDecorations implements vscode.Disposable {
       const inserts: vscode.DecorationOptions[] = []
       const deletes: vscode.DecorationOptions[] = []
       const maxOffset = editor.document.getText().length
-      for (const c of doc.changes) {
-        const p = Math.min(c.op.p, maxOffset)
-        if (c.op.i !== undefined) {
-          const end = Math.min(p + c.op.i.length, maxOffset)
+      for (const dc of aggregateChanges(doc.changes)) {
+        const replaceHover =
+          dc.kind === 'replace'
+            ? new vscode.MarkdownString(
+                `Tracked: замена\n\nБыло:\n\`\`\`\n${(dc.del!.op.d ?? '').slice(0, 300)}\n\`\`\`\nСтало:\n\`\`\`\n${(dc.ins!.op.i ?? '').slice(0, 300)}\n\`\`\``
+              )
+            : undefined
+        if (dc.ins?.op.i !== undefined) {
+          const p = Math.min(dc.ins.op.p, maxOffset)
+          const end = Math.min(p + dc.ins.op.i.length, maxOffset)
           inserts.push({
             range: new vscode.Range(
               editor.document.positionAt(p),
               editor.document.positionAt(end)
             ),
-            hoverMessage: new vscode.MarkdownString('Tracked: вставка'),
+            hoverMessage:
+              replaceHover ?? new vscode.MarkdownString('Tracked: вставка'),
           })
-        } else if (c.op.d !== undefined) {
+        }
+        if (dc.del?.op.d !== undefined) {
+          const p = Math.min(dc.del.op.p, maxOffset)
           const pos = editor.document.positionAt(p)
           deletes.push({
             range: new vscode.Range(pos, pos),
             renderOptions: {
-              before: { contentText: trimText(c.op.d) },
+              before: { contentText: trimText(dc.del.op.d) },
             },
-            hoverMessage: new vscode.MarkdownString(
-              `Tracked: удалено\n\n\`\`\`\n${c.op.d.slice(0, 300)}\n\`\`\``
-            ),
+            hoverMessage:
+              replaceHover ??
+              new vscode.MarkdownString(
+                `Tracked: удалено\n\n\`\`\`\n${dc.del.op.d.slice(0, 300)}\n\`\`\``
+              ),
           })
         }
       }
