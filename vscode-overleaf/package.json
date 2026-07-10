@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -85,6 +85,16 @@
           },
           "default": [],
           "description": "Дополнительные аргументы локальной компиляции"
+        },
+        "latexspace.compile.onSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ctrl/Cmd+S в .tex-файле запускает компиляцию (в live-режиме «сохранить» само по себе не нужно — правки и так синхронизируются)"
+        },
+        "latexspace.sync.autoPushNewFiles": {
+          "type": "boolean",
+          "default": false,
+          "description": "Автоматически отправлять на сервер НОВЫЕ файлы. По умолчанию выключено: новые файлы (часто их создают другие расширения при автокомпиляции) отправляются только явно — через уведомление или меню синхронизации"
         },
         "latexspace.sync.autoPush": {
           "type": "boolean",
@@ -303,6 +313,32 @@
         "category": "LatexSpace",
         "title": "Отклонить правку",
         "icon": "$(discard)"
+      },
+      {
+        "command": "latexspace.commentCreate",
+        "category": "LatexSpace",
+        "title": "Комментировать"
+      },
+      {
+        "command": "latexspace.commentReplyInline",
+        "category": "LatexSpace",
+        "title": "Ответить"
+      },
+      {
+        "command": "latexspace.commentResolveInline",
+        "category": "LatexSpace",
+        "title": "Пометить решённым",
+        "icon": "$(check)"
+      },
+      {
+        "command": "latexspace.saveAndCompile",
+        "category": "LatexSpace",
+        "title": "Скомпилировать (Ctrl/Cmd+S)"
+      },
+      {
+        "command": "latexspace.sendNewFiles",
+        "category": "LatexSpace",
+        "title": "Отправить новые файлы на сервер…"
       }
     ],
     "viewsContainers": {
@@ -346,6 +382,25 @@
       }
     ],
     "menus": {
+      "comments/commentThread/context": [
+        {
+          "command": "latexspace.commentCreate",
+          "group": "inline",
+          "when": "commentController == latexspace && commentThreadIsEmpty"
+        },
+        {
+          "command": "latexspace.commentReplyInline",
+          "group": "inline",
+          "when": "commentController == latexspace && !commentThreadIsEmpty"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "latexspace.commentResolveInline",
+          "group": "navigation",
+          "when": "commentController == latexspace && commentThread == lsOpen"
+        }
+      ],
       "editor/context": [
         {
           "command": "latexspace.comments.add",
@@ -526,6 +581,26 @@
         {
           "command": "latexspace.comments.toggleResolved",
           "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.commentCreate",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.commentReplyInline",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.commentResolveInline",
+          "when": "false"
+        },
+        {
+          "command": "latexspace.saveAndCompile",
+          "when": "latexspace.active"
+        },
+        {
+          "command": "latexspace.sendNewFiles",
+          "when": "latexspace.active"
         }
       ]
     },
@@ -535,6 +610,12 @@
         "key": "ctrl+alt+b",
         "mac": "cmd+alt+b",
         "when": "latexspace.active"
+      },
+      {
+        "command": "latexspace.saveAndCompile",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "latexspace.active && latexspace.compileOnSave && editorTextFocus && !editorReadonly && editorLangId =~ /^(latex|tex|latex-expl3|doctex|bibtex)$/"
       },
       {
         "command": "latexspace.syncToPdf",

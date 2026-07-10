@@ -49,6 +49,15 @@ export class SyncManager implements vscode.Disposable {
   private pushTimers = new Map<string, NodeJS.Timeout>()
   private retryQueue = new Set<string>()
   private selfWrites = new Map<string, number>()
+  /**
+   * Новые (untracked) файлы: есть локально, но нет в базовой копии.
+   * Автоматически на сервер НЕ отправляются — их часто создают другие
+   * расширения (автокомпиляция и т.п.). Отправка только явная.
+   */
+  private untracked = new Set<string>()
+  private freshUntracked = new Set<string>()
+  private untrackedTimer?: NodeJS.Timeout
+  private muteUntrackedNotice = false
   private lock: Promise<unknown> = Promise.resolve()
   private pollTimer?: NodeJS.Timeout
   private pollCount = 0
@@ -77,6 +86,7 @@ export class SyncManager implements vscode.Disposable {
   dispose(): void {
     this.disposed = true
     if (this.pollTimer) clearInterval(this.pollTimer)
+    if (this.untrackedTimer) clearTimeout(this.untrackedTimer)
     for (const t of this.pushTimers.values()) clearTimeout(t)
     this.statusEmitter.dispose()
     this.pullEmitter.dispose()
@@ -341,15 +351,19 @@ export class SyncManager implements vscode.Disposable {
       this.meta.lastSyncedVersion = version
       await this.state.saveMeta(this.meta)
 
-      // авто-отправка новых локальных файлов (нет ни на сервере, ни в базе)
+      // новые локальные файлы (нет ни на сервере, ни в базе):
+      // авто-отправка только если явно включена, иначе — в список untracked
       if (getConfig().autoPush) {
         const localList = await walkDir(this.state.rootDir, matcher)
         for (const rel of localList) {
           if (server.has(rel)) continue
           if (await this.state.readBase(rel)) continue
-          this.schedulePush(rel, 500)
+          if (getConfig().autoPushNewFiles) this.schedulePush(rel, 500)
+          else this.registerUntracked(rel)
         }
       }
+      // файлы, пришедшие с сервера, перестали быть новыми
+      for (const rel of server.keys()) this.untracked.delete(rel)
 
       this.conflicts = newConflicts
       if (applied.length || resurrected.length || removed.length) {
@@ -486,6 +500,11 @@ export class SyncManager implements vscode.Disposable {
       if (this.isRealtimeManaged(rel)) continue
       const L = await readFileOrNull(this.state.localPath(rel))
       const B = await this.state.readBase(rel)
+      if (B === null && !getConfig().autoPushNewFiles) {
+        // новые файлы отправляются только явно
+        this.registerUntracked(rel)
+        continue
+      }
       if (!contentsEqual(L, B) && !this.conflicts.has(rel)) {
         await this.pushFile(rel)
       }
@@ -555,6 +574,7 @@ export class SyncManager implements vscode.Disposable {
       }
       await this.state.resetBase(files)
       this.conflicts.clear()
+      this.untracked.clear()
       try {
         this.meta.lastSyncedVersion = await this.client.getLatestVersion(
           this.meta.projectId
@@ -644,30 +664,117 @@ export class SyncManager implements vscode.Disposable {
     this.pullEmitter.fire()
   }
 
+  // ---------- новые (untracked) файлы ----------
+
+  /** Количество новых файлов, не отправленных на сервер. */
+  getUntrackedCount(): number {
+    return this.untracked.size
+  }
+
+  private registerUntracked(rel: string): void {
+    if (this.untracked.has(rel)) return
+    this.untracked.add(rel)
+    this.freshUntracked.add(rel)
+    if (this.muteUntrackedNotice) return
+    if (this.untrackedTimer) clearTimeout(this.untrackedTimer)
+    // подождать, пока «пачка» файлов (например, от чужой автокомпиляции)
+    // накопится, и показать одно уведомление
+    this.untrackedTimer = setTimeout(() => this.notifyUntracked(), 3000)
+  }
+
+  private notifyUntracked(): void {
+    const fresh = [...this.freshUntracked]
+    this.freshUntracked.clear()
+    if (fresh.length === 0) return
+    const list =
+      fresh.slice(0, 3).join(', ') +
+      (fresh.length > 3 ? ` и ещё ${fresh.length - 3}` : '')
+    void vscode.window
+      .showInformationMessage(
+        `LatexSpace: новые файлы НЕ отправлены на сервер: ${list}. Если это ваши файлы — отправьте их; автогенерируемые отправлять не нужно.`,
+        'Отправить…',
+        'Больше не показывать'
+      )
+      .then(pick => {
+        if (pick === 'Отправить…') void this.pickAndSendUntracked()
+        else if (pick === 'Больше не показывать')
+          this.muteUntrackedNotice = true
+      })
+  }
+
+  /** Диалог выбора и явной отправки новых файлов. */
+  async pickAndSendUntracked(): Promise<void> {
+    // убрать из списка исчезнувшие файлы
+    for (const rel of [...this.untracked]) {
+      if ((await readFileOrNull(this.state.localPath(rel))) === null) {
+        this.untracked.delete(rel)
+      }
+    }
+    if (this.untracked.size === 0) {
+      void vscode.window.showInformationMessage(
+        'LatexSpace: новых файлов нет — всё синхронизировано.'
+      )
+      return
+    }
+    const picks = await vscode.window.showQuickPick(
+      [...this.untracked].sort().map(rel => ({ label: rel })),
+      {
+        canPickMany: true,
+        title: 'Новые файлы — отметьте, что отправить на сервер',
+        placeHolder: 'Не отмеченные останутся только локально',
+      }
+    )
+    if (!picks || picks.length === 0) return
+    for (const p of picks) {
+      await this.pushFile(p.label)
+      if (await this.state.readBase(p.label)) this.untracked.delete(p.label)
+    }
+    void vscode.window.showInformationMessage(
+      `LatexSpace: отправлено файлов: ${picks.length}.`
+    )
+  }
+
   // ---------- обработчики файловых событий ----------
+
+  /** push для существующих на сервере файлов; новые — в список untracked */
+  private schedulePushPolicy(rel: string, delayMs: number): void {
+    void this.state.readBase(rel).then(base => {
+      if (base !== null || getConfig().autoPushNewFiles) {
+        this.schedulePush(rel, delayMs)
+      } else {
+        this.registerUntracked(rel)
+      }
+    })
+  }
 
   onLocalSave(doc: vscode.TextDocument): void {
     const rel = this.relOf(doc.uri)
     if (!rel || this.matcher().ignoresFile(rel)) return
-    this.schedulePush(rel)
+    this.schedulePushPolicy(rel, 300)
   }
 
   onFsChangeOrCreate(uri: vscode.Uri): void {
     if (this.isSelfWrite(uri.fsPath)) return
     const rel = this.relOf(uri)
     if (!rel || this.matcher().ignoresFile(rel)) return
-    this.schedulePush(rel, 1000)
+    this.schedulePushPolicy(rel, 1000)
   }
 
   onFsDelete(uri: vscode.Uri): void {
     if (this.isSelfWrite(uri.fsPath)) return
     const rel = this.relOf(uri)
     if (!rel || this.matcher().ignoresFile(rel)) return
+    this.untracked.delete(rel)
     void this.state.readBase(rel).then(base => {
       if (base !== null) {
-        void vscode.window.showInformationMessage(
-          `LatexSpace: «${rel}» удалён локально. На сервере он остался — удалить его можно командой «Полная отправка на сервер».`
-        )
+        void vscode.window
+          .showInformationMessage(
+            `LatexSpace: «${rel}» удалён локально, но на сервере остался.`,
+            'Удалить и на сервере (полная отправка)…'
+          )
+          .then(pick => {
+            if (pick) void vscode.commands.executeCommand('latexspace.pushAll')
+          })
       }
     })
   }

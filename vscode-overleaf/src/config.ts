@@ -17,6 +17,8 @@ export function getConfig() {
     localCommand: cfg.get<string>('compile.localCommand', 'latexmk'),
     localArgs: cfg.get<string[]>('compile.localArgs', []),
     autoPush: cfg.get<boolean>('sync.autoPush', true),
+    autoPushNewFiles: cfg.get<boolean>('sync.autoPushNewFiles', false),
+    compileOnSave: cfg.get<boolean>('compile.onSave', true),
     autoPull: cfg.get<boolean>('sync.autoPull', true),
     pollIntervalSeconds: Math.max(
       5,
