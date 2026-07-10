@@ -286,7 +286,7 @@ export async function activate(
   projectsTree = new ProjectsTreeProvider()
   context.subscriptions.push(
     projectsTree,
-    registerPdfPanelSerializer(),
+    registerPdfPanelSerializer(context),
     vscode.window.createTreeView('latexspaceProjects', {
       treeDataProvider: projectsTree,
     })
