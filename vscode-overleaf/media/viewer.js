@@ -2,7 +2,10 @@
 (function () {
   'use strict'
 
-  pdfjsLib.GlobalWorkerOptions.workerSrc = document.body.dataset.workerSrc
+  // pdf.worker.min.js подключён обычным <script> и работает на главном
+  // потоке (globalThis.pdfjsWorker). Реальный Worker в webview VSCode
+  // не создаём: его сетевые запросы идут мимо service worker'а и висят
+  // до таймаута (~30 с) перед откатом на главный поток.
   const vscode = acquireVsCodeApi()
 
   const pagesEl = document.getElementById('pages')
@@ -15,6 +18,7 @@
   let fitWidth = true
   let rendering = false
   let pendingLayout = false
+  let lastLayoutWidth = 0
   const pageStates = [] // {num, wrap, canvas, viewport, pageWidthPt, pageHeightPt}
 
   const dpr = Math.max(1, window.devicePixelRatio || 1)
@@ -49,6 +53,7 @@
     const doc = pdfDoc
     try {
       await waitForSize()
+      lastLayoutWidth = pagesEl.clientWidth
       const scrollRatio =
         preserveScroll && document.documentElement.scrollHeight > 0
           ? window.scrollY / document.documentElement.scrollHeight
@@ -249,7 +254,12 @@
   window.addEventListener('resize', () => {
     if (!fitWidth) return
     clearTimeout(resizeTimer)
-    resizeTimer = setTimeout(() => layout(true), 200)
+    resizeTimer = setTimeout(() => {
+      // скрытие/показ вкладки тоже даёт resize — перерисовываем только
+      // когда ширина действительно изменилась
+      if (pagesEl.clientWidth === lastLayoutWidth) return
+      layout(true)
+    }, 200)
   })
 
   // ---------- пустое состояние (PDF ещё не собран) ----------
@@ -281,6 +291,8 @@
     if (!msg) return
     if (msg.type === 'load') {
       hideEmpty()
+      // состояние для восстановления вкладки после перезагрузки окна
+      if (msg.state) vscode.setState(msg.state)
       loadPdf(msg.url)
     } else if (msg.type === 'highlight') showHighlight(msg)
     else if (msg.type === 'empty') showEmpty()
