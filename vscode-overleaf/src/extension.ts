@@ -23,7 +23,7 @@ import {
   getConfig,
   setCredentialsFlow,
 } from './config'
-import { ProjectsTreeProvider } from './projects/projectsTree'
+import { FileNode, ProjectsTreeProvider } from './projects/projectsTree'
 import { RealtimeManager } from './realtime/realtimeManager'
 import { LATEXSPACE_DIR, ProjectMeta, ProjectState } from './sync/state'
 import { Conflict, SyncManager } from './sync/syncManager'
@@ -165,6 +165,7 @@ class ProjectSession implements vscode.Disposable {
       this.changesDecorations.liveProvider = () =>
         this.realtime!.getLiveRanges()
       this.sync.realtimeFilter = rel => !!this.realtime?.managesRel(rel)
+      this.sync.entityResolver = rel => this.realtime?.entityByRel(rel) ?? null
       this.compiler.beforeServerCompile = () =>
         this.realtime!.flushSynchronized()
       this.realtime.onTrackChangesChanged = () => this.updateTrackChangesUi()
@@ -204,6 +205,7 @@ class ProjectSession implements vscode.Disposable {
   }
 
   start(): void {
+    projectsTree.isUntracked = rel => this.sync.isUntrackedFile(rel)
     if (!this.offline) {
       this.sync.start()
       this.comments.startPolling(getConfig().pollIntervalSeconds)
@@ -248,6 +250,7 @@ class ProjectSession implements vscode.Disposable {
       'latexspace.trackChanges',
       false
     )
+    projectsTree.isUntracked = undefined
     projectsTree.setActive(undefined)
   }
 }
@@ -446,6 +449,12 @@ export async function activate(
     cmd('latexspace.sendNewFiles', () =>
       needOnline().sync.pickAndSendUntracked()
     ),
+    // кнопка ↑ у файла «не на сервере» в панели
+    cmd('latexspace.pushFile', async node => {
+      if (!(node instanceof FileNode)) return
+      await needOnline().sync.sendFile(node.rel)
+      projectsTree.poke()
+    }),
     cmd('latexspace.checkConflicts', () =>
       suggestDisablingConflicts(needSession().state, true)
     ),
@@ -1294,6 +1303,17 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
       action: () => showConflictsUi(s),
     })
   }
+  // видимый выключатель точного SyncTeX — чтобы можно было мгновенно
+  // отключить, если что-то пойдёт не так
+  const fine = getConfig().syncFineGrained
+  items.push({
+    label: `$(target) Точный SyncTeX (пословный): ${fine ? 'вкл' : 'выкл'}`,
+    description: 'переключить',
+    action: () =>
+      vscode.workspace
+        .getConfiguration('latexspace')
+        .update('synctex.fineGrained', !fine, vscode.ConfigurationTarget.Global),
+  })
   items.push(
     {
       label: '$(file-pdf) Показать PDF',
@@ -1330,7 +1350,9 @@ async function showConflictsUi(s: ProjectSession): Promise<void> {
       description:
         c.kind === 'deletedOnServer'
           ? 'удалён на сервере, изменён локально'
-          : 'изменён и на сервере, и локально',
+          : c.kind === 'deletedLocally'
+            ? 'удалён локально, изменён на сервере'
+            : 'изменён и на сервере, и локально',
       conflict: c,
     })),
     { title: 'Конфликты синхронизации' }
@@ -1351,12 +1373,17 @@ async function showConflictsUi(s: ProjectSession): Promise<void> {
       description:
         c.kind === 'deletedOnServer'
           ? 'удалить локальный файл (копия останется в .latexspace/trash)'
-          : 'перезаписать локальный файл (локальные правки будут потеряны!)',
+          : c.kind === 'deletedLocally'
+            ? 'вернуть удалённый файл с сервера'
+            : 'перезаписать локальный файл (локальные правки будут потеряны!)',
       act: () => s.sync.resolveTakeServer(c),
     },
     {
       label: '$(cloud-upload) Оставить локальную версию',
-      description: 'отправить локальный файл на сервер',
+      description:
+        c.kind === 'deletedLocally'
+          ? 'файла нет локально — удалить его и на сервере'
+          : 'отправить локальный файл на сервер',
       act: () => s.sync.resolveKeepLocal(c),
     },
   ]
