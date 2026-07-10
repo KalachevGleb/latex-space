@@ -175,13 +175,14 @@
     const node = range && range.startContainer
     if (!node || node.nodeType !== Node.TEXT_NODE) return null
     const text = node.textContent || ''
-    const isW = ch => /[0-9A-Za-zА-Яа-яЁёÀ-ɏ-]/.test(ch)
+    // стандартная токенизация (буква|цифра)+ — как при поиске в исходнике
+    const isW = ch => /[\p{L}\p{N}]/u.test(ch)
     let s = range.startOffset
     let e = s
     while (s > 0 && isW(text[s - 1])) s--
     while (e < text.length && isW(text[e])) e++
     const w = text.slice(s, e)
-    return w.length >= 2 ? w : null
+    return w.length >= 1 ? w : null
   }
 
   // ---------- обратный SyncTeX: Ctrl/Cmd+Click ----------
