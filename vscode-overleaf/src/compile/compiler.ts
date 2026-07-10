@@ -35,6 +35,11 @@ export class CompileManager implements vscode.Disposable {
   lastLocalRoot?: string
   /** вызывается перед серверной компиляцией (например, flush real-time) */
   beforeServerCompile?: () => Promise<void>
+  /** режим ПОСЛЕДНЕЙ компиляции — по нему работает SyncTeX */
+  lastMode?: 'server' | 'local'
+  /** кэш авто-детекта локального TeX Live (undefined — ещё не проверяли) */
+  private localToolchainFound?: boolean
+  private fallbackNoticeShown = false
 
   constructor(
     private client: LatexSpaceClient,
@@ -79,8 +84,9 @@ export class CompileManager implements vscode.Disposable {
     try {
       // 1. сохранить все буферы и дождаться отправки изменений
       await vscode.workspace.saveAll(false)
-      const cfg = getConfig()
-      if (cfg.compileMode === 'server') {
+      const mode = await this.resolveMode()
+      this.lastMode = mode
+      if (mode === 'server') {
         await this.beforeServerCompile?.()
         await this.sync.pushAllDirty()
         await this.sync.flushPending()
@@ -97,12 +103,63 @@ export class CompileManager implements vscode.Disposable {
   }
 
   async stop(): Promise<void> {
-    if (getConfig().compileMode === 'server') {
+    if (this.lastMode === 'server') {
       await this.client.stopCompile(this.meta.projectId).catch(() => undefined)
     }
     if (this.localProcess && !this.localProcess.killed) {
       this.localProcess.kill('SIGTERM')
     }
+  }
+
+  /**
+   * Фактический режим компиляции. Смысл плагина — разгружать сервер,
+   * поэтому по умолчанию ('auto') компилируем локально, если latexmk
+   * установлен, и только иначе — на сервере (с одноразовой подсказкой).
+   */
+  async resolveMode(): Promise<'server' | 'local'> {
+    const cfg = getConfig()
+    if (cfg.compileMode === 'server' || cfg.compileMode === 'local') {
+      return cfg.compileMode
+    }
+    if (this.localToolchainFound === undefined) {
+      this.localToolchainFound = await this.detectLocalToolchain(
+        cfg.localCommand
+      )
+      this.output.appendLine(
+        `[compile] auto: локальный ${cfg.localCommand} ${
+          this.localToolchainFound ? 'найден — компилируем локально' : 'не найден — компилируем на сервере'
+        }`
+      )
+      if (!this.localToolchainFound && !this.fallbackNoticeShown) {
+        this.fallbackNoticeShown = true
+        void vscode.window.showInformationMessage(
+          'LatexSpace: TeX Live (latexmk) не найден — компиляция будет выполняться на сервере. Установите TeX Live, чтобы компилировать локально и не нагружать сервер.'
+        )
+      }
+    }
+    return this.localToolchainFound ? 'local' : 'server'
+  }
+
+  /** Сбросить кэш авто-детекта (например, пользователь поставил TeX Live). */
+  resetToolchainCache(): void {
+    this.localToolchainFound = undefined
+  }
+
+  private detectLocalToolchain(cmd: string): Promise<boolean> {
+    return new Promise(resolve => {
+      let child: ChildProcess
+      try {
+        child = spawn(cmd, ['--version'], {
+          stdio: 'ignore',
+          shell: process.platform === 'win32',
+        })
+      } catch {
+        resolve(false)
+        return
+      }
+      child.on('error', () => resolve(false))
+      child.on('exit', code => resolve(code === 0))
+    })
   }
 
   // ---------- серверная компиляция ----------

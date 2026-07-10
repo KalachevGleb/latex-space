@@ -2706,7 +2706,7 @@
   "vscode_plugin_after_install": "已经安装？",
   "vscode_plugin_download_vsix": "下载扩展（.vsix）",
   "vscode_plugin_how_to_install": "安装方法",
-  "vscode_plugin_intro": "在本地编辑您的项目，功能与浏览器中相同：实时同步、一键编译、SyncTeX、评论和修订跟踪。",
+  "vscode_plugin_intro": "在本地编辑您的项目，功能与浏览器中相同：实时同步、评论、修订跟踪和 SyncTeX。编译在您的计算机上运行（TeX Live），减轻服务器负载；未安装 TeX Live 时自动改用服务器编译。",
   "vscode_plugin_open_in_cursor": "在 Cursor 中打开",
   "vscode_plugin_open_in_vscode": "在 VS Code 中打开",
   "vscode_plugin_open_note": "这些按钮在安装扩展后可用：编辑器将打开并提示登录和选择项目。",

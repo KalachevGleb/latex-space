@@ -1818,7 +1818,7 @@
   "vscode_plugin_after_install": "Déjà installée ?",
   "vscode_plugin_download_vsix": "Télécharger l’extension (.vsix)",
   "vscode_plugin_how_to_install": "Comment installer",
-  "vscode_plugin_intro": "Modifiez vos projets localement avec les mêmes fonctionnalités que dans le navigateur : synchronisation en temps réel, compilation en un clic, SyncTeX, commentaires et suivi des modifications.",
+  "vscode_plugin_intro": "Modifiez vos projets localement avec les mêmes fonctionnalités que dans le navigateur : synchronisation en temps réel, commentaires, suivi des modifications et SyncTeX. La compilation s’exécute sur votre machine (TeX Live), déchargeant le serveur ; sans TeX Live, elle bascule automatiquement sur le serveur.",
   "vscode_plugin_open_in_cursor": "Ouvrir dans Cursor",
   "vscode_plugin_open_in_vscode": "Ouvrir dans VS Code",
   "vscode_plugin_open_note": "Ces boutons fonctionnent une fois l’extension installée : l’éditeur s’ouvrira et proposera de se connecter et de choisir un projet.",

@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -35,15 +35,17 @@
         "latexspace.compile.mode": {
           "type": "string",
           "enum": [
-            "server",
-            "local"
+            "auto",
+            "local",
+            "server"
           ],
           "enumDescriptions": [
-            "Компиляция на сервере (результат идентичен веб-версии)",
-            "Локальная компиляция через latexmk (требуется установленный TeX Live)"
+            "Локально, если установлен TeX Live (latexmk); иначе на сервере",
+            "Всегда локально через latexmk (требуется установленный TeX Live)",
+            "Всегда на сервере (результат идентичен веб-версии)"
           ],
-          "default": "server",
-          "description": "Где компилировать проект"
+          "default": "auto",
+          "description": "Где компилировать проект. Основной сценарий плагина — локальная компиляция, не нагружающая сервер"
         },
         "latexspace.compile.compiler": {
           "type": "string",
