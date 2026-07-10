@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -85,6 +85,38 @@
           },
           "default": [],
           "description": "Дополнительные аргументы локальной компиляции"
+        },
+        "latexspace.synctex.fineGrained": {
+          "type": "boolean",
+          "default": true,
+          "description": "Точный SyncTeX при локальной компиляции: сборка идёт по теневой копии исходников, где пробелы между словами заменены переносами строк (для TeX это эквивалентно) — синхронизация PDF↔код работает с точностью до слова, а не абзаца. Позиции ошибок и SyncTeX автоматически пересчитываются к исходным файлам"
+        },
+        "latexspace.synctex.splitEnvironments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "document",
+            "abstract",
+            "proof",
+            "theorem",
+            "lemma",
+            "corollary",
+            "proposition",
+            "definition",
+            "remark",
+            "example",
+            "itemize",
+            "enumerate",
+            "description",
+            "center",
+            "quote",
+            "quotation",
+            "flushleft",
+            "flushright"
+          ],
+          "description": "Окружения, внутри которых точный SyncTeX может дробить пробелы (плюс преамбула и глобальная область). Verbatim-подобные окружения исключены всегда"
         },
         "latexspace.compile.onSave": {
           "type": "boolean",

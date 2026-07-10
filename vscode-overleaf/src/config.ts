@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { LatexSpaceClient } from './api/client'
+import { DEFAULT_SPLIT_ENVS } from './latex/explode'
 import { ProjectMeta } from './sync/state'
 
 const PASSWORD_SECRET_KEY = 'latexspace.userPassword'
@@ -30,6 +31,11 @@ export function getConfig() {
     ),
     ignore: cfg.get<string[]>('sync.ignore', []),
     hiddenFilePatterns: cfg.get<string[]>('ui.hiddenFilePatterns', []),
+    syncFineGrained: cfg.get<boolean>('synctex.fineGrained', true),
+    splitEnvironments: cfg.get<string[]>(
+      'synctex.splitEnvironments',
+      DEFAULT_SPLIT_ENVS
+    ),
   }
 }
 
