@@ -34,9 +34,10 @@
   }
 
   /**
-   * Полная отрисовка: все страницы по порядку, каждая — canvas + текстовый
-   * слой (выделение текста и слово под курсором для SyncTeX). Никакой
-   * ленивой отрисовки: загрузили — нарисовали, состояние одно.
+   * Полная отрисовка в два прохода: сначала канвасы всех страниц (страницы
+   * видны сразу, по мере готовности), затем текстовые слои (выделение
+   * текста и слово под курсором). Никакой ленивой отрисовки — одно
+   * состояние, один путь исполнения.
    */
   async function layout(preserveScroll) {
     if (!pdfDoc) return
@@ -45,6 +46,7 @@
       return
     }
     rendering = true
+    const doc = pdfDoc
     try {
       await waitForSize()
       const scrollRatio =
@@ -55,17 +57,19 @@
       pagesEl.textContent = ''
       pageStates.length = 0
 
-      const first = await pdfDoc.getPage(1)
+      const first = await doc.getPage(1)
       const vp0 = first.getViewport({ scale: 1 })
       const effScale = fitWidth
         ? Math.max(0.3, (pagesEl.clientWidth - 32) / vp0.width)
         : scale
       zoomLabel.textContent = Math.round(effScale * 100) + '%'
-      pageInfoEl.textContent = 'страниц: ' + pdfDoc.numPages
+      pageInfoEl.textContent = 'страниц: ' + doc.numPages
 
-      for (let i = 1; i <= pdfDoc.numPages; i++) {
-        setStatus(`отрисовка ${i}/${pdfDoc.numPages}…`)
-        const page = i === 1 ? first : await pdfDoc.getPage(i)
+      // проход 1: канвасы
+      for (let i = 1; i <= doc.numPages; i++) {
+        if (pdfDoc !== doc) return // пришёл новый документ
+        setStatus(`страница ${i}/${doc.numPages}…`)
+        const page = i === 1 ? first : await doc.getPage(i)
         const viewport = page.getViewport({ scale: effScale })
 
         const wrap = document.createElement('div')
@@ -87,40 +91,42 @@
           transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
         }).promise
 
-        // текстовый слой: выделение текста + слово под курсором
+        pageStates.push({
+          num: i,
+          wrap,
+          canvas,
+          page,
+          viewport,
+          pageWidthPt: page.view[2] - page.view[0],
+          pageHeightPt: page.view[3] - page.view[1],
+        })
+        if (preserveScroll && i === 1) {
+          window.scrollTo(0, scrollRatio * document.documentElement.scrollHeight)
+        }
+      }
+
+      // проход 2: текстовые слои
+      for (const state of pageStates) {
+        if (pdfDoc !== doc) return
         try {
-          const textContent = await page.getTextContent()
+          const textContent = await state.page.getTextContent()
           const layer = document.createElement('div')
           layer.className = 'textLayer'
-          layer.style.width = canvas.style.width
-          layer.style.height = canvas.style.height
+          layer.style.width = state.canvas.style.width
+          layer.style.height = state.canvas.style.height
           layer.style.setProperty('--scale-factor', String(effScale))
-          wrap.appendChild(layer)
+          state.wrap.appendChild(layer)
           await pdfjsLib.renderTextLayer({
             textContentSource: textContent,
             container: layer,
-            viewport,
+            viewport: state.viewport,
             textDivs: [],
           }).promise
         } catch (e) {
           console.error('text layer:', e)
         }
-
-        pageStates.push({
-          num: i,
-          wrap,
-          canvas,
-          viewport,
-          pageWidthPt: page.view[2] - page.view[0],
-          pageHeightPt: page.view[3] - page.view[1],
-        })
       }
       setStatus('')
-      if (preserveScroll) {
-        requestAnimationFrame(() => {
-          window.scrollTo(0, scrollRatio * document.documentElement.scrollHeight)
-        })
-      }
     } finally {
       rendering = false
       if (pendingLayout) {
@@ -130,12 +136,9 @@
     }
   }
 
-  async function loadPdf(base64) {
+  async function loadPdf(url) {
     setStatus('загрузка…')
     try {
-      const raw = atob(base64)
-      const bytes = new Uint8Array(raw.length)
-      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
       if (pdfDoc) {
         try {
           pdfDoc.destroy()
@@ -143,7 +146,7 @@
           /* ignore */
         }
       }
-      pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise
+      pdfDoc = await pdfjsLib.getDocument({ url }).promise
       await layout(true)
     } catch (err) {
       console.error(err)
@@ -278,7 +281,7 @@
     if (!msg) return
     if (msg.type === 'load') {
       hideEmpty()
-      loadPdf(msg.data)
+      loadPdf(msg.url)
     } else if (msg.type === 'highlight') showHighlight(msg)
     else if (msg.type === 'empty') showEmpty()
   })

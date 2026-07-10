@@ -793,6 +793,12 @@ export class SyncManager implements vscode.Disposable {
       })
   }
 
+  /** Внешняя точка входа: локально удалён файл (в т.ч. live-документ). */
+  notifyDeleted(rel: string, content: Buffer): void {
+    this.untracked.delete(rel)
+    this.notifyLocalDeletion(rel, content)
+  }
+
   /** Явное удаление файла на сервере (по id сущности из realtime-модели). */
   async deleteOnServer(rel: string): Promise<void> {
     const entity = this.entityResolver?.(rel)

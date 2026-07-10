@@ -704,6 +704,15 @@ export class RealtimeManager implements vscode.Disposable {
     const abs = this.projState.localPath(b.rel)
     const doc = this.findDoc(b.uri)
     try {
+      if (!doc) {
+        // документ закрыт: если файла нет на диске — его удалили,
+        // НЕ воссоздаём (решение об удалении принимает пользователь)
+        try {
+          await fs.access(abs)
+        } catch {
+          return
+        }
+      }
       if (!doc || !doc.isDirty) {
         const current = doc?.getText()
         if (current !== b.ot.text) {
@@ -715,6 +724,40 @@ export class RealtimeManager implements vscode.Disposable {
     } catch (err) {
       this.log(`persist «${b.rel}»: ${err instanceof Error ? err.message : err}`)
     }
+  }
+
+  /**
+   * Локальный файл live-документа удалён пользователем: отвязать документ
+   * (ничего не записывая на диск), закрыть его вкладки — иначе VSCode
+   * пересоздаст файл при сохранении буфера — и вернуть последний текст
+   * для возможного «Вернуть файл». Дальнейшее решает файловая
+   * синхронизация (уведомление «Удалить на сервере / Вернуть»).
+   */
+  async handleLocalFileDeleted(rel: string): Promise<Buffer | null> {
+    for (const [docId, b] of this.bindings) {
+      if (b.rel !== rel) continue
+      if (b.saveTimer) clearTimeout(b.saveTimer)
+      this.bindings.delete(docId)
+      void this.sio?.emitWithAck('leaveDoc', [docId]).catch(() => undefined)
+      const target = path.resolve(b.uri.fsPath)
+      const tabs = vscode.window.tabGroups.all
+        .flatMap(g => g.tabs)
+        .filter(
+          t =>
+            t.input instanceof vscode.TabInputText &&
+            path.resolve(t.input.uri.fsPath) === target
+        )
+      if (tabs.length > 0) {
+        await vscode.window.tabGroups.close(tabs, false).then(
+          () => undefined,
+          () => undefined
+        )
+      }
+      this.log(`отвязан после локального удаления: ${rel}`)
+      this.fireRangesChanged()
+      return Buffer.from(b.ot.text, 'utf8')
+    }
+    return null
   }
 
   // ---------- локальные правки ----------
