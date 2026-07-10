@@ -47,6 +47,14 @@ function apply(webRouter, privateApiRouter) {
     AuthorizationMiddleware.ensureUserCanReadProject,
     HistoryController.proxyToHistoryApiAndInjectUserDetails
   )
+  // Лёгкий запрос текущей версии проекта: {version, timestamp} —
+  // для опроса из VSCode-расширения (вместо тяжёлого /updates)
+  webRouter.get(
+    '/project/:Project_id/version',
+    AuthorizationMiddleware.blockRestrictedUserFromProject,
+    AuthorizationMiddleware.ensureUserCanReadProject,
+    HistoryController.proxyToHistoryApi
+  )
   webRouter.get(
     '/project/:Project_id/doc/:doc_id/diff',
     AuthorizationMiddleware.blockRestrictedUserFromProject,

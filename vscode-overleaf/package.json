@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,

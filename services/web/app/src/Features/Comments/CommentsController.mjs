@@ -401,7 +401,8 @@ async function getCommentsWithPositions(req, res) {
     const comments = []
     
     for (const docRange of docRanges) {
-      const docId = docRange.id
+      // docstore отдаёт _id, а не id (см. docstore HttpController._buildDocsArrayView)
+      const docId = docRange.id ?? docRange._id
       const docPath = docPaths[docId] || 'unknown'
       
       for (const comment of docRange.ranges?.comments || []) {

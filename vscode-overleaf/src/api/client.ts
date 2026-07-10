@@ -68,6 +68,16 @@ export class LatexSpaceClient {
   private cookies = new Map<string, string>()
   private csrfToken?: string
   private loginPromise?: Promise<void>
+  /**
+   * Сервер явно отклонил учётные данные (401/403 на /login).
+   * Дальнейшие автоматические попытки входа прекращаются, чтобы не
+   * упереться в rate limiter логина (10 попыток / 2 мин на e-mail) и не
+   * заблокировать пользователю вход в браузере. Сбрасывается только
+   * созданием нового клиента после повторного входа.
+   */
+  private authRejected = false
+  /** вызывается один раз, когда сервер отклонил учётные данные */
+  onAuthRejected?: () => void
 
   constructor(private opts: ClientOptions) {}
 
@@ -141,6 +151,13 @@ export class LatexSpaceClient {
       } catch {
         /* не JSON */
       }
+      // именно отклонение входа (не сетевая ошибка) — стоп автоповторам
+      this.authRejected = true
+      try {
+        this.onAuthRejected?.()
+      } catch {
+        /* не мешаем основному потоку */
+      }
       throw new AuthError(`Не удалось войти: ${msg}`)
     }
     if (res.status >= 400) {
@@ -165,6 +182,13 @@ export class LatexSpaceClient {
   }
 
   private ensureSession(): Promise<void> {
+    if (this.authRejected) {
+      return Promise.reject(
+        new AuthError(
+          'Вход отклонён сервером (пароль изменился?) — войдите заново'
+        )
+      )
+    }
     if (this.cookies.size > 0 && this.csrfToken) return Promise.resolve()
     if (!this.loginPromise) {
       this.loginPromise = this.login().finally(() => {
@@ -394,7 +418,7 @@ export class LatexSpaceClient {
   }
 
   async downloadZip(projectId: string): Promise<Buffer> {
-    return this.request<Buffer>(`/Project/${projectId}/download/zip`, {
+    return this.request<Buffer>(`/project/${projectId}/download/zip`, {
       expect: 'buffer',
       timeoutMs: 120_000,
     })
@@ -433,9 +457,26 @@ export class LatexSpaceClient {
 
   /**
    * Номер последней версии истории проекта.
-   * Использует GET /project/:id/updates (project-history).
+   * Сначала лёгкий GET /project/:id/version (наше расширение API);
+   * если сервер старый и роута ещё нет — fallback на тяжёлый /updates.
    */
+  private hasVersionEndpoint = true
+
   async getLatestVersion(projectId: string): Promise<number> {
+    if (this.hasVersionEndpoint) {
+      try {
+        const res = await this.request<{ version?: number }>(
+          `/project/${projectId}/version`
+        )
+        if (typeof res.version === 'number') return res.version
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          this.hasVersionEndpoint = false // старый сервер — больше не пробуем
+        } else {
+          throw err
+        }
+      }
+    }
     const res = await this.request<{ updates?: Array<{ toV?: number }> }>(
       `/project/${projectId}/updates`,
       { query: { min_count: '1' } }

@@ -34,7 +34,8 @@ async function getAllRanges(req, res) {
       })
       
       return {
-        id: doc.id,
+        // docstore отдаёт _id, а не id (см. docstore HttpController._buildDocsArrayView)
+        id: doc.id ?? doc._id,
         ranges: {
           comments,
           changes: doc.ranges?.changes || [],

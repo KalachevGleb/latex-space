@@ -201,9 +201,29 @@ semantic cleanup из diff-match-patch: посимвольный diff → укр
 операции — это буквальные действия пользователя, поэтому картина правок
 из плагина естественная по построению.
 
-## Замеченные баги сервера (к исправлению в web)
+## Контракт API (что должно оставаться стабильным на сервере)
 
-- `RangesController`/`CommentsController` читают `doc.id`, а docstore
-  возвращает `_id`: `/project/:id/ranges` отдаёт документы без id,
-  `/api/project/:id/comments` из-за этого даёт `file: "unknown"`.
-  Исправление: `doc.id ?? doc._id`.
+Расширение, в отличие от браузера, обновляется у пользователей не
+синхронно с сервером — эти точки менять только с обратной
+совместимостью:
+
+- `GET /dev/csrf` (выдача CSRF-токена; браузер получает токен иначе —
+  из meta-тега страницы, так что этим роутом пользуется только плагин
+  и тесты) и `POST /login` (JSON, поля `email`/`password`/`_csrf`).
+- `POST /api/project` (список проектов), `GET /project/:id/entities`,
+  `GET /project/:id/download/zip`.
+- `POST /project/:id/upload-by-path` (поля `qqfile`/`name`/`path`) и
+  `POST /project/:id/sync-from-zip`.
+- `GET /project/:id/version` (лёгкий опрос версии; при 404 плагин
+  откатывается на `GET /project/:id/updates` — можно убрать fallback,
+  когда все серверы обновятся).
+- Компиляция: `POST /project/:id/compile` (в теле `editorId`),
+  `sync/code` и `sync/pdf` (query `editorId`+`buildId`+`clsiserverid`).
+- Комментарии/правки: `/project/:id/threads`, `/project/:id/ranges`,
+  `/api/project/:id/comments`, `thread/:id/messages|resolve|reopen`,
+  `doc/:docId/changes/accept`.
+- Websocket-протокол socket.io 0.9 целиком: handshake с `?projectId=`,
+  `joinDoc` (escape-кодировка строк), `applyOtUpdate` с `meta.tc`,
+  события `otUpdateApplied`, `reciveNewDoc`/`reciveNewFile`/… (имена с
+  опечаткой — тоже контракт), `accept-changes`, `toggle-track-changes`,
+  комментарийные события.
