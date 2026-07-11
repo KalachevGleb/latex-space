@@ -28,6 +28,14 @@ html {
   background: var(--vscode-editorWidget-background, #252526);
   border-bottom: 1px solid var(--vscode-editorWidget-border, #454545);
   font-size: 12px;
+  /* фиксированная высота и без переносов: иначе счётчик «страница i/N»
+     в узкой панели переносит строку, панель растёт и толкает PDF вниз,
+     а по завершении — обратно вверх */
+  box-sizing: border-box;
+  height: 32px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 #toolbar button {
