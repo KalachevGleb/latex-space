@@ -178,6 +178,8 @@ export class PdfPreview implements vscode.Disposable {
   private queue: unknown[] = []
   /** обработчик Ctrl/Cmd+Click по PDF (обратный SyncTeX) */
   onSyncToCode?: (click: PdfSyncClick) => void
+  /** отладочный лог из webview (диагностика прокрутки) */
+  onLog?: (text: string) => void
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -253,6 +255,8 @@ export class PdfPreview implements vscode.Disposable {
       for (const m of pending) void this.panel?.webview.postMessage(m)
     } else if (msg?.type === 'compile') {
       void vscode.commands.executeCommand('latexspace.compile')
+    } else if (msg?.type === 'log') {
+      this.onLog?.(String((msg as { text?: unknown }).text ?? ''))
     } else if (msg?.type === 'syncToCode' && this.onSyncToCode) {
       this.onSyncToCode({
         page: Number(msg.page),
