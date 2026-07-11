@@ -90,7 +90,6 @@ class ProjectSession implements vscode.Disposable {
       output
     )
     this.preview.onSyncToCode = click => void this.synctex.backward(click)
-    this.preview.onLog = m => output.appendLine(`[pdf] ${m}`)
     this.comments = new CommentsService(client, meta, output)
     this.tree = new CommentsTreeProvider(this.comments, state.rootDir)
     this.decorations = new CommentDecorations(this.comments, state.rootDir)
