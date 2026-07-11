@@ -29,6 +29,8 @@
     statusEl.textContent = text || ''
   }
 
+  const dbg = text => vscode.postMessage({ type: 'log', text })
+
   /**
    * Панель может быть создана скрытой (ширина 0) — тогда рендер по нулевой
    * ширине даёт пустые страницы. Просто ждём, пока появится размер.
@@ -49,6 +51,7 @@
     if (!pdfDoc) return
     if (rendering) {
       pendingLayout = true
+      dbg('layout вызван во время рендера → pendingLayout')
       return
     }
     rendering = true
@@ -129,11 +132,24 @@
 
       if (pdfDoc !== doc) return
       // всё готово — мгновенная подмена и единственная установка прокрутки
+      const beforeSwap = window.scrollY
       pagesEl.replaceChildren(frag)
       pageStates.length = 0
       for (const st of newStates) pageStates.push(st)
-      const max = document.documentElement.scrollHeight - window.innerHeight
-      window.scrollTo(0, Math.min(targetScroll, Math.max(0, max)))
+      const scrollH = document.documentElement.scrollHeight
+      const max = scrollH - window.innerHeight
+      const target = Math.min(targetScroll, Math.max(0, max))
+      window.scrollTo(0, target)
+      dbg(
+        `swap: saved=${savedScroll} target=${targetScroll.toFixed(1)} ` +
+          `set=${target.toFixed(1)} beforeSwap=${beforeSwap} ` +
+          `now=${window.scrollY} scrollH=${scrollH} innerH=${window.innerHeight} ` +
+          `effScale=${effScale.toFixed(4)}`
+      )
+      // проследить, кто двигает прокрутку после нашей установки
+      for (const t of [50, 200, 600, 1200]) {
+        setTimeout(() => dbg(`+${t}ms scrollY=${window.scrollY}`), t)
+      }
       setStatus('')
     } finally {
       rendering = false
@@ -262,6 +278,7 @@
       // скрытие/показ вкладки тоже даёт resize — перерисовываем только
       // когда ширина действительно изменилась
       if (pagesEl.clientWidth === lastLayoutWidth) return
+      dbg(`resize: ширина ${lastLayoutWidth} → ${pagesEl.clientWidth}, re-layout`)
       layout(true)
     }, 200)
   })
