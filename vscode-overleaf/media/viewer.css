@@ -5,6 +5,9 @@ html, body {
   background: var(--vscode-editor-background, #1e1e1e);
   color: var(--vscode-foreground, #ccc);
   font-family: var(--vscode-font-family, sans-serif);
+  /* браузер сам не подкручивает прокрутку при подмене страниц — позицию
+     после перекомпиляции задаёт только наш scrollTo (иначе сдвиг вниз) */
+  overflow-anchor: none;
 }
 
 #toolbar {
@@ -46,6 +49,7 @@ html, body {
   align-items: center;
   gap: 12px;
   padding: 12px 0 40px;
+  overflow-anchor: none;
 }
 
 .page-wrap {
