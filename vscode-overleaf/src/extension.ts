@@ -472,6 +472,20 @@ export async function activate(
     cmd('latexspace.checkConflicts', () =>
       suggestDisablingConflicts(needSession().state, true)
     ),
+    cmd('latexspace.fineGrained.toggle', async () => {
+      const on = !getConfig().syncFineGrained
+      await vscode.workspace
+        .getConfiguration('latexspace')
+        .update('synctex.fineGrained', on, vscode.ConfigurationTarget.Global)
+      vscode.window.setStatusBarMessage(
+        `LatexSpace: точный SyncTeX (по слову) ${on ? 'включён' : 'выключен'}`,
+        4000
+      )
+    }),
+    // тот же переключатель под другим id — для пункта с «✓» в меню панели
+    cmd('latexspace.fineGrained.toggleOff', () =>
+      vscode.commands.executeCommand('latexspace.fineGrained.toggle')
+    ),
     cmd('latexspace.trackChanges.toggle', () => {
       const s = needSession()
       if (!s.realtime || !s.realtime.isLive()) {
@@ -602,10 +616,21 @@ export async function activate(
       getConfig().compileOnSave
     )
   updateCompileOnSaveCtx()
+  // context key для «галочки» точного SyncTeX в меню «…» панели
+  const updateFineGrainedCtx = () =>
+    void vscode.commands.executeCommand(
+      'setContext',
+      'latexspace.fineGrained',
+      getConfig().syncFineGrained
+    )
+  updateFineGrainedCtx()
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('latexspace.compile.onSave')) {
         updateCompileOnSaveCtx()
+      }
+      if (e.affectsConfiguration('latexspace.synctex.fineGrained')) {
+        updateFineGrainedCtx()
       }
     })
   )
@@ -1317,16 +1342,13 @@ async function syncMenuUi(s: ProjectSession): Promise<void> {
       action: () => showConflictsUi(s),
     })
   }
-  // видимый выключатель точного SyncTeX — чтобы можно было мгновенно
-  // отключить, если что-то пойдёт не так
+  // выключатель точного SyncTeX (он же — галочка в меню «…» панели)
   const fine = getConfig().syncFineGrained
   items.push({
-    label: `$(target) Точный SyncTeX (пословный): ${fine ? 'вкл' : 'выкл'}`,
+    label: `$(target) Точный SyncTeX (по слову): ${fine ? 'вкл' : 'выкл'}`,
     description: 'переключить',
     action: () =>
-      vscode.workspace
-        .getConfiguration('latexspace')
-        .update('synctex.fineGrained', !fine, vscode.ConfigurationTarget.Global),
+      vscode.commands.executeCommand('latexspace.fineGrained.toggle'),
   })
   items.push(
     {
