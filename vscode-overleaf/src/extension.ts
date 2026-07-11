@@ -474,11 +474,22 @@ export async function activate(
     ),
     cmd('latexspace.fineGrained.toggle', async () => {
       const on = !getConfig().syncFineGrained
-      await vscode.workspace
-        .getConfiguration('latexspace')
-        .update('synctex.fineGrained', on, vscode.ConfigurationTarget.Global)
+      const cfg = vscode.workspace.getConfiguration('latexspace')
+      // настройка проектная (не сработало на конкретном документе —
+      // выключаем именно там): храним в workspace; глобальное значение,
+      // если осталось от старых версий, убираем
+      await cfg.update(
+        'synctex.fineGrained',
+        undefined,
+        vscode.ConfigurationTarget.Global
+      )
+      await cfg.update(
+        'synctex.fineGrained',
+        on,
+        vscode.ConfigurationTarget.Workspace
+      )
       vscode.window.setStatusBarMessage(
-        `LatexSpace: точный SyncTeX (по слову) ${on ? 'включён' : 'выключен'}`,
+        `LatexSpace: точный SyncTeX (по слову) ${on ? 'включён' : 'выключен'} (для этого проекта)`,
         4000
       )
     }),
