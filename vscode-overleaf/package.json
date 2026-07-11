@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -382,6 +382,16 @@
         "category": "LatexSpace",
         "title": "Отправить файл на сервер",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "latexspace.fineGrained.toggle",
+        "category": "LatexSpace",
+        "title": "Точный SyncTeX (по слову)"
+      },
+      {
+        "command": "latexspace.fineGrained.toggleOff",
+        "category": "LatexSpace",
+        "title": "✓ Точный SyncTeX (по слову)"
       }
     ],
     "viewsContainers": {
@@ -493,6 +503,16 @@
           "group": "2_tools@1"
         },
         {
+          "command": "latexspace.fineGrained.toggle",
+          "when": "view == latexspaceProjects && !latexspace.fineGrained",
+          "group": "3_settings@1"
+        },
+        {
+          "command": "latexspace.fineGrained.toggleOff",
+          "when": "view == latexspaceProjects && latexspace.fineGrained",
+          "group": "3_settings@1"
+        },
+        {
           "command": "latexspace.comments.add",
           "when": "view == latexspaceComments",
           "group": "navigation@1"
@@ -551,6 +571,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "latexspace.fineGrained.toggleOff",
+          "when": "false"
+        },
         {
           "command": "latexspace.comments.open",
           "when": "false"
