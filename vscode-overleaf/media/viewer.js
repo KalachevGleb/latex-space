@@ -19,6 +19,8 @@
   let rendering = false
   let pendingLayout = false
   let lastLayoutWidth = 0
+  /** effScale последней отрисовки — для пересчёта прокрутки при зуме */
+  let prevScale = 0
   const pageStates = [] // {num, wrap, canvas, viewport, pageWidthPt, pageHeightPt}
 
   const dpr = Math.max(1, window.devicePixelRatio || 1)
@@ -54,10 +56,7 @@
     try {
       await waitForSize()
       lastLayoutWidth = pagesEl.clientWidth
-      const scrollRatio =
-        preserveScroll && document.documentElement.scrollHeight > 0
-          ? window.scrollY / document.documentElement.scrollHeight
-          : 0
+      const savedScroll = preserveScroll ? window.scrollY : 0
 
       pagesEl.textContent = ''
       pageStates.length = 0
@@ -67,6 +66,11 @@
       const effScale = fitWidth
         ? Math.max(0.3, (pagesEl.clientWidth - 32) / vp0.width)
         : scale
+      // абсолютная прокрутка в пикселях; при смене масштаба — пропорционально
+      const targetScroll =
+        prevScale > 0 ? (savedScroll * effScale) / prevScale : savedScroll
+      prevScale = effScale
+      let scrollRestored = targetScroll <= 0
       zoomLabel.textContent = Math.round(effScale * 100) + '%'
       pageInfoEl.textContent = 'страниц: ' + doc.numPages
 
@@ -105,8 +109,13 @@
           pageWidthPt: page.view[2] - page.view[0],
           pageHeightPt: page.view[3] - page.view[1],
         })
-        if (preserveScroll && i === 1) {
-          window.scrollTo(0, scrollRatio * document.documentElement.scrollHeight)
+        // вернуть прежнюю позицию, как только страниц хватает по высоте;
+        // после этого больше не трогаем — пользователь мог прокрутить сам
+        if (!scrollRestored) {
+          const max =
+            document.documentElement.scrollHeight - window.innerHeight
+          window.scrollTo(0, Math.min(targetScroll, Math.max(0, max)))
+          if (targetScroll <= max) scrollRestored = true
         }
       }
 
