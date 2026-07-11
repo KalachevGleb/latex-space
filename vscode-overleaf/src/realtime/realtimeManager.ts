@@ -69,6 +69,8 @@ export class RealtimeManager implements vscode.Disposable {
   onCommentsChanged?: () => void
   /** диапазоны (комментарии/правки) изменились */
   onRangesChanged?: () => void
+  /** набор live-документов изменился (привязка/отвязка) */
+  onManagesChanged?: () => void
   /** запомнить свою запись на диск (для подавления watcher'а) */
   noteSelfWrite?: (absPath: string) => void
   /** режим рецензирования: наши операции идут как tracked changes */
@@ -616,6 +618,8 @@ export class RealtimeManager implements vscode.Disposable {
       void this.resyncDoc(binding)
     }
     this.bindings.set(docId, binding)
+    // документ стал live — обновить «+» на полях для комментариев
+    this.onManagesChanged?.()
 
     // сверка с буфером
     const bufText = doc.getText()

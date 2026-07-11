@@ -33,16 +33,29 @@ export class LiveCommentController implements vscode.Disposable {
       prompt: 'Комментарий к фрагменту',
       placeHolder: 'Текст комментария… (Esc — отмена)',
     }
+    this.setCommentingRangeProvider()
+    this.subs.push(this.comments.onDidUpdate(() => void this.refresh()))
+  }
+
+  private setCommentingRangeProvider(): void {
     this.controller.commentingRangeProvider = {
       provideCommentingRanges: doc => {
         const rel = this.relOf(doc.uri)
         if (!rel || !this.managesRel?.(rel)) return []
-        return [
-          new vscode.Range(0, 0, Math.max(0, doc.lineCount - 1), 1e6),
-        ]
+        return [new vscode.Range(0, 0, Math.max(0, doc.lineCount - 1), 1e6)]
       },
     }
-    this.subs.push(this.comments.onDidUpdate(() => void this.refresh()))
+  }
+
+  /**
+   * Заставить VSCode заново запросить комментируемые диапазоны. Нужно,
+   * когда документ стал live уже после открытия: VSCode кэширует пустой
+   * результат провайдера и сам не переспрашивает, из-за чего значок «+» на
+   * полях не появляется (остаётся только контекстное меню). Переустановка
+   * провайдера сбрасывает кэш.
+   */
+  pokeCommentingRanges(): void {
+    this.setCommentingRangeProvider()
   }
 
   dispose(): void {
