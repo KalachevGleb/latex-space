@@ -58,9 +58,6 @@
       lastLayoutWidth = pagesEl.clientWidth
       const savedScroll = preserveScroll ? window.scrollY : 0
 
-      pagesEl.textContent = ''
-      pageStates.length = 0
-
       const first = await doc.getPage(1)
       const vp0 = first.getViewport({ scale: 1 })
       const effScale = fitWidth
@@ -70,11 +67,13 @@
       const targetScroll =
         prevScale > 0 ? (savedScroll * effScale) / prevScale : savedScroll
       prevScale = effScale
-      let scrollRestored = targetScroll <= 0
       zoomLabel.textContent = Math.round(effScale * 100) + '%'
       pageInfoEl.textContent = 'страниц: ' + doc.numPages
 
-      // проход 1: канвасы
+      // проход 1: канвасы рендерятся в отсоединённый фрагмент — на экране
+      // до полной готовности остаются старые страницы, никаких прыжков
+      const frag = document.createDocumentFragment()
+      const newStates = []
       for (let i = 1; i <= doc.numPages; i++) {
         if (pdfDoc !== doc) return // пришёл новый документ
         setStatus(`страница ${i}/${doc.numPages}…`)
@@ -92,7 +91,7 @@
         canvas.style.width = Math.floor(viewport.width) + 'px'
         canvas.style.height = Math.floor(viewport.height) + 'px'
         wrap.appendChild(canvas)
-        pagesEl.appendChild(wrap)
+        frag.appendChild(wrap)
 
         await page.render({
           canvasContext: canvas.getContext('2d'),
@@ -100,7 +99,7 @@
           transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
         }).promise
 
-        pageStates.push({
+        newStates.push({
           num: i,
           wrap,
           canvas,
@@ -109,15 +108,14 @@
           pageWidthPt: page.view[2] - page.view[0],
           pageHeightPt: page.view[3] - page.view[1],
         })
-        // вернуть прежнюю позицию, как только страниц хватает по высоте;
-        // после этого больше не трогаем — пользователь мог прокрутить сам
-        if (!scrollRestored) {
-          const max =
-            document.documentElement.scrollHeight - window.innerHeight
-          window.scrollTo(0, Math.min(targetScroll, Math.max(0, max)))
-          if (targetScroll <= max) scrollRestored = true
-        }
       }
+
+      // мгновенная подмена готового документа и одна установка прокрутки
+      pagesEl.replaceChildren(frag)
+      pageStates.length = 0
+      for (const st of newStates) pageStates.push(st)
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      window.scrollTo(0, Math.min(targetScroll, Math.max(0, max)))
 
       // проход 2: текстовые слои
       for (const state of pageStates) {
