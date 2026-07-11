@@ -161,6 +161,10 @@ class ProjectSession implements vscode.Disposable {
         this.changesDecorations.redrawAll()
         this.decorations.redrawAll()
       }
+      // документ стал live — сбросить кэш «комментируемых диапазонов»,
+      // чтобы «+» на полях появился без переоткрытия файла
+      this.realtime.onManagesChanged = () =>
+        this.commentCtl?.pokeCommentingRanges()
       this.comments.liveProvider = () => this.realtime!.getLiveRanges()
       this.changesTree.liveProvider = () => this.realtime!.getLiveRanges()
       this.changesDecorations.liveProvider = () =>

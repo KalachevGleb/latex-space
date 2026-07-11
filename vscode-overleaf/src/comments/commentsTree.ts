@@ -116,8 +116,8 @@ export class CommentsTreeProvider
           ? vscode.TreeItemCollapsibleState.Collapsed
           : vscode.TreeItemCollapsibleState.None
       )
+      // цитируемый фрагмент не показываем — он и так виден в редакторе
       const parts: string[] = []
-      if (t.quoted) parts.push(`«${trimText(t.quoted, 20)}»`)
       if (first) parts.push(authorName(first))
       if (t.messages.length > 1) parts.push(`+${t.messages.length - 1}`)
       item.description = parts.join(' · ') || undefined
@@ -154,11 +154,6 @@ export class CommentsTreeProvider
   private threadTooltip(t: ThreadModel): vscode.MarkdownString {
     const md = new vscode.MarkdownString(undefined, true)
     md.isTrusted = false
-    if (t.quoted) {
-      md.appendMarkdown(`*Фрагмент:*\n\n`)
-      md.appendCodeblock(trimText(t.quoted, 300), 'latex')
-      md.appendMarkdown('\n---\n')
-    }
     for (const m of t.messages) {
       const when = m.timestamp
         ? ` — ${new Date(m.timestamp).toLocaleString()}`
