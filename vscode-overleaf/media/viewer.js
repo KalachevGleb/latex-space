@@ -30,6 +30,41 @@
   }
 
   /**
+   * Целевая прокрутка после перекомпиляции. Второй проход (текстовые слои)
+   * может слегка двигать раскладку — удерживаем позицию, переустанавливая
+   * её, пока пользователь сам не прокрутил. «Сам прокрутил» определяем по
+   * реальным событиям ввода (колесо/клавиши/тач), а не по величине сдвига:
+   * иначе тот самый нудж на пару пикселей приняли бы за действие пользователя.
+   */
+  let scrollTarget = 0
+  let userScrolled = false
+  function applyScrollTarget() {
+    if (userScrolled) return
+    const max = document.documentElement.scrollHeight - window.innerHeight
+    window.scrollTo(0, Math.min(scrollTarget, Math.max(0, max)))
+  }
+  const markUserScroll = () => {
+    userScrolled = true
+  }
+  window.addEventListener('wheel', markUserScroll, { passive: true })
+  window.addEventListener('touchmove', markUserScroll, { passive: true })
+  window.addEventListener('keydown', e => {
+    if (
+      [
+        'ArrowUp',
+        'ArrowDown',
+        'PageUp',
+        'PageDown',
+        'Home',
+        'End',
+        ' ',
+      ].includes(e.key)
+    ) {
+      markUserScroll()
+    }
+  })
+
+  /**
    * Панель может быть создана скрытой (ширина 0) — тогда рендер по нулевой
    * ширине даёт пустые страницы. Просто ждём, пока появится размер.
    */
@@ -110,14 +145,19 @@
         })
       }
 
-      // мгновенная подмена готового документа и одна установка прокрутки
+      // мгновенная подмена готового документа и установка прокрутки
       pagesEl.replaceChildren(frag)
       pageStates.length = 0
       for (const st of newStates) pageStates.push(st)
-      const max = document.documentElement.scrollHeight - window.innerHeight
-      window.scrollTo(0, Math.min(targetScroll, Math.max(0, max)))
+      scrollTarget = targetScroll
+      userScrolled = false
+      applyScrollTarget()
+      // на следующем кадре (после того как браузер посчитал раскладку)
+      requestAnimationFrame(applyScrollTarget)
 
-      // проход 2: текстовые слои
+      // проход 2: текстовые слои. Могут слегка двигать раскладку, поэтому
+      // после каждого удерживаем целевую позицию (если её не сдвинул сам
+      // пользователь)
       for (const state of pageStates) {
         if (pdfDoc !== doc) return
         try {
@@ -138,6 +178,7 @@
           console.error('text layer:', e)
         }
       }
+      applyScrollTarget()
       setStatus('')
     } finally {
       rendering = false
