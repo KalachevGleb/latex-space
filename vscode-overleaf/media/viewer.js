@@ -30,41 +30,6 @@
   }
 
   /**
-   * Целевая прокрутка после перекомпиляции. Второй проход (текстовые слои)
-   * может слегка двигать раскладку — удерживаем позицию, переустанавливая
-   * её, пока пользователь сам не прокрутил. «Сам прокрутил» определяем по
-   * реальным событиям ввода (колесо/клавиши/тач), а не по величине сдвига:
-   * иначе тот самый нудж на пару пикселей приняли бы за действие пользователя.
-   */
-  let scrollTarget = 0
-  let userScrolled = false
-  function applyScrollTarget() {
-    if (userScrolled) return
-    const max = document.documentElement.scrollHeight - window.innerHeight
-    window.scrollTo(0, Math.min(scrollTarget, Math.max(0, max)))
-  }
-  const markUserScroll = () => {
-    userScrolled = true
-  }
-  window.addEventListener('wheel', markUserScroll, { passive: true })
-  window.addEventListener('touchmove', markUserScroll, { passive: true })
-  window.addEventListener('keydown', e => {
-    if (
-      [
-        'ArrowUp',
-        'ArrowDown',
-        'PageUp',
-        'PageDown',
-        'Home',
-        'End',
-        ' ',
-      ].includes(e.key)
-    ) {
-      markUserScroll()
-    }
-  })
-
-  /**
    * Панель может быть создана скрытой (ширина 0) — тогда рендер по нулевой
    * ширине даёт пустые страницы. Просто ждём, пока появится размер.
    */
@@ -75,10 +40,10 @@
   }
 
   /**
-   * Полная отрисовка в два прохода: сначала канвасы всех страниц (страницы
-   * видны сразу, по мере готовности), затем текстовые слои (выделение
-   * текста и слово под курсором). Никакой ленивой отрисовки — одно
-   * состояние, один путь исполнения.
+   * Отрисовать документ ЦЕЛИКОМ (канвасы и текстовые слои) в невидимый
+   * фрагмент, затем одной операцией заменить содержимое и один раз выставить
+   * прокрутку. Пока идёт отрисовка, на экране остаётся прежний документ на
+   * своём месте; подмена мгновенная, промежуточных состояний нет.
    */
   async function layout(preserveScroll) {
     if (!pdfDoc) return
@@ -105,8 +70,6 @@
       zoomLabel.textContent = Math.round(effScale * 100) + '%'
       pageInfoEl.textContent = 'страниц: ' + doc.numPages
 
-      // проход 1: канвасы рендерятся в отсоединённый фрагмент — на экране
-      // до полной готовности остаются старые страницы, никаких прыжков
       const frag = document.createDocumentFragment()
       const newStates = []
       for (let i = 1; i <= doc.numPages; i++) {
@@ -126,7 +89,6 @@
         canvas.style.width = Math.floor(viewport.width) + 'px'
         canvas.style.height = Math.floor(viewport.height) + 'px'
         wrap.appendChild(canvas)
-        frag.appendChild(wrap)
 
         await page.render({
           canvasContext: canvas.getContext('2d'),
@@ -134,6 +96,26 @@
           transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
         }).promise
 
+        // текстовый слой — в том же фрагменте, до подмены (позиции спанов
+        // pdf.js берёт из viewport, DOM для этого не нужен)
+        const layer = document.createElement('div')
+        layer.className = 'textLayer'
+        layer.style.width = canvas.style.width
+        layer.style.height = canvas.style.height
+        layer.style.setProperty('--scale-factor', String(effScale))
+        wrap.appendChild(layer)
+        try {
+          await pdfjsLib.renderTextLayer({
+            textContentSource: await page.getTextContent(),
+            container: layer,
+            viewport,
+            textDivs: [],
+          }).promise
+        } catch (e) {
+          console.error('text layer:', e)
+        }
+
+        frag.appendChild(wrap)
         newStates.push({
           num: i,
           wrap,
@@ -145,40 +127,13 @@
         })
       }
 
-      // мгновенная подмена готового документа и установка прокрутки
+      if (pdfDoc !== doc) return
+      // всё готово — мгновенная подмена и единственная установка прокрутки
       pagesEl.replaceChildren(frag)
       pageStates.length = 0
       for (const st of newStates) pageStates.push(st)
-      scrollTarget = targetScroll
-      userScrolled = false
-      applyScrollTarget()
-      // на следующем кадре (после того как браузер посчитал раскладку)
-      requestAnimationFrame(applyScrollTarget)
-
-      // проход 2: текстовые слои. Могут слегка двигать раскладку, поэтому
-      // после каждого удерживаем целевую позицию (если её не сдвинул сам
-      // пользователь)
-      for (const state of pageStates) {
-        if (pdfDoc !== doc) return
-        try {
-          const textContent = await state.page.getTextContent()
-          const layer = document.createElement('div')
-          layer.className = 'textLayer'
-          layer.style.width = state.canvas.style.width
-          layer.style.height = state.canvas.style.height
-          layer.style.setProperty('--scale-factor', String(effScale))
-          state.wrap.appendChild(layer)
-          await pdfjsLib.renderTextLayer({
-            textContentSource: textContent,
-            container: layer,
-            viewport: state.viewport,
-            textDivs: [],
-          }).promise
-        } catch (e) {
-          console.error('text layer:', e)
-        }
-      }
-      applyScrollTarget()
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      window.scrollTo(0, Math.min(targetScroll, Math.max(0, max)))
       setStatus('')
     } finally {
       rendering = false
