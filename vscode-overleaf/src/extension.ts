@@ -404,21 +404,19 @@ export async function activate(
     cmd('latexspace.comments.toggleResolved', () =>
       needSession().tree.toggleResolved()
     ),
-    cmd('latexspace.comments.open', threadId =>
-      needSession().decorations.revealThread(String(threadId))
-    ),
+    cmd('latexspace.comments.open', async threadId => {
+      const s = needSession()
+      await s.decorations.revealThread(String(threadId))
+      s.commentCtl?.expandOnly(String(threadId))
+    }),
+    // ответ из панели: раскрываем тред в редакторе — ответ вводится в
+    // инлайн-виджете (никакой шторки showInputBox)
     cmd('latexspace.comments.reply', async node => {
       const s = needSession()
       const thread = node instanceof ThreadNode ? node.thread : undefined
       if (!thread) return
-      const text = await vscode.window.showInputBox({
-        title: 'Ответ на комментарий',
-        prompt: thread.quoted
-          ? `Фрагмент: «${thread.quoted.slice(0, 80)}»`
-          : undefined,
-        ignoreFocusOut: true,
-      })
-      if (text) await s.comments.reply(thread.threadId, text)
+      await s.decorations.revealThread(thread.threadId)
+      s.commentCtl?.expandOnly(thread.threadId)
     }),
     cmd('latexspace.comments.resolve', async node => {
       if (node instanceof ThreadNode) {
@@ -1270,35 +1268,22 @@ function genObjectId(): string {
 
 async function addCommentCommand(s: ProjectSession): Promise<void> {
   const editor = vscode.window.activeTextEditor
-  if (!editor || editor.selection.isEmpty) {
+  if (!editor) {
     void vscode.window.showInformationMessage(
-      'Выделите текст, к которому относится комментарий.'
+      'Откройте файл и выделите фрагмент, к которому относится комментарий.'
     )
     return
   }
-  if (!s.realtime?.isLive()) {
+  const rel = s.sync.relOf(editor.document.uri)
+  if (!s.realtime?.isLive() || !rel || !s.realtime.managesRel(rel)) {
     throw new Error(
-      'Добавление комментариев доступно только при live-подключении.'
+      'Комментарии доступны для файлов, открытых в режиме реального времени (live).'
     )
   }
-  const rel = s.sync.relOf(editor.document.uri)
-  if (!rel) return
-  const quoted = editor.document.getText(editor.selection)
-  const pos = editor.document.offsetAt(editor.selection.start)
-  const content = await vscode.window.showInputBox({
-    title: 'Новый комментарий',
-    prompt: `К фрагменту: «${quoted.slice(0, 60)}»`,
-    ignoreFocusOut: true,
-  })
-  if (!content) return
-  const threadId = genObjectId()
-  // как в вебе: сначала текст треда (REST), затем якорь (OT-операция)
-  await s.comments.createThread(threadId, content)
-  const anchored = s.realtime.addCommentAnchor(rel, pos, quoted, threadId)
-  if (!anchored) {
-    throw new Error('Не удалось поставить якорь: документ не подключён live.')
-  }
-  await s.comments.refresh(true)
+  // открыть нативное инлайн-поле комментария на выделении (тот же путь, что
+  // и по «+» на полях). Ввод и подтверждение — прямо в редакторе; при
+  // отправке сработает latexspace.commentCreate. Никакой шторки showInputBox.
+  await vscode.commands.executeCommand('workbench.action.addComment')
 }
 
 // ---------- меню синхронизации и конфликты ----------

@@ -80,6 +80,19 @@ export class LiveCommentController implements vscode.Disposable {
     return (thread as LsThread).lsThreadId
   }
 
+  /**
+   * Развернуть указанный тред и свернуть все остальные (поведение
+   * «аккордеон»): открываешь один комментарий — прочие закрываются.
+   */
+  expandOnly(threadId: string): void {
+    for (const [id, thread] of this.byThreadId) {
+      thread.collapsibleState =
+        id === threadId
+          ? vscode.CommentThreadCollapsibleState.Expanded
+          : vscode.CommentThreadCollapsibleState.Collapsed
+    }
+  }
+
   /** Пересобрать инлайн-треды из модели комментариев. */
   async refresh(): Promise<void> {
     if (this.refreshing) {
