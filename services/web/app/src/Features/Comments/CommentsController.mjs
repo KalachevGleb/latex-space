@@ -259,7 +259,12 @@ async function createMessage(req, res) {
   const { content } = req.body
   // Passport.js хранит пользователя в req.session.passport.user;
   // Service API кладёт пользователя в req.session.user
-  const userId = req.session?.passport?.user?._id || req.session?.user?._id
+  // Браузер: пользователь в сессии (passport); Service API: сессии нет,
+  // пользователь в req.user
+  const userId =
+    req.user?._id ||
+    req.session?.passport?.user?._id ||
+    req.session?.user?._id
 
   if (!content) {
     return res.status(400).json({ error: 'Content is required' })
@@ -300,7 +305,12 @@ async function resolveThread(req, res) {
   const projectId = req.params.Project_id
   const threadId = req.params.thread_id
   // Passport.js хранит пользователя в req.session.passport.user
-  const userId = req.session?.passport?.user?._id || req.session?.user?._id
+  // Браузер: пользователь в сессии (passport); Service API: сессии нет,
+  // пользователь в req.user
+  const userId =
+    req.user?._id ||
+    req.session?.passport?.user?._id ||
+    req.session?.user?._id
   
   try {
     await db.projectHistoryComments.updateOne(

@@ -49,7 +49,12 @@ async function acceptChanges(req, res) {
   const docId = req.params.doc_id
   const { change_ids: changeIds } = req.body
   // Passport.js хранит пользователя в req.session.passport.user
-  const userId = req.session?.passport?.user?._id || req.session?.user?._id
+  // Браузер: пользователь в сессии (passport); Service API: сессии нет,
+  // пользователь в req.user
+  const userId =
+    req.user?._id ||
+    req.session?.passport?.user?._id ||
+    req.session?.user?._id
   
   if (!changeIds || !Array.isArray(changeIds)) {
     return res.status(400).json({ error: 'change_ids array is required' })
