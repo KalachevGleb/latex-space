@@ -24,11 +24,12 @@
 | `/api/user/:user_id/permissions` | GET | Получить права пользователя (admin) |
 | `/api/user/:user_id/permissions` | POST | Установить права пользователя (admin) |
 
-## Приглашение пользователей (Service API only)
+## Создание пользователей (Service API only)
 
 | Endpoint | Method | Описание |
 |----------|--------|----------|
 | `/service/api/user/invite` | POST | Пригласить нового пользователя по e-mail, возвращает ссылку активации |
+| `/service/api/user/create` | POST | Создать пользователя без письма и подтверждения (служебные/бот-аккаунты) |
 
 ## Проекты
 
@@ -37,7 +38,7 @@
 | `/user/projects` | GET | Список проектов пользователя |
 | `/api/project` | POST | Получить список проектов (JSON) |
 | `/project/new` | POST | Создать проект |
-| `/project/:Project_id/entities` | GET | Структура проекта (файлы и папки) |
+| `/project/:Project_id/entities` | GET | Список документов и файлов проекта (`id`, `path`, `type`) |
 | `/project/:Project_id/rename` | POST | Переименовать проект |
 | `/project/:Project_id/settings` | POST | Обновить настройки проекта |
 | `/Project/:Project_id` | GET | Открыть проект в редакторе |
@@ -127,6 +128,9 @@
 | Endpoint | Method | Описание |
 |----------|--------|----------|
 | `/api/project/:Project_id/comments` | GET | Получить все комментарии с позициями (JSON API) |
+| `/api/project/:Project_id/doc/:doc_id/comments` | POST | Добавить комментарий к фрагменту текста от имени пользователя |
+| `/api/project/:Project_id/doc/:doc_id/suggestions` | POST | Добавить правки как track changes (с комментариями) от имени пользователя |
+| `/api/project/:Project_id/users/:user_id/alias` | PUT | Задать/удалить псевдоним участника проекта (владелец) |
 | `/project/:Project_id/ranges` | GET | Получить ranges (комментарии и изменения) |
 | `/project/:Project_id/threads` | GET | Получить треды комментариев |
 | `/project/:Project_id/changes/users` | GET | Получить пользователей, делавших изменения |
