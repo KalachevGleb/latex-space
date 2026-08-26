@@ -42,10 +42,12 @@ export const positionItems = debounce(
       return
     }
 
+    const headerHeight = getHeaderHeight(element, newEditor)
+
     const activeItemTop = getTopPosition(
       activeItem,
       activeItemIndex === 0,
-      newEditor
+      headerHeight
     )
 
     const positions: [HTMLElement, number][] = []
@@ -56,7 +58,7 @@ export const positionItems = debounce(
     for (let i = activeItemIndex - 1; i >= 0; i--) {
       const item = items[i]
       const height = item.offsetHeight
-      let top = getTopPosition(item, i === 0, newEditor)
+      let top = getTopPosition(item, i === 0, headerHeight)
       const bottom = top + height
       if (bottom > topLimit) {
         top = topLimit - height - GAP_BETWEEN_ENTRIES
@@ -70,7 +72,7 @@ export const positionItems = debounce(
     for (let i = activeItemIndex + 1; i < items.length; i++) {
       const item = items[i]
       const height = item.offsetHeight
-      let top = getTopPosition(item, false, newEditor)
+      let top = getTopPosition(item, false, headerHeight)
       if (top < bottomLimit) {
         top = bottomLimit + GAP_BETWEEN_ENTRIES
       }
@@ -78,8 +80,16 @@ export const positionItems = debounce(
       bottomLimit = top + height
     }
 
+    // Entries stacked above the active one can end up under the sticky panel
+    // header (or above the panel altogether) when the ranges are close to the
+    // top of the document. Shift the whole stack down so that the topmost
+    // entry starts below the header.
+    const minTop = headerHeight + GAP_BETWEEN_ENTRIES
+    const topmost = Math.min(...positions.map(([, top]) => top))
+    const shift = topmost < minTop ? minTop - topmost : 0
+
     for (const [item, top] of positions) {
-      item.style.top = `${top}px`
+      item.style.top = `${top + shift}px`
       item.style.visibility = 'visible'
     }
 
@@ -92,16 +102,27 @@ export const positionItems = debounce(
   { leading: false, trailing: true, maxWait: 1000 }
 )
 
+/**
+ * Height of the sticky header at the top of the panel, which entries must not
+ * be placed under. The new editor renders the title in the rail and the panel
+ * entries start at the top, hence 0.
+ */
+function getHeaderHeight(element: HTMLDivElement, newEditor: boolean) {
+  if (newEditor) {
+    return 0
+  }
+  const header = element
+    .closest('.review-panel-inner')
+    ?.querySelector<HTMLElement>('.review-panel-header')
+  return header?.offsetHeight || COLLAPSED_HEADER_HEIGHT
+}
+
 function getTopPosition(
   item: HTMLDivElement,
   isFirstEntry: boolean,
-  newEditor: boolean
+  headerHeight: number
 ) {
   const offset = isFirstEntry ? 0 : OFFSET_FOR_ENTRIES_ABOVE
 
-  if (newEditor) {
-    return Math.max(offset, Number(item.dataset.top))
-  }
-
-  return Math.max(COLLAPSED_HEADER_HEIGHT + offset, Number(item.dataset.top))
+  return Math.max(headerHeight + offset, Number(item.dataset.top))
 }
