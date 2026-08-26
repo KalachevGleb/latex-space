@@ -126,6 +126,20 @@ describe('ReviewApiController', function () {
       expect(ctx.Project.updateOne).not.to.have.been.called
     })
 
+    it('takes the acting user from req.user when there is no session (Service API)', async function (ctx) {
+      const req = ctx.makeReq({ pos: 0, text: 'This', content: 'x' })
+      delete req.session
+      req.user = { _id: { toString: () => ctx.userId } }
+      await ctx.controller.addComment(req, ctx.res, ctx.next)
+      expect(ctx.res.statusCode).to.equal(201)
+      expect(ctx.CommentsController.addMessage).to.have.been.calledWith(
+        ctx.projectId,
+        sinon.match.string,
+        ctx.userId,
+        'x'
+      )
+    })
+
     it('sets the author alias when requested', async function (ctx) {
       await ctx.controller.addComment(
         ctx.makeReq({

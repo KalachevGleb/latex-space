@@ -18,6 +18,15 @@ import { addMessage, deleteThreadById } from './CommentsController.mjs'
 const MAX_ALIAS_LENGTH = 100
 const MAX_SUGGESTIONS_PER_REQUEST = 500
 
+/**
+ * Id of the user the request acts for. Browser requests carry the user in the
+ * session; Service API requests have no session and carry it in req.user.
+ */
+function getActingUserId(req) {
+  const userId = req.user?._id ?? SessionManager.getLoggedInUserId(req.session)
+  return userId ? userId.toString() : null
+}
+
 class ValidationError extends Error {
   constructor(code, description, extra = {}) {
     super(description)
@@ -129,7 +138,7 @@ function handleDocUpdaterError(err, res, context) {
  */
 async function addComment(req, res) {
   const { Project_id: projectId, doc_id: docId } = req.params
-  const userId = SessionManager.getLoggedInUserId(req.session)
+  const userId = getActingUserId(req)
   const { pos, text, content, author_alias: rawAlias } = req.body
 
   if (!Number.isInteger(pos) || pos < 0) {
@@ -290,7 +299,7 @@ function validateSuggestionItems(items) {
  */
 async function addSuggestions(req, res) {
   const { Project_id: projectId, doc_id: docId } = req.params
-  const userId = SessionManager.getLoggedInUserId(req.session)
+  const userId = getActingUserId(req)
   const { items: rawItems, author_alias: rawAlias } = req.body
 
   let items, alias
