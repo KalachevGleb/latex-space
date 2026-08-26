@@ -13,7 +13,8 @@
 10. [Компиляция и скачивание](#компиляция-и-скачивание)
 11. [Private API](#private-api)
 12. [Review Panel (комментарии и track changes)](#review-panel-комментарии-и-track-changes)
-13. [Примеры использования](#примеры-использования)
+13. [Review API (комментарии и правки от сервисов и ИИ)](#review-api-комментарии-и-правки-от-сервисов-и-ии)
+14. [Примеры использования](#примеры-использования)
 
 ---
 
@@ -167,6 +168,49 @@ curl -u overleaf:SERVICE_PASSWORD \
   -d '{"email":"newuser@example.com"}' \
   http://localhost/service/api/user/invite
 ```
+
+### Создать пользователя без письма (Service API)
+
+Создаёт аккаунт сразу, без письма и без подтверждения e-mail. Предназначено для
+служебных и бот-аккаунтов (например, ИИ-рецензента): e-mail не обязан быть
+реальным, пароль не задаётся, поэтому войти в браузере таким аккаунтом нельзя —
+он используется только через Service API (`X-Overleaf-User-Id` /
+`X-Overleaf-User-Email`).
+
+```http
+POST /service/api/user/create
+Authorization: Basic overleaf:<service_password>
+Content-Type: application/json
+
+{
+  "email": "reviewer-bot@ai.local",
+  "first_name": "ИИ",
+  "last_name": "рецензент"
+}
+```
+
+`first_name` и `last_name` необязательны (по умолчанию имя = часть e-mail до `@`).
+Это глобальное имя пользователя; отображаемое имя внутри конкретного проекта
+можно переопределить псевдонимом (см. «Задать псевдоним участника»).
+
+**Ответ при успехе (201):**
+```json
+{
+  "status": "created",
+  "user_id": "6a8f5121a48c86a4e999addc",
+  "email": "reviewer-bot@ai.local",
+  "first_name": "ИИ",
+  "last_name": "рецензент"
+}
+```
+
+**Коды ошибок:**
+
+| Код | `error` | Причина |
+|-----|---------|---------|
+| 400 | `missing_email` / `invalid_email` / `invalid_name` | Некорректное тело запроса |
+| 403 | `forbidden` | Запрос без Service API аутентификации |
+| 409 | `email_already_registered` | Пользователь уже есть; в ответе есть `user_id` |
 
 ### Получить информацию о текущем пользователе
 ```http
@@ -1555,6 +1599,177 @@ Content-Type: application/json
 **Ответ:** 204 No Content
 
 ---
+
+## Review API (комментарии и правки от сервисов и ИИ)
+
+Эти endpoints позволяют внешнему сервису (например, ИИ-рецензенту) добавлять в
+документ комментарии и правки, которые в редакторе выглядят точно так же, как
+сделанные человеком: правки отображаются в track changes (их можно принять или
+отклонить), комментарии — в панели рецензирования.
+
+**Как устроено авторство.** Никаких отдельных сущностей «ИИ-автор» нет. Автор —
+обычный пользователь, указанный в `X-Overleaf-User-Id` (обычно бот-аккаунт,
+созданный через `POST /service/api/user/create`), который должен быть участником
+проекта — рекомендуется роль `review` (`POST /service/project/:id/add` с
+`"privileges": "review"`): такой участник может только комментировать и вносить
+tracked changes. Отображаемое имя задаётся на уровне проекта псевдонимом
+(`memberAliases`) — так один и тот же бот в одном проекте может называться
+«ИИ рецензия», в другом «ИИ корректура». Псевдоним действует на все комментарии
+и правки этого пользователя в проекте. Если нужно несколько «персон»
+одновременно в одном проекте — создайте несколько бот-пользователей.
+
+**Позиции.** `pos` — смещение в символах от начала документа (строки соединены
+`\n`), в той же системе координат, что и `position.start` в
+`GET /api/project/:id/comments`. Текст документа и его версию можно получить
+через `GET /service/Project/:id/doc/:doc_id/download`. Чтобы исключить ошибки,
+сервер всегда сверяет `text` / `old_text` с реальным содержимым документа по
+указанной позиции и при расхождении отвечает `409 text_mismatch` (в ответе есть
+`expected` и `actual`). Параллельные правки других пользователей не ломают
+результат: операции проходят через штатный OT-конвейер document-updater.
+
+### Добавить комментарий к фрагменту текста
+
+```http
+POST /service/api/project/:Project_id/doc/:doc_id/comments
+Authorization: Basic overleaf:<service_password>
+X-Overleaf-User-Id: <bot_user_id>
+Content-Type: application/json
+
+{
+  "pos": 99,
+  "text": "cellular automata",
+  "content": "Уточните, о каком классе клеточных автоматов идёт речь.",
+  "author_alias": "ИИ рецензия"
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `pos` | number | Смещение начала фрагмента |
+| `text` | string | Текст фрагмента, к которому привязывается комментарий (сверяется с документом) |
+| `content` | string | Текст комментария (поддерживается Markdown/MathJax как в обычных комментариях) |
+| `author_alias` | string, опц. | Задать псевдоним автора в этом проекте; `null` или `""` — убрать |
+
+**Ответ (201):**
+```json
+{
+  "thread_id": "6a8f5121d412da6d47000001",
+  "doc_id": "6a8f5121a48c86a4e999ade4",
+  "position": { "start": 99, "end": 116 },
+  "text": "cellular automata",
+  "message": {
+    "id": "6a8f5121a48c86a4e999adec",
+    "content": "Уточните, ...",
+    "timestamp": "2026-08-26T20:48:01.000Z",
+    "user": { "id": "...", "email": "...", "first_name": "TestBot", "last_name": "", "alias": "ИИ рецензия" }
+  }
+}
+```
+
+Права: пользователь должен иметь право писать или рецензировать проект
+(владелец, `readAndWrite` или `review`).
+
+### Добавить правки как track changes
+
+Каждый элемент `items` — замена фрагмента `old_text` на `new_text` начиная с
+`pos`. Сервер строит пословный diff (`diff`), так что в track changes видны
+только реально изменённые слова, и применяет все замены одним обновлением от
+имени пользователя. К любой замене можно приложить комментарий — он привязывается
+к новому тексту (для чистого удаления, когда `new_text` пустой, — к символу
+сразу после удалённого фрагмента).
+
+```http
+POST /service/api/project/:Project_id/doc/:doc_id/suggestions
+Authorization: Basic overleaf:<service_password>
+X-Overleaf-User-Id: <bot_user_id>
+Content-Type: application/json
+
+{
+  "author_alias": "ИИ корректура",
+  "items": [
+    { "pos": 75,  "old_text": "studys",    "new_text": "studies", "comment": "Опечатка." },
+    { "pos": 87,  "old_text": "behaviour", "new_text": "behavior" },
+    { "pos": 150, "old_text": "that that", "new_text": "that",    "comment": "Повтор слова." },
+    { "pos": 238, "old_text": ", and experiments", "new_text": "", "comment": "Лишнее упоминание." }
+  ]
+}
+```
+
+Требования к `items`: не более 500 элементов, позиции указываются относительно
+**текущего** документа (до применения правок), фрагменты не должны
+пересекаться, `old_text` ≠ `new_text`.
+
+**Ответ (200):**
+```json
+{
+  "version": 3,
+  "applied": 4,
+  "comments": [
+    { "index": 0, "thread_id": "6a8f5121b727ab66f1000001" },
+    { "index": 2, "thread_id": "6a8f51213d9ee5116e000001" },
+    { "index": 3, "thread_id": "6a8f512162518c0945000001" }
+  ]
+}
+```
+
+Правки видны в панели track changes как изменения от указанного пользователя
+(с его псевдонимом); их можно принять/отклонить как обычные, в том числе через
+`POST /project/:id/doc/:doc_id/changes/accept`. Включать режим track changes
+в проекте для этого не требуется.
+
+**Коды ошибок (оба endpoint):**
+
+| Код | `error` | Причина |
+|-----|---------|---------|
+| 400 | `invalid_pos`, `invalid_text`, `invalid_content`, `invalid_items`, `too_many_items`, `no_change`, `overlapping_items`, `invalid_comment`, `invalid_alias` | Некорректное тело запроса; для `items` в ответе есть `index` |
+| 404 | `not_found` | Документ не найден |
+| 409 | `text_mismatch` | Текст по позиции не совпадает; в ответе `expected`, `actual` (и `index`) |
+| 409 | `ops_rejected` | document-updater отверг операции (документ изменился между чтением и записью) — перечитайте документ и повторите |
+
+### Задать псевдоним участника
+
+```http
+PUT /service/api/project/:Project_id/users/:user_id/alias
+Authorization: Basic overleaf:<service_password>
+X-Overleaf-User-Id: <owner_or_admin_user_id>
+Content-Type: application/json
+
+{ "alias": "ИИ корректура" }
+```
+
+`null` или пустая строка убирают псевдоним. Требуются права администратора
+проекта (владелец). Тот же эффект для *своего* псевдонима даёт поле
+`author_alias` в запросах выше — оно не требует прав владельца. Псевдоним
+хранится в поле `memberAliases` проекта и используется везде, где показывается
+имя автора: комментарии, track changes, список участников. Открытые редакторы
+обновляют имя сразу (событие `project:membership:changed`).
+
+**Ответ (200):** `{ "user_id": "...", "alias": "ИИ корректура" }`; `404 not_a_member`, если пользователь не участник проекта.
+
+### Сценарий: ИИ-рецензент
+
+```bash
+BASE=http://localhost; AUTH="-u overleaf:$SERVICE_PASSWORD"
+
+# 1. Один раз: создать бот-аккаунт
+BOT=$(curl -s $AUTH -H 'Content-Type: application/json' \
+  -d '{"email":"reviewer-bot@ai.local","first_name":"ИИ"}' \
+  $BASE/service/api/user/create | jq -r .user_id)
+
+# 2. Для каждого проекта: добавить бота как рецензента (от имени владельца)
+curl -s $AUTH -H "X-Overleaf-User-Id: $OWNER_ID" -H 'Content-Type: application/json' \
+  -d '{"email":"reviewer-bot@ai.local","privileges":"review"}' \
+  $BASE/service/project/$PROJECT_ID/add
+
+# 3. Прочитать документ (позиции считаются по этому тексту)
+curl -s $AUTH -H "X-Overleaf-User-Id: $BOT" \
+  $BASE/service/Project/$PROJECT_ID/doc/$DOC_ID/download > main.tex
+
+# 4. Отправить комментарии и правки от имени бота
+curl -s $AUTH -H "X-Overleaf-User-Id: $BOT" -H 'Content-Type: application/json' \
+  -d '{"author_alias":"ИИ рецензия","items":[{"pos":75,"old_text":"studys","new_text":"studies","comment":"Опечатка."}]}' \
+  $BASE/service/api/project/$PROJECT_ID/doc/$DOC_ID/suggestions
+```
 
 ## Примеры использования
 

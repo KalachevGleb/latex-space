@@ -6,6 +6,112 @@ import ProjectGetter from '../Project/ProjectGetter.js'
 import ProjectEntityHandler from '../Project/ProjectEntityHandler.js'
 import DocstoreManager from '../Docstore/DocstoreManager.js'
 
+/**
+ * Load the public view of a message author, including the project alias.
+ * Returns null when the user cannot be found.
+ */
+async function getMessageUserView(projectId, userId, memberAliases) {
+  if (!userId) {
+    return null
+  }
+  if (memberAliases == null) {
+    const project = await ProjectGetter.promises.getProject(projectId, {
+      memberAliases: 1,
+    })
+    memberAliases = project?.memberAliases || {}
+  }
+  const userIdString = userId.toString()
+  try {
+    const user = await UserGetter.promises.getUser(userIdString, {
+      email: 1,
+      first_name: 1,
+      last_name: 1,
+    })
+    if (!user) {
+      return null
+    }
+    return {
+      id: userIdString,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      alias: memberAliases[userIdString],
+    }
+  } catch (err) {
+    logger.warn({ err, userId }, 'error getting user for thread message')
+    return null
+  }
+}
+
+/**
+ * Append a message to a comment thread (creating the thread if needed) and
+ * notify connected editors. Shared by the browser and Service API flows.
+ *
+ * @returns {Promise<object>} the message with its author, as sent to clients
+ */
+export async function addMessage(projectId, threadId, userId, content) {
+  const messageId = new ObjectId()
+  const timestamp = new Date()
+
+  const message = {
+    id: messageId.toString(),
+    content,
+    timestamp,
+    user_id: userId ? new ObjectId(userId) : null,
+  }
+
+  const existingThread = await db.projectHistoryComments.findOne({
+    _id: new ObjectId(threadId),
+  })
+
+  if (existingThread) {
+    await db.projectHistoryComments.updateOne(
+      { _id: new ObjectId(threadId) },
+      {
+        $push: { messages: message },
+        $set: { updated_at: timestamp },
+      }
+    )
+  } else {
+    await db.projectHistoryComments.insertOne({
+      _id: new ObjectId(threadId),
+      project_id: new ObjectId(projectId),
+      messages: [message],
+      resolved: false,
+      created_at: timestamp,
+      updated_at: timestamp,
+    })
+  }
+
+  const responseMessage = {
+    id: messageId.toString(),
+    content,
+    timestamp,
+    user: await getMessageUserView(projectId, userId),
+  }
+
+  EditorRealTimeController.emitToRoom(
+    projectId,
+    'new-comment',
+    threadId,
+    responseMessage
+  )
+
+  return responseMessage
+}
+
+/**
+ * Remove a thread that has no range in any document (used to roll back a
+ * failed Service API comment).
+ */
+export async function deleteThreadById(projectId, threadId) {
+  await db.projectHistoryComments.deleteOne({
+    _id: new ObjectId(threadId),
+    project_id: new ObjectId(projectId),
+  })
+  EditorRealTimeController.emitToRoom(projectId, 'delete-thread', threadId)
+}
+
 async function getChangesUsers(req, res) {
   const projectId = req.params.Project_id
   
@@ -30,6 +136,21 @@ async function getChangesUsers(req, res) {
         }
       })
     })
+
+    // Авторы tracked changes (могут уже не быть участниками проекта,
+    // например бот-пользователь, добавлявший правки через Service API)
+    try {
+      const docRanges = await DocstoreManager.promises.getAllRanges(projectId)
+      for (const doc of docRanges) {
+        for (const change of doc.ranges?.changes || []) {
+          if (change.metadata?.user_id) {
+            userIds.add(change.metadata.user_id.toString())
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, projectId }, 'error getting ranges for changes users')
+    }
     
     // Получаем информацию о пользователях
     const users = []
@@ -136,98 +257,21 @@ async function createMessage(req, res) {
   const projectId = req.params.Project_id
   const threadId = req.params.thread_id
   const { content } = req.body
-  // Passport.js хранит пользователя в req.session.passport.user
+  // Passport.js хранит пользователя в req.session.passport.user;
+  // Service API кладёт пользователя в req.session.user
   const userId = req.session?.passport?.user?._id || req.session?.user?._id
-  
-  logger.info({ projectId, threadId, userId, hasSession: !!req.session, hasPassport: !!req.session?.passport }, 'createMessage called')
-  
+
   if (!content) {
     return res.status(400).json({ error: 'Content is required' })
   }
-  
+
   try {
-    // Получаем псевдонимы из проекта
-    const project = await ProjectGetter.promises.getProject(projectId, {
-      memberAliases: 1,
-    })
-    const memberAliases = project?.memberAliases || {}
-    
-    const messageId = new ObjectId()
-    const timestamp = new Date()
-    
-    // Получаем информацию о пользователе из сессии
-    const sessionUser = req.session?.passport?.user
-    let user = null
-    if (userId && sessionUser) {
-      user = {
-        email: sessionUser.email,
-        first_name: sessionUser.first_name,
-        last_name: sessionUser.last_name,
-      }
-      // Добавляем псевдоним если он есть
-      if (memberAliases[userId]) {
-        user.alias = memberAliases[userId]
-      }
-      logger.info({ userId, userName: `${user.first_name} ${user.last_name}` }, 'user from session')
-    } else {
-      logger.warn({ userId, hasSession: !!req.session, hasPassport: !!req.session?.passport }, 'no user data available')
-    }
-    
-    const message = {
-      id: messageId.toString(),
-      content,
-      timestamp,
-      user_id: userId ? new ObjectId(userId) : null,
-    }
-    
-    // Проверяем, существует ли thread
-    const existingThread = await db.projectHistoryComments.findOne({
-      _id: new ObjectId(threadId),
-    })
-    
-    if (existingThread) {
-      // Добавляем сообщение в существующий thread
-      await db.projectHistoryComments.updateOne(
-        { _id: new ObjectId(threadId) },
-        { 
-          $push: { messages: message },
-          $set: { updated_at: timestamp }
-        }
-      )
-    } else {
-      // Создаем новый thread
-      await db.projectHistoryComments.insertOne({
-        _id: new ObjectId(threadId),
-        project_id: new ObjectId(projectId),
-        messages: [message],
-        resolved: false,
-        created_at: timestamp,
-        updated_at: timestamp,
-      })
-    }
-    
-    // Возвращаем сообщение с информацией о пользователе для frontend
-    const responseMessage = {
-      id: messageId.toString(),
-      content,
-      timestamp,
-      user: user ? {
-        id: userId.toString(),
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        alias: user.alias,
-      } : null,
-    }
-    
-    // Отправляем socket event для real-time обновления
-    EditorRealTimeController.emitToRoom(
+    const responseMessage = await addMessage(
       projectId,
-      'new-comment',
       threadId,
-      responseMessage
+      userId,
+      content
     )
-    
     res.json(responseMessage)
   } catch (error) {
     logger.error({ err: error, projectId, threadId }, 'error creating message')

@@ -220,6 +220,20 @@ Response: {
 # Примечание: История и комментарии сохраняются при обновлении файлов
 ```
 
+#### Пользователи
+
+```bash
+# Пригласить пользователя (создаёт аккаунт и шлёт письмо с активацией)
+POST /service/api/user/invite
+Body: {"email": "user@example.com"}
+
+# Создать пользователя без письма и подтверждения (служебные/бот-аккаунты, например ИИ-рецензент)
+POST /service/api/user/create
+Body: {"email": "reviewer-bot@ai.local", "first_name": "ИИ", "last_name": "рецензент"}
+# Ответ 201: {"status":"created","user_id":"...","email":"...","first_name":"...","last_name":"..."}
+# Ответ 409 (уже есть): {"error":"email_already_registered","user_id":"..."}
+```
+
 #### Управление участниками
 
 ```bash
@@ -267,7 +281,22 @@ Body: {"content": "Comment text"}
 
 # Отметить как решённый
 POST /service/project/:Project_id/doc/:Doc_id/thread/:thread_id/resolve
+
+# Добавить комментарий к фрагменту текста (от имени пользователя из X-Overleaf-User-Id)
+POST /service/api/project/:Project_id/doc/:doc_id/comments
+Body: {"pos": 120, "text": "cellular automata", "content": "Уточните класс автоматов", "author_alias": "ИИ рецензия"}
+
+# Добавить правки как track changes (с опциональными комментариями)
+POST /service/api/project/:Project_id/doc/:doc_id/suggestions
+Body: {"items": [{"pos": 75, "old_text": "studys", "new_text": "studies", "comment": "Опечатка"}]}
+
+# Задать отображаемое имя участника в проекте (псевдоним)
+PUT /service/api/project/:Project_id/users/:user_id/alias
+Body: {"alias": "ИИ корректура"}   # null или "" — убрать псевдоним
 ```
+
+Подробное описание (позиции, диффы, коды ошибок, сценарий «ИИ-рецензент») — в
+[API_DOCUMENTATION_RU.md, раздел «Review API»](API_DOCUMENTATION_RU.md#review-api-комментарии-и-правки-от-сервисов-и-ии).
 
 #### Защита проектов и файлов
 

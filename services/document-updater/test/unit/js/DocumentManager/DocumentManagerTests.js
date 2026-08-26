@@ -415,6 +415,137 @@ describe('DocumentManager', function () {
     })
   })
 
+  describe('applyOps', function () {
+    beforeEach(function () {
+      this.ops = [
+        { d: 'foo', p: 4 },
+        { i: 'bar', p: 4 },
+      ]
+      this.user_id = 'user-id-123'
+      this.DocumentManager.promises.getDoc = sinon.stub().resolves({
+        lines: ['some', 'lines'],
+        version: this.version,
+        alreadyLoaded: true,
+        type: 'sharejs-text-ot',
+      })
+      this.DocumentManager.promises.flushDocIfLoaded = sinon.stub().resolves()
+      this.DocumentManager.promises.flushAndDeleteDoc = sinon
+        .stub()
+        .resolves()
+    })
+
+    describe('with tracked changes', function () {
+      beforeEach(async function () {
+        this.result = await this.DocumentManager.promises.applyOps(
+          this.project_id,
+          this.doc_id,
+          this.ops,
+          null,
+          this.user_id,
+          true,
+          'service-api'
+        )
+      })
+
+      it('should apply the ops as a tracked update by the user', function () {
+        this.UpdateManager.promises.applyUpdate.should.have.been.calledOnce
+        const update = this.UpdateManager.promises.applyUpdate.args[0][2]
+        expect(update.doc).to.equal(this.doc_id)
+        expect(update.op).to.deep.equal(this.ops)
+        expect(update.v).to.equal(this.version)
+        expect(update.meta.user_id).to.equal(this.user_id)
+        expect(update.meta.source).to.equal('service-api')
+        expect(update.meta.tc).to.match(/^[0-9a-f]{18}$/)
+      })
+
+      it('should flush the doc when it was already loaded', function () {
+        this.DocumentManager.promises.flushDocIfLoaded.should.have.been.calledWith(
+          this.project_id,
+          this.doc_id
+        )
+        this.DocumentManager.promises.flushAndDeleteDoc.should.not.have.been
+          .called
+      })
+
+      it('should return the next version', function () {
+        expect(this.result).to.deep.equal({ version: this.version + 1 })
+      })
+    })
+
+    describe('without tracked changes and with an explicit base version', function () {
+      beforeEach(async function () {
+        this.DocumentManager.promises.getDoc.resolves({
+          lines: ['some', 'lines'],
+          version: this.version,
+          alreadyLoaded: false,
+          type: 'sharejs-text-ot',
+        })
+        await this.DocumentManager.promises.applyOps(
+          this.project_id,
+          this.doc_id,
+          [{ c: 'foo', p: 4, t: 'thread-id' }],
+          this.version - 1,
+          this.user_id,
+          false
+        )
+      })
+
+      it('should not mark the update as tracked', function () {
+        const update = this.UpdateManager.promises.applyUpdate.args[0][2]
+        expect(update.meta.tc).to.be.undefined
+        expect(update.v).to.equal(this.version - 1)
+        expect(update.meta.source).to.equal('service-api')
+      })
+
+      it('should flush and evict the doc when it was not loaded', function () {
+        this.DocumentManager.promises.flushAndDeleteDoc.should.have.been.calledWith(
+          this.project_id,
+          this.doc_id
+        )
+        this.HistoryManager.flushProjectChangesAsync.should.have.been.calledWith(
+          this.project_id
+        )
+      })
+    })
+
+    describe('with a history-ot doc', function () {
+      it('should reject the update', async function () {
+        this.DocumentManager.promises.getDoc.resolves({
+          lines: [],
+          version: this.version,
+          alreadyLoaded: true,
+          type: 'history-ot',
+        })
+        await expect(
+          this.DocumentManager.promises.applyOps(
+            this.project_id,
+            this.doc_id,
+            this.ops,
+            null,
+            this.user_id,
+            true
+          )
+        ).to.be.rejectedWith(Errors.OTTypeMismatchError)
+        this.UpdateManager.promises.applyUpdate.should.not.have.been.called
+      })
+    })
+
+    describe('with no ops', function () {
+      it('should throw', async function () {
+        await expect(
+          this.DocumentManager.promises.applyOps(
+            this.project_id,
+            this.doc_id,
+            [],
+            null,
+            this.user_id,
+            true
+          )
+        ).to.be.rejectedWith('No ops were provided to applyOps')
+      })
+    })
+  })
+
   describe('setDoc', function () {
     describe('with plain tex lines', function () {
       beforeEach(function () {

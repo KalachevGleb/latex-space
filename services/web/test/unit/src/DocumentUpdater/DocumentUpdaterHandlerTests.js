@@ -539,6 +539,88 @@ describe('DocumentUpdaterHandler', function () {
     })
   })
 
+  describe('applyOps', function () {
+    beforeEach(function () {
+      this.user_id = 'user-id-123'
+      this.ops = [{ i: 'foo', p: 4 }]
+    })
+
+    describe('successfully', function () {
+      beforeEach(function () {
+        this.docUpdaterMock
+          .post(`/project/${this.project_id}/doc/${this.doc_id}/ops`, {
+            ops: this.ops,
+            user_id: this.user_id,
+            track_changes: true,
+            source: 'service-api',
+            v: 41,
+          })
+          .reply(200, { version: 42 })
+      })
+
+      it('should post the ops to the document updater', async function () {
+        const result = await this.handler.promises.applyOps(
+          this.project_id,
+          this.doc_id,
+          this.user_id,
+          this.ops,
+          { version: 41, trackChanges: true }
+        )
+        expect(this.docUpdaterMock.isDone()).to.be.true
+        expect(result).to.deep.equal({ version: 42 })
+      })
+    })
+
+    describe('without options', function () {
+      beforeEach(function () {
+        this.docUpdaterMock
+          .post(`/project/${this.project_id}/doc/${this.doc_id}/ops`, {
+            ops: this.ops,
+            user_id: this.user_id,
+            track_changes: false,
+            source: 'service-api',
+          })
+          .reply(200, { version: 1 })
+      })
+
+      it('should not track changes and not send a version', async function () {
+        await this.handler.promises.applyOps(
+          this.project_id,
+          this.doc_id,
+          this.user_id,
+          this.ops
+        )
+        expect(this.docUpdaterMock.isDone()).to.be.true
+      })
+    })
+
+    describe('when the document updater rejects the ops', function () {
+      beforeEach(function () {
+        this.docUpdaterMock
+          .post(`/project/${this.project_id}/doc/${this.doc_id}/ops`)
+          .reply(409, { error: 'ops_rejected' })
+      })
+
+      it('should reject with the response status', async function () {
+        let error
+        try {
+          await this.handler.promises.applyOps(
+            this.project_id,
+            this.doc_id,
+            this.user_id,
+            this.ops
+          )
+        } catch (err) {
+          error = err
+        }
+        expect(error).to.exist
+        expect(error.name).to.equal('RequestFailedError')
+        expect(error.response.status).to.equal(409)
+        expect(JSON.parse(error.body)).to.deep.equal({ error: 'ops_rejected' })
+      })
+    })
+  })
+
   describe('acceptChanges', function () {
     beforeEach(function () {
       this.change_id = 'mock-change-id-1'

@@ -27,6 +27,7 @@ describe('HttpController', function () {
         updateCommentStateWithLock: sinon.stub().resolves(),
         deleteCommentWithLock: sinon.stub().resolves(),
         appendToDocWithLock: sinon.stub(),
+        applyOpsWithLock: sinon.stub(),
       },
     }
 
@@ -364,6 +365,114 @@ describe('HttpController', function () {
           'getting comment via http'
         )
         .should.equal(true)
+    })
+  })
+
+  describe('applyOps', function () {
+    beforeEach(function () {
+      this.ops = [{ i: 'foo', p: 4 }]
+      this.user_id = 'user-id-123'
+      this.res.status = sinon.stub().returns(this.res)
+      this.req = {
+        headers: {},
+        params: {
+          project_id: this.project_id,
+          doc_id: this.doc_id,
+        },
+        query: {},
+        body: {
+          ops: this.ops,
+          v: 41,
+          user_id: this.user_id,
+          track_changes: true,
+          source: 'service-api',
+        },
+      }
+    })
+
+    describe('successfully', function () {
+      beforeEach(async function () {
+        this.DocumentManager.promises.applyOpsWithLock.resolves({ version: 42 })
+        await this.HttpController.applyOps(this.req, this.res, this.next)
+      })
+
+      it('should apply the ops with a lock', function () {
+        this.DocumentManager.promises.applyOpsWithLock.should.have.been.calledWith(
+          this.project_id,
+          this.doc_id,
+          this.ops,
+          41,
+          this.user_id,
+          true,
+          'service-api'
+        )
+      })
+
+      it('should return the new version', function () {
+        this.res.json.should.have.been.calledWith({ version: 42 })
+      })
+
+      it('should time the request', function () {
+        this.Metrics.Timer.prototype.done.called.should.equal(true)
+      })
+    })
+
+    describe('with invalid input', function () {
+      it('should return 400 when ops are missing', async function () {
+        this.req.body.ops = []
+        await this.HttpController.applyOps(this.req, this.res, this.next)
+        this.res.status.should.have.been.calledWith(400)
+        this.DocumentManager.promises.applyOpsWithLock.should.not.have.been
+          .called
+      })
+
+      it('should return 400 when the version is not an integer', async function () {
+        this.req.body.v = 'abc'
+        await this.HttpController.applyOps(this.req, this.res, this.next)
+        this.res.status.should.have.been.calledWith(400)
+      })
+    })
+
+    describe('when the ops do not match the document', function () {
+      beforeEach(async function () {
+        this.DocumentManager.promises.applyOpsWithLock.rejects(
+          new Error("Delete component 'foo' does not match deleted text 'bar'")
+        )
+        await this.HttpController.applyOps(this.req, this.res, this.next)
+      })
+
+      it('should return 409', function () {
+        this.res.status.should.have.been.calledWith(409)
+        this.res.json.should.have.been.calledWithMatch({
+          error: 'ops_rejected',
+        })
+        this.next.should.not.have.been.called
+      })
+    })
+
+    describe('when the base version is too old', function () {
+      it('should return 409', async function () {
+        this.DocumentManager.promises.applyOpsWithLock.rejects(
+          new Error('Op too old')
+        )
+        await this.HttpController.applyOps(this.req, this.res, this.next)
+        this.res.status.should.have.been.calledWith(409)
+      })
+    })
+
+    describe('when an unexpected error occurs', function () {
+      beforeEach(async function () {
+        this.DocumentManager.promises.applyOpsWithLock.rejects(
+          new Error('oops')
+        )
+        await this.HttpController.applyOps(this.req, this.res, this.next)
+      })
+
+      it('should call next with the error', function () {
+        this.next.should.have.been.calledWithMatch(
+          sinon.match.instanceOf(Error)
+        )
+      })
     })
   })
 

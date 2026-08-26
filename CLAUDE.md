@@ -18,6 +18,8 @@ This version includes several custom features:
 
 4. **Extended Comments API** - JSON API to retrieve all comments with file positions and author information.
 
+   **Review API** - Service API endpoints to add comments and tracked-change suggestions on behalf of a user (e.g. an AI review bot): `POST /service/api/project/:id/doc/:docId/comments`, `.../suggestions`, member aliases via `PUT /service/api/project/:id/users/:userId/alias`, bot accounts via `POST /service/api/user/create`. Backed by a document-updater endpoint `POST /project/:id/doc/:docId/ops` that applies ShareJS ops (optionally as tracked changes) through the normal OT pipeline. See `api_doc/API_DOCUMENTATION_RU.md`, section "Review API".
+
 5. **Review Panel Enhancements** - MathJax support in comments and improved UI for peer-review workflows.
 
 6. **Full Russian language support** - Improved Russian language support. All text elements in UI have Russian translation.
