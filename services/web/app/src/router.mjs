@@ -41,6 +41,7 @@ import ChatController from './Features/Chat/ChatController.mjs'
 import CommentsController from './Features/Comments/CommentsController.mjs'
 import RangesController from './Features/Comments/RangesController.mjs'
 import TrackChangesController from './Features/Comments/TrackChangesController.mjs'
+import ReviewApiController from './Features/Comments/ReviewApiController.mjs'
 import Modules from './infrastructure/Modules.js'
 import {
   RateLimiter,
@@ -597,6 +598,24 @@ async function initialize(webRouter, privateApiRouter, publicApiRouter) {
     CommentsController.getCommentsWithPositions
   )
   
+  // Review API (Service API): comments and tracked-change suggestions on
+  // behalf of the acting user, e.g. an AI review bot
+  webRouter.post(
+    '/api/project/:Project_id/doc/:doc_id/comments',
+    AuthorizationMiddleware.ensureUserCanWriteOrReviewProjectContent,
+    ReviewApiController.addComment
+  )
+  webRouter.post(
+    '/api/project/:Project_id/doc/:doc_id/suggestions',
+    AuthorizationMiddleware.ensureUserCanWriteOrReviewProjectContent,
+    ReviewApiController.addSuggestions
+  )
+  webRouter.put(
+    '/api/project/:Project_id/users/:user_id/alias',
+    AuthorizationMiddleware.ensureUserCanAdminProject,
+    ReviewApiController.setMemberAlias
+  )
+
   // Track Changes routes
   webRouter.post(
     '/project/:Project_id/track_changes',

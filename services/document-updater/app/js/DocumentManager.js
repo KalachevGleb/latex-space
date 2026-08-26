@@ -12,6 +12,7 @@ const { extractOriginOrSource } = require('./Utils')
 const { getTotalSizeOfLines } = require('./Limits')
 const Settings = require('@overleaf/settings')
 const { StringFileData } = require('overleaf-editor-core')
+const RangesTracker = require('@overleaf/ranges-tracker')
 
 const MAX_UNFLUSHED_AGE = 300 * 1000 // 5 mins, document should be flushed to mongo this time after a change
 
@@ -271,6 +272,82 @@ const DocumentManager = {
         HistoryManager.flushProjectChangesAsync(projectId)
       }
     }
+  },
+
+  /**
+   * Apply a list of ShareJS ops (i/d/c) to a document on behalf of a user,
+   * optionally as tracked changes. Used by the web Service API to add
+   * comments and tracked-change suggestions without a websocket client.
+   *
+   * @param {string} projectId
+   * @param {string} docId
+   * @param {object[]} ops - ShareJS text ops: {i, p}, {d, p} or {c, p, t}
+   * @param {number} [baseVersion] - doc version the ops are based on; defaults
+   *   to the current version. Older versions are transformed by ShareJS.
+   * @param {string} userId - author of the update
+   * @param {boolean} trackChanges - record i/d ops as tracked changes
+   * @param {string} [source] - update source label
+   * @returns {Promise<{version: number}>} the version after the update
+   */
+  async applyOps(
+    projectId,
+    docId,
+    ops,
+    baseVersion,
+    userId,
+    trackChanges,
+    source
+  ) {
+    if (!Array.isArray(ops) || ops.length === 0) {
+      throw new Error('No ops were provided to applyOps')
+    }
+
+    // Circular dependency. Import at runtime.
+    const UpdateManager = require('./UpdateManager')
+
+    const { version, alreadyLoaded, type } = await DocumentManager.getDoc(
+      projectId,
+      docId
+    )
+    if (type !== 'sharejs-text-ot') {
+      throw new Errors.OTTypeMismatchError(type, 'sharejs-text-ot')
+    }
+
+    const update = {
+      doc: docId,
+      op: ops,
+      v: baseVersion != null ? baseVersion : version,
+      meta: {
+        user_id: userId,
+        source: source || 'service-api',
+      },
+    }
+    if (trackChanges) {
+      // The id seed is used by the ranges tracker to generate change ids,
+      // exactly like the editor client does for its own tracked changes.
+      update.meta.tc = RangesTracker.generateIdSeed()
+    }
+
+    logger.debug(
+      { projectId, docId, userId, trackChanges, opCount: ops.length },
+      'applying ops via http'
+    )
+
+    await UpdateManager.promises.applyUpdate(projectId, docId, update)
+
+    // Same flushing policy as setDoc: if nobody has the doc open, persist it
+    // and evict it from redis right away.
+    if (alreadyLoaded) {
+      await DocumentManager.flushDocIfLoaded(projectId, docId)
+    } else {
+      try {
+        await DocumentManager.flushAndDeleteDoc(projectId, docId, {})
+      } finally {
+        HistoryManager.flushProjectChangesAsync(projectId)
+      }
+    }
+
+    return { version: version + 1 }
   },
 
   async flushDocIfLoaded(projectId, docId) {
@@ -679,6 +756,28 @@ const DocumentManager = {
       undoing,
       external,
       trackChangesUserId
+    )
+  },
+
+  async applyOpsWithLock(
+    projectId,
+    docId,
+    ops,
+    baseVersion,
+    userId,
+    trackChanges,
+    source
+  ) {
+    const UpdateManager = require('./UpdateManager')
+    return await UpdateManager.promises.lockUpdatesAndDo(
+      DocumentManager.applyOps,
+      projectId,
+      docId,
+      ops,
+      baseVersion,
+      userId,
+      trackChanges,
+      source
     )
   },
 

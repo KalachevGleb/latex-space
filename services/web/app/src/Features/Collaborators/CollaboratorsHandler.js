@@ -118,9 +118,17 @@ async function addUserIdToProject(
   let aliasUpdate = {}
   if (isAnonymous) {
     const memberAliases = project.memberAliases || {}
-    // Count existing users with aliases to determine the next number
-    const existingAliasCount = Object.keys(memberAliases).length
-    const alias = `Reviewer ${existingAliasCount + 1}`
+    // Pick the next free "Reviewer N" number. Only auto-generated aliases are
+    // counted, so custom aliases (e.g. for bot users) do not shift numbering,
+    // and removed reviewers do not cause duplicate numbers.
+    const maxReviewerNumber = Object.values(memberAliases).reduce(
+      (max, existingAlias) => {
+        const match = /^Reviewer (\d+)$/.exec(existingAlias)
+        return match ? Math.max(max, parseInt(match[1], 10)) : max
+      },
+      0
+    )
+    const alias = `Reviewer ${maxReviewerNumber + 1}`
     memberAliases[userId.toString()] = alias
     aliasUpdate = { memberAliases }
   }

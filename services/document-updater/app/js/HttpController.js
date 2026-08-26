@@ -240,6 +240,74 @@ async function setDoc(req, res) {
   res.json(result || {})
 }
 
+const OT_ERROR_PATTERNS = [
+  /does not match/i, // delete/comment text does not match the document
+  /too old/i, // base version is older than the retained op history
+  /component/i, // malformed op component
+  /position/i, // invalid position
+  /unknown op/i,
+]
+
+function isInvalidOpsError(err) {
+  const message = typeof err === 'string' ? err : err?.message || ''
+  return OT_ERROR_PATTERNS.some(pattern => pattern.test(message))
+}
+
+async function applyOps(req, res) {
+  const docId = req.params.doc_id
+  const projectId = req.params.project_id
+  const {
+    ops,
+    v: baseVersion,
+    user_id: userId,
+    track_changes: trackChanges,
+    source,
+  } = req.body
+
+  if (!Array.isArray(ops) || ops.length === 0) {
+    return res.status(400).json({
+      error: 'invalid_ops',
+      error_description: 'ops must be a non-empty array',
+    })
+  }
+  if (baseVersion != null && !Number.isInteger(baseVersion)) {
+    return res.status(400).json({
+      error: 'invalid_version',
+      error_description: 'v must be an integer',
+    })
+  }
+
+  logger.debug(
+    { projectId, docId, userId, baseVersion, trackChanges, opCount: ops.length },
+    'applying ops via http'
+  )
+  const timer = new Metrics.Timer('http.applyOps')
+
+  let result
+  try {
+    result = await DocumentManager.promises.applyOpsWithLock(
+      projectId,
+      docId,
+      ops,
+      baseVersion,
+      userId,
+      Boolean(trackChanges),
+      source
+    )
+  } catch (err) {
+    if (isInvalidOpsError(err)) {
+      logger.debug({ projectId, docId, err }, 'ops rejected by document updater')
+      return res.status(409).json({
+        error: 'ops_rejected',
+        error_description: typeof err === 'string' ? err : err.message,
+      })
+    }
+    throw err
+  }
+  timer.done()
+  res.json(result)
+}
+
 async function appendToDoc(req, res) {
   const docId = req.params.doc_id
   const projectId = req.params.project_id
@@ -558,6 +626,7 @@ module.exports = {
   clearProjectState: expressify(clearProjectState),
   appendToDoc: expressify(appendToDoc),
   setDoc: expressify(setDoc),
+  applyOps: expressify(applyOps),
   flushDocIfLoaded: expressify(flushDocIfLoaded),
   deleteDoc: expressify(deleteDoc),
   flushProject: expressify(flushProject),

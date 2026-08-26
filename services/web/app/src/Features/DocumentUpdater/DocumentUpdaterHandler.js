@@ -145,6 +145,37 @@ async function setDocument(
   }
 }
 
+/**
+ * Apply ShareJS ops to a document on behalf of a user, optionally as tracked
+ * changes. Comments are added with {c, p, t} ops.
+ *
+ * @param {string} projectId
+ * @param {string} docId
+ * @param {string} userId
+ * @param {object[]} ops
+ * @param {object} [opts]
+ * @param {number} [opts.version] - version the ops are based on
+ * @param {boolean} [opts.trackChanges]
+ * @param {string} [opts.source]
+ * @returns {Promise<{version: number}>}
+ */
+async function applyOps(projectId, docId, userId, ops, opts = {}) {
+  const body = {
+    ops,
+    user_id: userId,
+    track_changes: Boolean(opts.trackChanges),
+    source: opts.source || 'service-api',
+  }
+  if (opts.version != null) {
+    body.v = opts.version
+  }
+  return await fetchJson(`${BASE_URL}/project/${projectId}/doc/${docId}/ops`, {
+    method: 'POST',
+    json: body,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+}
+
 async function appendToDocument(projectId, docId, userId, lines, source) {
   const maybeJson = await fetchString(
     `${BASE_URL}/project/${projectId}/doc/${docId}/append`,
@@ -536,6 +567,7 @@ const DocumentUpdaterHandler = {
   getProjectRanges,
   setDocument,
   appendToDocument,
+  applyOps,
   getProjectDocsIfMatch,
   clearProjectState,
   acceptChanges,
