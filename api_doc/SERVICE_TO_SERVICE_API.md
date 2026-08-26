@@ -295,8 +295,7 @@ PUT /service/api/project/:Project_id/users/:user_id/alias
 Body: {"alias": "ИИ корректура"}   # null или "" — убрать псевдоним
 ```
 
-Подробное описание (позиции, диффы, коды ошибок, сценарий «ИИ-рецензент») — в
-[API_DOCUMENTATION_RU.md, раздел «Review API»](API_DOCUMENTATION_RU.md#review-api-комментарии-и-правки-от-сервисов-и-ии).
+Параметры, ответы и коды ошибок: [API_DOCUMENTATION_RU.md, раздел «Review API»](API_DOCUMENTATION_RU.md#review-api-комментарии-и-правки-от-сервисов-и-ии).
 
 #### Защита проектов и файлов
 
