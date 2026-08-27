@@ -5,6 +5,7 @@ import EditorRealTimeController from '../Editor/EditorRealTimeController.js'
 import ProjectGetter from '../Project/ProjectGetter.js'
 import ProjectEntityHandler from '../Project/ProjectEntityHandler.js'
 import DocstoreManager from '../Docstore/DocstoreManager.js'
+import DocumentUpdaterHandler from '../DocumentUpdater/DocumentUpdaterHandler.js'
 
 /**
  * Load the public view of a message author, including the project alias.
@@ -284,13 +285,76 @@ async function createMessage(req, res) {
   }
 }
 
+/**
+ * Найти документ проекта, содержащий диапазон комментария threadId.
+ * Возвращает id документа или null.
+ */
+async function findDocWithComment(projectId, threadId) {
+  await DocumentUpdaterHandler.promises.flushProjectToMongo(projectId)
+  const docRanges = await DocstoreManager.promises.getAllRanges(projectId)
+  for (const doc of docRanges) {
+    const comments = doc.ranges?.comments || []
+    if (comments.some(comment => comment.op?.t === threadId)) {
+      return (doc.id ?? doc._id).toString()
+    }
+  }
+  return null
+}
+
+/**
+ * Удалить диапазон комментария из документа. Если в docId диапазона нет
+ * (например, клиент передал id открытого документа, а комментарий в другом),
+ * документ ищется по всем документам проекта.
+ */
+async function removeCommentRange(projectId, docId, threadId, userId) {
+  let targetDocId = docId
+  try {
+    const doc = await DocumentUpdaterHandler.promises.getDocument(
+      projectId,
+      docId,
+      -1
+    )
+    const comments = doc.ranges?.comments || []
+    if (!comments.some(comment => comment.op?.t === threadId)) {
+      targetDocId = await findDocWithComment(projectId, threadId)
+    }
+  } catch (err) {
+    logger.warn(
+      { err, projectId, docId, threadId },
+      'could not read doc while deleting thread, searching all docs'
+    )
+    targetDocId = await findDocWithComment(projectId, threadId)
+  }
+
+  if (!targetDocId) {
+    logger.debug({ projectId, threadId }, 'no comment range found for thread')
+    return
+  }
+
+  await DocumentUpdaterHandler.promises.deleteThread(
+    projectId,
+    targetDocId,
+    threadId,
+    userId
+  )
+}
+
 async function deleteThread(req, res) {
   const projectId = req.params.Project_id
+  const docId = req.params.Doc_id
   const threadId = req.params.thread_id
-  
+  const userId =
+    req.user?._id ||
+    req.session?.passport?.user?._id ||
+    req.session?.user?._id
+
   try {
+    // Убираем диапазон комментария из документа (document-updater),
+    // иначе в ranges остаётся «сирота» без треда
+    await removeCommentRange(projectId, docId, threadId, userId?.toString())
+
     await db.projectHistoryComments.deleteOne({ _id: new ObjectId(threadId) })
-    
+
     // Отправляем socket event для real-time обновления
     EditorRealTimeController.emitToRoom(projectId, 'delete-thread', threadId)
     
@@ -436,7 +500,11 @@ async function getCommentsWithPositions(req, res) {
     
     // Получаем пути к документам проекта
     const docPaths = await ProjectEntityHandler.promises.getAllDocPathsFromProjectById(projectId)
-    
+
+    // Сбрасываем несохранённые правки из document-updater в docstore,
+    // иначе ranges могут быть устаревшими
+    await DocumentUpdaterHandler.promises.flushProjectToMongo(projectId)
+
     // Получаем ranges (позиции комментариев) из docstore
     const docRanges = await DocstoreManager.promises.getAllRanges(projectId)
     

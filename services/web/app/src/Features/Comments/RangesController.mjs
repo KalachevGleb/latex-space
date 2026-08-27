@@ -1,12 +1,17 @@
 import { expressify } from '@overleaf/promise-utils'
 import DocstoreManager from '../Docstore/DocstoreManager.js'
+import DocumentUpdaterHandler from '../DocumentUpdater/DocumentUpdaterHandler.js'
 import logger from '@overleaf/logger'
 import { db, ObjectId } from '../../infrastructure/mongodb.js'
 
 async function getAllRanges(req, res) {
   const projectId = req.params.Project_id
-  
+
   try {
+    // Сбрасываем несохранённые правки из document-updater в docstore,
+    // иначе ranges могут быть устаревшими
+    await DocumentUpdaterHandler.promises.flushProjectToMongo(projectId)
+
     // Получаем ranges из docstore
     const docRanges = await DocstoreManager.promises.getAllRanges(projectId)
     
