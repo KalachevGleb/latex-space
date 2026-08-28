@@ -13,6 +13,7 @@
 #    overleaf-backup.sh status             когда был последний бэкап и успешен ли он
 #    overleaf-backup.sh verify             проверить архив и пробно развернуть базу из последней копии
 #    overleaf-backup.sh restore ИМЯ        восстановить копию ИМЯ (из `list`); сервис будет остановлен
+#    overleaf-backup.sh cleanup            удалить старые данные (*.before-restore-*), оставшиеся после restore
 #    overleaf-backup.sh cloud-setup        настроить копию в облако (Яндекс.Диск/Google Диск/S3)
 #    overleaf-backup.sh cloud-status       что сейчас лежит в облаке
 #    overleaf-backup.sh cloud-pull         скачать копии из облака обратно на сервер
@@ -131,6 +132,19 @@ init() {
     if docker compose version >/dev/null 2>&1; then COMPOSE="docker compose"
     elif command -v docker-compose >/dev/null 2>&1; then COMPOSE="docker-compose"
     else echo "docker compose не найден" >&2; exit 1; fi
+
+    # Файлы в каталоге данных принадлежат root/пользователям контейнеров, поэтому
+    # читаем и пишем их через вспомогательный контейнер (sudo не нужен).
+    HELPER_IMAGE=""
+    for img in alpine busybox redis:6.2 mongo:6.0; do
+        docker image inspect "$img" >/dev/null 2>&1 && { HELPER_IMAGE="$img"; break; }
+    done
+    [ -n "$HELPER_IMAGE" ] || { echo "Не найден ни один образ для вспомогательного контейнера (alpine/busybox/redis/mongo)" >&2; exit 1; }
+}
+
+# Выполнить команду от root с каталогом данных, смонтированным в /data
+as_root() {
+    docker run --rm -i -v "$DATA_DIR":/data --entrypoint sh "$HELPER_IMAGE" -c "$1"
 }
 
 epoch_of() {  # "YYYY-MM-DD HH:MM:SS" -> секунды; работает и с GNU, и с BSD date
@@ -153,7 +167,7 @@ container_running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/nu
 check_disk_space() {
     # Грубая оценка: место под бэкап должно быть не меньше размера данных без кэша
     local need avail
-    need=$(du -sm --exclude=compiles --exclude=output --exclude=cache "$DATA_DIR/sharelatex_data" "$DATA_DIR/mongo_data" 2>/dev/null | awk '{s+=$1} END{print s+0}')
+    need=$(as_root 'du -sm /data/sharelatex_data/data/user_files /data/sharelatex_data/data/history /data/sharelatex_data/data/template_files /data/mongo_data 2>/dev/null' | awk '{s+=$1} END{print s+0}')
     avail=$(df -Pm "$BACKUP_DIR" | awk 'NR==2{print $4}')
     if [ "$avail" -lt "$need" ]; then
         die "Мало места для бэкапа в $BACKUP_DIR: свободно ${avail}MB, данных примерно ${need}MB"
@@ -200,7 +214,7 @@ dump_redis() {
     mkdir -p "$STAGING/redis"
     if ! container_running "$C_REDIS"; then
         warn "Контейнер $C_REDIS не запущен — копирую dump.rdb как есть"
-        [ -f "$DATA_DIR/redis_data/dump.rdb" ] && cp "$DATA_DIR/redis_data/dump.rdb" "$STAGING/redis/"
+        as_root 'cat /data/redis_data/dump.rdb' > "$STAGING/redis/dump.rdb" 2>/dev/null || rm -f "$STAGING/redis/dump.rdb"
         return
     fi
     info "Сохраняю Redis..."
@@ -212,11 +226,25 @@ dump_redis() {
         [ "$after" != "$before" ] && break
         sleep 1
     done
-    if [ -f "$DATA_DIR/redis_data/dump.rdb" ]; then
-        cp "$DATA_DIR/redis_data/dump.rdb" "$STAGING/redis/"
-    else
+    if ! docker exec "$C_REDIS" cat /data/dump.rdb > "$STAGING/redis/dump.rdb" 2>/dev/null; then
+        rm -f "$STAGING/redis/dump.rdb"
         warn "dump.rdb не найден (сессии не сохранятся, это не критично)"
     fi
+}
+
+tar_data() {
+    # Каталоги данных -> $STAGING/data.tar. Читаем через контейнер от root:
+    # файлы принадлежат root/mongodb/redis и владельцы сохраняются в архиве.
+    local dirs="$*"
+    info "Копирую файлы данных ($dirs)..."
+    as_root "cd /data && tar -cf - \
+        --exclude=sharelatex_data/data/compiles --exclude=sharelatex_data/data/output \
+        --exclude=sharelatex_data/data/cache --exclude=sharelatex_data/data/clsi-cache \
+        --exclude=sharelatex_data/tmp \
+        --exclude=mongo_data/diagnostic.data \
+        $dirs" > "$STAGING/data.tar" 2>>"$LOG_FILE" || die "Не удалось скопировать каталоги данных (см. $LOG_FILE)"
+    [ -s "$STAGING/data.tar" ] || die "Архив данных пустой"
+    info "Файлы данных: $(du -h "$STAGING/data.tar" | cut -f1)"
 }
 
 copy_config() {
@@ -246,14 +274,8 @@ borg_store() {
     local repo="$1" name="$2"
     borg_init_if_needed "$repo" || { warn "Не удалось создать хранилище $repo"; return 1; }
     info "Пишу в borg ($repo)..."
-    # Исключаем кэш компиляции — он большой и восстанавливается сам
-    borg create --stats --compression zstd,3 \
-        --exclude "$DATA_DIR/sharelatex_data/data/compiles" \
-        --exclude "$DATA_DIR/sharelatex_data/data/output" \
-        --exclude "$DATA_DIR/sharelatex_data/data/cache" \
-        --exclude "$DATA_DIR/sharelatex_data/data/clsi-cache" \
-        --exclude "$DATA_DIR/sharelatex_data/tmp" \
-        "$repo::$name" "$STAGING" "${RAW_DIRS[@]}" >>"$LOG_FILE" 2>&1 || return 1
+    # В $STAGING лежат: mongo/ (дамп), redis/, config/, data.tar (файлы; кэш компиляции уже исключён)
+    (cd "$STAGING" && borg create --stats --compression zstd,3 "$repo::$name" .) >>"$LOG_FILE" 2>&1 || return 1
     borg prune --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" \
         --keep-within 2d "$repo" >>"$LOG_FILE" 2>&1 || warn "borg prune не удался (некритично)"
     borg compact "$repo" >>"$LOG_FILE" 2>&1 || true
@@ -266,13 +288,7 @@ tar_store() {
     local name="$1" out="$TAR_DIR/$name.tar.gz"
     mkdir -p "$TAR_DIR"
     info "Пишу архив $out ..."
-    local args=(-C "$STAGING" .)
-    local d; for d in "${RAW_DIRS[@]}"; do args+=(-C "$(dirname "$d")" "$(basename "$d")"); done
-    tar -czf "$out" \
-        --exclude="sharelatex_data/data/compiles" --exclude="sharelatex_data/data/output" \
-        --exclude="sharelatex_data/data/cache" --exclude="sharelatex_data/data/clsi-cache" \
-        --exclude="sharelatex_data/tmp" \
-        "${args[@]}" 2>>"$LOG_FILE" || return 1
+    tar -czf "$out" -C "$STAGING" . 2>>"$LOG_FILE" || return 1
     tar -tzf "$out" >/dev/null 2>&1 || return 1
     find "$TAR_DIR" -name '*.tar.gz' -mtime +"$KEEP_DAYS_TAR" -delete
     if [ -n "$BACKUP_DIR_2" ] && [ -d "$BACKUP_DIR_2" ]; then
@@ -397,7 +413,7 @@ cmd_backup() {
     check_disk_space
     rm -rf "$STAGING"; mkdir -p "$STAGING"
     local name="overleaf-$STAMP-$MODE"
-    RAW_DIRS=("$DATA_DIR/sharelatex_data")
+    local data_dirs="sharelatex_data"
 
     if [ "$MODE" = "stop" ]; then
         info "Режим с остановкой: останавливаю приложение (буферы сбросятся автоматически)..."
@@ -415,9 +431,10 @@ cmd_backup() {
         info "Останавливаю mongo и redis для копии сырых файлов..."
         (cd "$INSTALL_DIR" && $COMPOSE stop "$C_MONGO" "$C_REDIS") >>"$LOG_FILE" 2>&1 || warn "Не удалось остановить mongo/redis, сырые каталоги не копирую"
         if ! container_running "$C_MONGO" && ! container_running "$C_REDIS"; then
-            RAW_DIRS+=("$DATA_DIR/mongo_data" "$DATA_DIR/redis_data")
+            data_dirs="sharelatex_data mongo_data redis_data"
         fi
     fi
+    tar_data $data_dirs
 
     local ok=1
     if [ "$USE_BORG" = 1 ]; then
@@ -494,17 +511,14 @@ extract_archive_to() {
     mkdir -p "$dest"
     if [ "$USE_BORG" = 1 ] && borg list "$BORG_REPO::$name" >/dev/null 2>&1; then
         (cd "$dest" && borg extract "$BORG_REPO::$name") >>"$LOG_FILE" 2>&1 || return 1
-        # borg хранит абсолютные пути без ведущего "/", приводим к удобному виду
-        EX_STAGING="$dest${STAGING}"
-        EX_DATA="$dest${DATA_DIR}"
     elif [ -f "$TAR_DIR/$name.tar.gz" ]; then
         tar -xzf "$TAR_DIR/$name.tar.gz" -C "$dest" >>"$LOG_FILE" 2>&1 || return 1
-        EX_STAGING="$dest"
-        EX_DATA="$dest"
     else
         return 1
     fi
+    EX_STAGING="$dest"
     [ -f "$EX_STAGING/mongo/sharelatex.archive.gz" ] || return 1
+    [ -f "$EX_STAGING/data.tar" ] || return 1
 }
 
 cmd_verify() {
@@ -537,7 +551,7 @@ cmd_verify() {
         docker rm -f "$cname" >/dev/null 2>&1
         rm -rf "$tmp"; die "Пробное восстановление базы НЕ удалось"
     fi
-    local nfiles; nfiles=$(find "$EX_DATA/sharelatex_data" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local nfiles; nfiles=$(tar -tf "$EX_STAGING/data.tar" 2>/dev/null | grep -c '^sharelatex_data/.*[^/]$')
     rm -rf "$tmp"
     info "${GREEN}Копия $name исправна.${NC} База: $counts. Файлов в sharelatex_data: $nfiles"
     echo "VERIFY_OK=$(date '+%F %T') $name" >> "$STATUS_FILE"
@@ -560,29 +574,33 @@ cmd_restore() {
     info "Останавливаю сервисы..."
     (cd "$INSTALL_DIR" && $COMPOSE down) >>"$LOG_FILE" 2>&1 || die "Не удалось остановить сервисы"
 
-    # 1. Файлы
-    info "Восстанавливаю файлы (sharelatex_data)..."
-    [ -d "$DATA_DIR/sharelatex_data" ] && mv "$DATA_DIR/sharelatex_data" "$DATA_DIR/sharelatex_data.before-restore-$STAMP"
-    mv "$EX_DATA/sharelatex_data" "$DATA_DIR/sharelatex_data" || die "Не удалось положить sharelatex_data на место"
-    mkdir -p "$DATA_DIR/sharelatex_data/data/compiles" "$DATA_DIR/sharelatex_data/data/output"
+    # Какие каталоги есть в копии (в режиме --stop там ещё mongo_data и redis_data)
+    local in_tar; in_tar=$(tar -tf "$EX_STAGING/data.tar" | cut -d/ -f1 | sort -u | tr '\n' ' ')
+    local has_raw_mongo=0; echo "$in_tar" | grep -q "mongo_data" && has_raw_mongo=1
 
-    # 2. Redis
-    if [ -f "$EX_STAGING/redis/dump.rdb" ]; then
+    # 1. Текущие данные — в сторону (переименование не требует прав на сами файлы)
+    local d
+    for d in sharelatex_data redis_data mongo_data; do
+        [ -d "$DATA_DIR/$d" ] && mv "$DATA_DIR/$d" "$DATA_DIR/$d.before-restore-$STAMP"
+    done
+
+    # 2. Файлы из копии — через контейнер от root, чтобы сохранить владельцев
+    info "Восстанавливаю файлы данных ($in_tar)..."
+    as_root 'cd /data && tar -xf -' < "$EX_STAGING/data.tar" || die "Не удалось распаковать файлы данных. Старые данные: $DATA_DIR/*.before-restore-$STAMP"
+    as_root 'mkdir -p /data/sharelatex_data/data/compiles /data/sharelatex_data/data/output /data/redis_data /data/mongo_data && chown 999:999 /data/redis_data /data/mongo_data'
+
+    # 3. Redis (если в копии не было сырого каталога)
+    if [ -f "$EX_STAGING/redis/dump.rdb" ] && ! echo "$in_tar" | grep -q "redis_data"; then
         info "Восстанавливаю Redis..."
-        [ -d "$DATA_DIR/redis_data" ] && mv "$DATA_DIR/redis_data" "$DATA_DIR/redis_data.before-restore-$STAMP"
-        mkdir -p "$DATA_DIR/redis_data" && cp "$EX_STAGING/redis/dump.rdb" "$DATA_DIR/redis_data/"
+        as_root 'cat > /data/redis_data/dump.rdb && chown 999:999 /data/redis_data/dump.rdb' < "$EX_STAGING/redis/dump.rdb"
     fi
 
-    # 3. MongoDB
-    if [ -d "$EX_DATA/mongo_data" ]; then
-        info "Восстанавливаю MongoDB из сырой копии каталога..."
-        [ -d "$DATA_DIR/mongo_data" ] && mv "$DATA_DIR/mongo_data" "$DATA_DIR/mongo_data.before-restore-$STAMP"
-        mv "$EX_DATA/mongo_data" "$DATA_DIR/mongo_data"
+    # 4. MongoDB
+    if [ "$has_raw_mongo" = 1 ]; then
+        info "MongoDB восстановлена из сырой копии каталога"
         (cd "$INSTALL_DIR" && $COMPOSE up -d "$C_MONGO" "$C_REDIS") >>"$LOG_FILE" 2>&1
     else
         info "Восстанавливаю MongoDB из дампа..."
-        [ -d "$DATA_DIR/mongo_data" ] && mv "$DATA_DIR/mongo_data" "$DATA_DIR/mongo_data.before-restore-$STAMP"
-        mkdir -p "$DATA_DIR/mongo_data"
         (cd "$INSTALL_DIR" && $COMPOSE up -d "$C_MONGO" "$C_REDIS") >>"$LOG_FILE" 2>&1 || die "Не удалось запустить mongo"
         local i ready=0; for i in $(seq 1 60); do
             docker exec "$C_MONGO" mongosh --quiet --eval 'rs.status().ok' 2>/dev/null | grep -q 1 && { ready=1; break; }; sleep 2
@@ -593,14 +611,22 @@ cmd_restore() {
         || die "mongorestore не удался. Старые данные: $DATA_DIR/*.before-restore-$STAMP"
     fi
 
-    # 4. Права: контейнер работает от www-data (uid 33) — как было у исходных каталогов
-    chown -R --reference="$DATA_DIR/sharelatex_data.before-restore-$STAMP" "$DATA_DIR/sharelatex_data" 2>/dev/null || true
-
     info "Запускаю сервисы..."
     (cd "$INSTALL_DIR" && $COMPOSE up -d) >>"$LOG_FILE" 2>&1 || die "Не удалось запустить сервисы"
     rm -rf "$tmp"
     write_status "OK" "restored $name"
-    info "${GREEN}Восстановление завершено.${NC} Проверьте сайт. Старые данные лежат в $DATA_DIR/*.before-restore-$STAMP — удалите их, когда убедитесь, что всё в порядке."
+    info "${GREEN}Восстановление завершено.${NC} Проверьте сайт. Старые данные лежат в $DATA_DIR/*.before-restore-$STAMP — когда убедитесь, что всё в порядке, удалите их: $SCRIPT_PATH cleanup"
+}
+
+cmd_cleanup() {
+    # Удалить каталоги *.before-restore-* (они принадлежат root — удаляем через контейнер)
+    local list; list=$(ls -d "$DATA_DIR"/*.before-restore-* 2>/dev/null)
+    [ -n "$list" ] || { echo "Нечего удалять: каталогов *.before-restore-* нет."; return 0; }
+    echo "Будут удалены:"; echo "$list" | sed 's/^/  /'
+    if [ "${1:-}" != "--yes" ]; then
+        read -r -p "Удалить? Введите 'yes': " ans; [ "$ans" = "yes" ] || { echo "Отменено."; exit 0; }
+    fi
+    as_root 'rm -rf /data/*.before-restore-*' && info "Удалено."
 }
 
 cmd_install() {
@@ -630,7 +656,7 @@ cmd_install() {
     echo "  $SCRIPT_PATH restore ИМЯ     — восстановить"
 }
 
-cmd_help() { sed -n '3,29p' "$SCRIPT_PATH" | sed 's/^# \{0,1\}//'; }
+cmd_help() { sed -n '3,30p' "$SCRIPT_PATH" | sed 's/^# \{0,1\}//'; }
 
 # --------------------------------- main --------------------------------------
 
@@ -646,6 +672,7 @@ case "$CMD" in
     status)  cmd_status ;;
     verify)  cmd_verify "$@" ;;
     restore) cmd_restore "$@" ;;
+    cleanup) cmd_cleanup "$@" ;;
     cloud-setup)  cmd_cloud_setup ;;
     cloud-status) cmd_cloud_status ;;
     cloud-pull)   cmd_cloud_pull ;;

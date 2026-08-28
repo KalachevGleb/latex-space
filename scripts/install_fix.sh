@@ -156,7 +156,8 @@ TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 info "Распаковываю пакет..."
-tar -xzf "$ARCHIVE_FILE" -C "$TEMP_DIR" --strip-components=1
+tar -xzf "$ARCHIVE_FILE" -C "$TEMP_DIR" --strip-components=1 --warning=no-unknown-keyword 2>/dev/null \
+  || tar -xzf "$ARCHIVE_FILE" -C "$TEMP_DIR" --strip-components=1
 [ -f "$TEMP_DIR/overleaf-custom.tar" ] || error "В пакете нет overleaf-custom.tar — это не пакет обновления."
 if [ -f "$TEMP_DIR/VERSION" ]; then
     NEW_REV=$(grep '^REVISION=' "$TEMP_DIR/VERSION" | cut -d= -f2)
