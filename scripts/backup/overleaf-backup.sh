@@ -133,6 +133,10 @@ init() {
     else echo "docker compose не найден" >&2; exit 1; fi
 }
 
+epoch_of() {  # "YYYY-MM-DD HH:MM:SS" -> секунды; работает и с GNU, и с BSD date
+    date -d "$1" +%s 2>/dev/null || date -j -f '%Y-%m-%d %H:%M:%S' "$1" +%s 2>/dev/null || echo 0
+}
+
 write_status() {
     [ -n "${STATUS_FILE:-}" ] || return 0
     printf 'RESULT=%s\nDATE=%s\nMESSAGE=%s\n' "$1" "$(date '+%F %T')" "${2:-}" > "$STATUS_FILE"
@@ -461,14 +465,14 @@ cmd_status() {
     result=$(grep '^RESULT=' "$STATUS_FILE" | cut -d= -f2)
     date=$(grep '^DATE=' "$STATUS_FILE" | cut -d= -f2-)
     msg=$(grep '^MESSAGE=' "$STATUS_FILE" | cut -d= -f2-)
-    age=$(( ( $(date +%s) - $(date -d "$date" +%s) ) / 3600 ))
+    age=$(( ( $(date +%s) - $(epoch_of "$date") ) / 3600 ))
     if [ "$result" = "OK" ]; then echo -e "Последний бэкап: ${GREEN}OK${NC}  $date (${age} ч. назад)  $msg"
     else echo -e "Последний бэкап: ${RED}ОШИБКА${NC}  $date (${age} ч. назад)  $msg"; echo "Подробности: $LOG_FILE"; return 1; fi
     if [ "$age" -gt 48 ]; then echo -e "${YELLOW}Внимание: последний бэкап старше двух суток. Проверьте cron (crontab -l).${NC}"; return 1; fi
     if [ -n "$CLOUD_REMOTE" ]; then
         if [ -f "$CLOUD_MARK" ]; then
             local cdate cage; cdate=$(grep '^DATE=' "$CLOUD_MARK" | cut -d= -f2-)
-            cage=$(( ( $(date +%s) - $(date -d "$cdate" +%s) ) / 3600 ))
+            cage=$(( ( $(date +%s) - $(epoch_of "$cdate") ) / 3600 ))
             if [ "$cage" -gt 48 ]; then echo -e "Копия в облаке: ${YELLOW}устарела${NC} ($cdate, ${cage} ч. назад)"
             else echo -e "Копия в облаке: ${GREEN}OK${NC}  $cdate ($CLOUD_REMOTE)"; fi
         else echo -e "Копия в облаке: ${RED}ни разу не отправлялась${NC} ($CLOUD_REMOTE)"; fi
