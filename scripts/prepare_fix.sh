@@ -66,13 +66,28 @@ else
     if ! git diff --quiet "$(git log -1 --format=%H -- server-ce/Dockerfile-base)" HEAD -- server-ce/Dockerfile-base 2>/dev/null; then
         echo "WARNING: server-ce/Dockerfile-base изменён после последнего коммита — базовый образ может быть устаревшим"
     fi
-    # Rebuild only web service image using existing base
-    cd "$PROJECT_ROOT/server-ce"
-    export MONOREPO_REVISION="$REVISION"
-    export BRANCH_NAME="$BRANCH"
-    export OVERLEAF_BASE_TAG="$EXISTING_BASE"
-    export OVERLEAF_TAG="overleaf-custom:$REVISION"
-    make build-community
+    # Если код приложения не менялся с одной из уже собранных ревизий — Docker не
+    # запускаем, а переиспользуем тот образ. (Docker сам этого не умеет: любое
+    # изменение в services/, даже version.json, сбрасывает кэш слоя с webpack.)
+    app_tree() { git rev-parse "$1:services" "$1:libraries" "$1:server-ce" "$1:patches" "$1:package.json" "$1:package-lock.json" 2>/dev/null | shasum | cut -c1-16; }
+    CUR_TREE=$(app_tree HEAD)
+    REUSE=""
+    for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^overleaf-custom:' | grep -v ':latest$\|:previous$'); do
+        r=$(docker inspect --format '{{index .Config.Labels "com.overleaf.ce.revision"}}' "$img" 2>/dev/null)
+        [ -n "$r" ] && git cat-file -e "$r^{commit}" 2>/dev/null && [ "$(app_tree "$r")" = "$CUR_TREE" ] && { REUSE="$img"; REUSE_REV="$r"; break; }
+    done
+    if [ -n "$REUSE" ]; then
+        echo "Код приложения не менялся с ревизии ${REUSE_REV:0:10} — переиспользую образ $REUSE (сборка пропущена)"
+        docker tag "$REUSE" "overleaf-custom:$REVISION"
+        REVISION="$REUSE_REV"   # в VERSION пишем ревизию, из которой реально собран образ
+    else
+        cd "$PROJECT_ROOT/server-ce"
+        export MONOREPO_REVISION="$REVISION"
+        export BRANCH_NAME="$BRANCH"
+        export OVERLEAF_BASE_TAG="$EXISTING_BASE"
+        export OVERLEAF_TAG="overleaf-custom:$REVISION"
+        make build-community
+    fi
 fi
 
 # Save Docker image
@@ -87,15 +102,8 @@ BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 FIX_TYPE=web-service-only
 EOF
 
-# Include server-side scripts so the package is self-contained
-mkdir -p "$BUILD_DIR/fix/scripts"
-cp "$SCRIPT_DIR/backup/overleaf-backup.sh" "$BUILD_DIR/fix/scripts/"
-cp "$SCRIPT_DIR/backup/BACKUP_RU.md" "$BUILD_DIR/fix/scripts/"
-cp "$SCRIPT_DIR/install_fix.sh" "$BUILD_DIR/fix/scripts/"
-cp "$SCRIPT_DIR/install_fix.sh" "$BUILD_DIR/"          # рядом с пакетом — его копируют на сервер вместе с архивом
-chmod +x "$BUILD_DIR/fix/scripts/"*.sh "$BUILD_DIR/install_fix.sh"
-
-# Package everything
+# Package everything (only the image: server scripts go in a separate small
+# package, see prepare_scripts.sh — it is built at the end of this script)
 echo "Creating fix package..."
 cd "$BUILD_DIR"
 # Exclude macOS metadata files
@@ -108,7 +116,8 @@ mv "$PACKAGE_NAME" "$PROJECT_ROOT/"
 if [ "${CLEANUP_AFTER:-false}" = "true" ]; then
     docker rmi "overleaf-custom:$REVISION" 2>/dev/null || true
 fi
-cp "$SCRIPT_DIR/install_fix.sh" "$PROJECT_ROOT/install_fix.sh"
+# Server scripts — separate small package (+ install_fix.sh next to it)
+"$SCRIPT_DIR/prepare_scripts.sh"
 
 echo "=========================================="
 echo "Fix package complete!"
@@ -122,6 +131,6 @@ echo "  Branch: $BRANCH"
 echo "  Type: Web service only (quick fix)"
 echo ""
 echo "To deploy (see ОБНОВЛЕНИЕ.md):"
-echo "  scp $PACKAGE_NAME install_fix.sh USER@SERVER:~/"
-echo "  ssh USER@SERVER 'bash ~/install_fix.sh ~/$PACKAGE_NAME'"
+echo "  rsync -avz --progress $PACKAGE_NAME overleaf-scripts.tar.gz install_fix.sh USER@SERVER:~/"
+echo "  ssh USER@SERVER 'bash ~/install_fix.sh ~/overleaf-scripts.tar.gz ~/$PACKAGE_NAME'"
 echo ""
