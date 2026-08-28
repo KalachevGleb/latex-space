@@ -100,7 +100,8 @@ echo "Creating fix package..."
 cd "$BUILD_DIR"
 # Exclude macOS metadata files
 export COPYFILE_DISABLE=1
-tar --exclude='._*' --exclude='.DS_Store' -czf "$PACKAGE_NAME" fix/
+tar --no-xattrs --exclude='._*' --exclude='.DS_Store' -czf "$PACKAGE_NAME" fix/ 2>/dev/null \
+  || tar --exclude='._*' --exclude='.DS_Store' -czf "$PACKAGE_NAME" fix/
 mv "$PACKAGE_NAME" "$PROJECT_ROOT/"
 
 # Keep the image locally (useful for smoke tests); remove with CLEANUP_AFTER=true
