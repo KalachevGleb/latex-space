@@ -33,6 +33,9 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     sleep 5
 fi
 
+# Все рантайм-импорты должны быть в dependencies, иначе сервис упадёт в production-образе
+"$SCRIPT_DIR/check_runtime_deps.py" || { echo "ERROR: исправьте зависимости и запустите сборку снова"; exit 1; }
+
 # Refresh version.json shown in the UI
 "$SCRIPT_DIR/update-version.sh"
 
