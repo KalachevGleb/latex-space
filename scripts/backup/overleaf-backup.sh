@@ -194,7 +194,14 @@ flush_pending_edits() {
 }
 
 dump_mongo() {
-    container_running "$C_MONGO" || die "Контейнер $C_MONGO не запущен — без него бэкап базы невозможен"
+    if ! container_running "$C_MONGO"; then
+        info "Контейнер $C_MONGO не запущен — запускаю mongo и redis для снятия копии..."
+        (cd "$INSTALL_DIR" && $COMPOSE up -d "$C_MONGO" "$C_REDIS") >>"$LOG_FILE" 2>&1
+        local i; for i in $(seq 1 45); do
+            docker exec "$C_MONGO" mongosh --quiet --eval 'db.runCommand({ping:1}).ok' 2>/dev/null | grep -q 1 && break; sleep 2
+        done
+        container_running "$C_MONGO" || die "Не удалось запустить $C_MONGO — без него бэкап базы невозможен (см. $LOG_FILE)"
+    fi
     info "Выгружаю MongoDB..."
     local out="$STAGING/mongo/sharelatex.archive.gz"
     mkdir -p "$STAGING/mongo"
