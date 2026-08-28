@@ -24,6 +24,23 @@ REVISION=$(git rev-parse HEAD)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "Building from branch: $BRANCH, revision: $REVISION"
 
+# Warn about uncommitted changes: the image is built from the working tree,
+# but VERSION will claim it is $REVISION.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    echo "WARNING: есть незакоммиченные изменения — они попадут в образ, но VERSION будет указывать на $REVISION:"
+    git status --short --untracked-files=no | head -20
+    echo "Лучше сначала закоммитить (git add -A && git commit). Продолжаю через 5 секунд..."
+    sleep 5
+fi
+if ! git diff --quiet HEAD -- package.json package-lock.json 'libraries/*/package.json' 'services/*/package.json' 2>/dev/null; then
+    echo "ERROR: изменены package.json/package-lock.json — быстрая сборка использует старый базовый образ и не подхватит новые зависимости."
+    echo "       Либо закоммитьте/откатите эти изменения, либо используйте полную сборку: scripts/prepare_install.sh"
+    exit 1
+fi
+
+# Refresh version.json shown in the UI
+"$SCRIPT_DIR/update-version.sh"
+
 # Find existing base image (use any available, prefer latest)
 echo "Looking for existing base image..."
 EXISTING_BASE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "overleaf-custom-base:" | grep -v "none" | head -n 1)
@@ -45,7 +62,17 @@ if [ -z "$EXISTING_BASE" ]; then
     make build-community
 else
     echo "Using existing base image: $EXISTING_BASE"
-    echo "NOTE: If libraries/ or package.json changed, run full prepare_install.sh instead"
+    BASE_REV="${EXISTING_BASE#*:}"
+    if git cat-file -e "$BASE_REV^{commit}" 2>/dev/null; then
+        if ! git diff --quiet "$BASE_REV" HEAD -- package.json package-lock.json 'libraries/*/package.json' 'services/*/package.json'; then
+            echo "ERROR: зависимости изменились с момента сборки базового образа ($BASE_REV)."
+            echo "       Нужна полная сборка: scripts/prepare_install.sh"
+            exit 1
+        fi
+        echo "Dependencies unchanged since base image — OK"
+    else
+        echo "NOTE: cannot verify base image revision; if libraries/ or package.json changed, run full prepare_install.sh instead"
+    fi
     # Rebuild only web service image using existing base
     cd "$PROJECT_ROOT/server-ce"
     export MONOREPO_REVISION="$REVISION"
@@ -67,6 +94,14 @@ BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 FIX_TYPE=web-service-only
 EOF
 
+# Include server-side scripts so the package is self-contained
+mkdir -p "$BUILD_DIR/fix/scripts"
+cp "$SCRIPT_DIR/backup/overleaf-backup.sh" "$BUILD_DIR/fix/scripts/"
+cp "$SCRIPT_DIR/backup/BACKUP_RU.md" "$BUILD_DIR/fix/scripts/"
+cp "$SCRIPT_DIR/install_fix.sh" "$BUILD_DIR/fix/scripts/"
+cp "$SCRIPT_DIR/install_fix.sh" "$BUILD_DIR/"          # рядом с пакетом — его копируют на сервер вместе с архивом
+chmod +x "$BUILD_DIR/fix/scripts/"*.sh "$BUILD_DIR/install_fix.sh"
+
 # Package everything
 echo "Creating fix package..."
 cd "$BUILD_DIR"
@@ -75,9 +110,11 @@ export COPYFILE_DISABLE=1
 tar --exclude='._*' --exclude='.DS_Store' -czf "$PACKAGE_NAME" fix/
 mv "$PACKAGE_NAME" "$PROJECT_ROOT/"
 
-# Cleanup Docker image (keep base for future fixes)
-echo "Cleaning up temporary Docker image..."
-docker rmi "overleaf-custom:$REVISION" 2>/dev/null || true
+# Keep the image locally (useful for smoke tests); remove with CLEANUP_AFTER=true
+if [ "${CLEANUP_AFTER:-false}" = "true" ]; then
+    docker rmi "overleaf-custom:$REVISION" 2>/dev/null || true
+fi
+cp "$SCRIPT_DIR/install_fix.sh" "$PROJECT_ROOT/install_fix.sh"
 
 echo "=========================================="
 echo "Fix package complete!"
@@ -90,7 +127,7 @@ echo "  Revision: $REVISION"
 echo "  Branch: $BRANCH"
 echo "  Type: Web service only (quick fix)"
 echo ""
-echo "To deploy fix:"
-echo "  1. Copy $PACKAGE_NAME to target server"
-echo "  2. Run: ./install_fix.sh $PACKAGE_NAME"
+echo "To deploy (see ОБНОВЛЕНИЕ.md):"
+echo "  scp $PACKAGE_NAME install_fix.sh USER@SERVER:~/"
+echo "  ssh USER@SERVER 'bash ~/install_fix.sh ~/$PACKAGE_NAME'"
 echo ""

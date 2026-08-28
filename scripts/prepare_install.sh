@@ -230,6 +230,12 @@ try {
 }
 EOF
 
+# Backup/restore tool (self-contained, see scripts/backup/BACKUP_RU.md)
+mkdir -p "$BUILD_DIR/deployment/scripts"
+cp "$PROJECT_ROOT/scripts/backup/overleaf-backup.sh" "$BUILD_DIR/deployment/scripts/"
+cp "$PROJECT_ROOT/scripts/backup/BACKUP_RU.md" "$BUILD_DIR/deployment/scripts/"
+chmod +x "$BUILD_DIR/deployment/scripts/overleaf-backup.sh"
+
 # Create version file
 cat > "$BUILD_DIR/deployment/VERSION" << EOF
 REVISION=$REVISION
