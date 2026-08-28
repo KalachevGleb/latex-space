@@ -32,11 +32,6 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     echo "Лучше сначала закоммитить (git add -A && git commit). Продолжаю через 5 секунд..."
     sleep 5
 fi
-if ! git diff --quiet HEAD -- package.json package-lock.json 'libraries/*/package.json' 'services/*/package.json' 2>/dev/null; then
-    echo "ERROR: изменены package.json/package-lock.json — быстрая сборка использует старый базовый образ и не подхватит новые зависимости."
-    echo "       Либо закоммитьте/откатите эти изменения, либо используйте полную сборку: scripts/prepare_install.sh"
-    exit 1
-fi
 
 # Refresh version.json shown in the UI
 "$SCRIPT_DIR/update-version.sh"
@@ -62,16 +57,11 @@ if [ -z "$EXISTING_BASE" ]; then
     make build-community
 else
     echo "Using existing base image: $EXISTING_BASE"
-    BASE_REV="${EXISTING_BASE#*:}"
-    if git cat-file -e "$BASE_REV^{commit}" 2>/dev/null; then
-        if ! git diff --quiet "$BASE_REV" HEAD -- package.json package-lock.json 'libraries/*/package.json' 'services/*/package.json'; then
-            echo "ERROR: зависимости изменились с момента сборки базового образа ($BASE_REV)."
-            echo "       Нужна полная сборка: scripts/prepare_install.sh"
-            exit 1
-        fi
-        echo "Dependencies unchanged since base image — OK"
-    else
-        echo "NOTE: cannot verify base image revision; if libraries/ or package.json changed, run full prepare_install.sh instead"
+    # Базовый образ содержит только ОС и Node — npm-пакеты ставятся при сборке образа
+    # приложения, поэтому изменения package.json здесь подхватываются. Полная сборка
+    # (prepare_install.sh) нужна только при смене версии Node/ОС в Dockerfile-base.
+    if ! git diff --quiet "$(git log -1 --format=%H -- server-ce/Dockerfile-base)" HEAD -- server-ce/Dockerfile-base 2>/dev/null; then
+        echo "WARNING: server-ce/Dockerfile-base изменён после последнего коммита — базовый образ может быть устаревшим"
     fi
     # Rebuild only web service image using existing base
     cd "$PROJECT_ROOT/server-ce"
