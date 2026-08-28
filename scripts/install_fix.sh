@@ -117,7 +117,12 @@ start_and_check() {
     else
         echo
         echo -e "${RED}Сервис не ответил за 3 минуты.${NC} Логи:  cd $INSTALL_DIR && $COMPOSE logs --tail=100 sharelatex"
-        echo "Откат на предыдущую версию:  $SCRIPT_DIR/$SCRIPT_NAME --rollback"
+        if [ "$DO_ROLLBACK" = true ]; then
+            echo "Вернуться на версию, которая была до отката:"
+            echo "  docker tag overleaf-custom:rolled-back overleaf-custom:latest && cd $INSTALL_DIR && $COMPOSE up -d"
+        else
+            echo "Откат на предыдущую версию:  $SCRIPT_DIR/$SCRIPT_NAME --rollback"
+        fi
         exit 1
     fi
 }
