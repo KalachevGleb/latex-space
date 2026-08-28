@@ -729,10 +729,14 @@
     "@types/adm-zip": "^0.5.5",
     "@types/node": "^18.19.0",
     "@types/vscode": "1.85.0",
+    "@types/ws": "^8.18.1",
     "@vscode/vsce": "^2.32.0",
     "adm-zip": "^0.5.14",
     "esbuild": "^0.21.5",
     "pdfjs-dist": "3.11.174",
     "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
   }
 }
