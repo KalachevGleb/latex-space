@@ -23,7 +23,7 @@ set -e
 
 SCRIPT_NAME=$(basename "$0")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ARCHIVE_FILE=""
+ARCHIVES=()
 INSTALL_DIR=""
 DO_BACKUP=true
 DO_ROLLBACK=false
@@ -46,9 +46,8 @@ while [[ $# -gt 0 ]]; do
         --help|-h)     usage ;;
         -*)            error "Неизвестная опция: $1" ;;
         *)
-            if [ -z "$ARCHIVE_FILE" ]; then ARCHIVE_FILE="$1"
-            elif [ -f "$1" ] && [[ "$1" == *.json ]]; then :   # старый формат вызова: второй аргумент — config.json, игнорируем
-            else error "Лишний аргумент: $1"; fi
+            if [[ "$1" == *.json ]]; then :   # старый формат вызова: config.json — игнорируем
+            else ARCHIVES+=("$1"); fi
             shift ;;
     esac
 done
@@ -141,13 +140,13 @@ if [ "$DO_ROLLBACK" = true ]; then
 fi
 
 # ----------------------------------------------------------------------------- update
-[ -n "$ARCHIVE_FILE" ] || error "Укажите пакет обновления: $SCRIPT_NAME overleaf-fix.tar.gz"
-[ -f "$ARCHIVE_FILE" ] || error "Файл не найден: $ARCHIVE_FILE"
+[ "${#ARCHIVES[@]}" -gt 0 ] || error "Укажите пакет(ы): $SCRIPT_NAME overleaf-fix.tar.gz  и/или  overleaf-scripts.tar.gz"
+for a in "${ARCHIVES[@]}"; do [ -f "$a" ] || error "Файл не найден: $a"; done
 
 echo "=========================================="
 echo "Обновление LaTeXSpace"
 echo "=========================================="
-echo "Пакет:     $ARCHIVE_FILE"
+echo "Пакеты:    ${ARCHIVES[*]}"
 echo "Установка: $INSTALL_DIR"
 echo "Сейчас:    $(image_revision overleaf-custom:latest | cut -c1-10)"
 echo "=========================================="
@@ -155,26 +154,41 @@ echo "=========================================="
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-info "Распаковываю пакет..."
-tar -xzf "$ARCHIVE_FILE" -C "$TEMP_DIR" --strip-components=1 --warning=no-unknown-keyword 2>/dev/null \
-  || tar -xzf "$ARCHIVE_FILE" -C "$TEMP_DIR" --strip-components=1
-[ -f "$TEMP_DIR/overleaf-custom.tar" ] || error "В пакете нет overleaf-custom.tar — это не пакет обновления."
-if [ -f "$TEMP_DIR/VERSION" ]; then
-    NEW_REV=$(grep '^REVISION=' "$TEMP_DIR/VERSION" | cut -d= -f2)
-    echo "Новая версия: ${NEW_REV:0:10}"
-    if [ -n "$NEW_REV" ] && [ "$NEW_REV" = "$(image_revision overleaf-custom:latest)" ]; then
-        warn "Эта версия уже установлена. Продолжаю (образ будет перезагружен)."
+# Два вида пакетов: overleaf-scripts.tar.gz (служебные скрипты, маленький) и
+# overleaf-fix.tar.gz (образ приложения, большой). Можно передать любой или оба.
+IMAGE_DIR=""
+for a in "${ARCHIVES[@]}"; do
+    d="$TEMP_DIR/$(basename "$a" .tar.gz)"; mkdir -p "$d"
+    info "Распаковываю $(basename "$a")..."
+    tar -xzf "$a" -C "$d" --strip-components=1 --warning=no-unknown-keyword 2>/dev/null \
+      || tar -xzf "$a" -C "$d" --strip-components=1
+    if [ -f "$d/overleaf-backup.sh" ]; then
+        mkdir -p "$INSTALL_DIR/scripts"
+        cp "$d"/*.sh "$d"/*.md "$INSTALL_DIR/scripts/" 2>/dev/null || true
+        chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
+        info "Служебные скрипты обновлены в $INSTALL_DIR/scripts/ ($(grep '^REVISION=' "$d/VERSION" 2>/dev/null | cut -c10-19))"
+        # сам установщик тоже мог обновиться — подменяем копию рядом с пакетами
+        [ -f "$d/install_fix.sh" ] && [ "$d/install_fix.sh" != "$SCRIPT_DIR/$SCRIPT_NAME" ] && cp "$d/install_fix.sh" "$SCRIPT_DIR/$SCRIPT_NAME" 2>/dev/null || true
+    elif [ -f "$d/overleaf-custom.tar" ]; then
+        IMAGE_DIR="$d"
+    else
+        error "$(basename "$a"): не похоже ни на пакет образа, ни на пакет скриптов."
     fi
+done
+mkdir -p "$INSTALL_DIR/scripts"
+cp "$SCRIPT_DIR/$SCRIPT_NAME" "$INSTALL_DIR/scripts/$SCRIPT_NAME" 2>/dev/null || true
+
+if [ -z "$IMAGE_DIR" ]; then
+    echo
+    echo -e "${GREEN}Готово: обновлены только служебные скрипты, сервис не трогали.${NC}"
+    exit 0
 fi
 
-# Обновляем служебные скрипты в каталоге установки (бэкап и т.п.)
-if [ -d "$TEMP_DIR/scripts" ]; then
-    mkdir -p "$INSTALL_DIR/scripts"
-    cp "$TEMP_DIR"/scripts/* "$INSTALL_DIR/scripts/"
-    chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
-    info "Служебные скрипты обновлены в $INSTALL_DIR/scripts/"
+[ -f "$IMAGE_DIR/VERSION" ] && NEW_REV=$(grep '^REVISION=' "$IMAGE_DIR/VERSION" | cut -d= -f2) || NEW_REV=""
+[ -n "$NEW_REV" ] && echo "Новая версия приложения: ${NEW_REV:0:10}"
+if [ -n "$NEW_REV" ] && [ "$NEW_REV" = "$(image_revision overleaf-custom:latest)" ]; then
+    warn "Эта версия уже установлена. Продолжаю (образ будет перезагружен)."
 fi
-cp "$SCRIPT_DIR/$SCRIPT_NAME" "$INSTALL_DIR/scripts/$SCRIPT_NAME" 2>/dev/null || true
 
 # Резервная копия
 BACKUP_SH="$INSTALL_DIR/scripts/overleaf-backup.sh"
@@ -204,14 +218,14 @@ fi
 
 # Загружаем новый образ
 info "Загружаю новый образ (1–3 минуты)..."
-LOAD_OUT=$(docker load -i "$TEMP_DIR/overleaf-custom.tar")
+LOAD_OUT=$(docker load -i "$IMAGE_DIR/overleaf-custom.tar")
 echo "$LOAD_OUT"
 LOADED=$(echo "$LOAD_OUT" | sed -n 's/^Loaded image: //p' | grep "overleaf-custom:" | grep -v base | head -1)
 [ -n "$LOADED" ] || error "Не удалось определить загруженный образ."
 docker tag "$LOADED" overleaf-custom:latest
 info "Образ $LOADED помечен как overleaf-custom:latest"
 
-[ -f "$TEMP_DIR/VERSION" ] && cp "$TEMP_DIR/VERSION" "$INSTALL_DIR/VERSION"
+[ -f "$IMAGE_DIR/VERSION" ] && cp "$IMAGE_DIR/VERSION" "$INSTALL_DIR/VERSION"
 
 if [ "$RESTART_SERVICES" = true ]; then
     start_and_check
