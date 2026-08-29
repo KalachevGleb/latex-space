@@ -54,6 +54,15 @@ const settings = {
 
   brandPrefix: '',
 
+  // В CE split-тесты не используются, и без этого переопределения у новых проектов
+  // не ставится overleaf.history.rangesSupportEnabled — тогда «восстановить проект
+  // до версии» из истории падает с "project does not have ranges support".
+  // Для уже существующих проектов: scripts/history/migrate_ranges_support.mjs --all
+  // (install_fix.sh делает это автоматически после обновления).
+  splitTestOverrides: {
+    'history-ranges-support': 'enabled',
+  },
+
   allowAnonymousReadAndWriteSharing:
     process.env.OVERLEAF_ALLOW_ANONYMOUS_READ_AND_WRITE_SHARING === 'true',
 
