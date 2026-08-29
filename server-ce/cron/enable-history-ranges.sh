@@ -20,6 +20,9 @@ for i in $(seq 1 60); do
   sleep 5
 done
 
+# У cron нет переменных окружения контейнера (адреса mongo/redis) — берём их из
+# файла, который phusion baseimage создаёт при старте, плюс адреса сервисов.
+source /etc/container_environment.sh
 source /etc/overleaf/env.sh
 cd /overleaf/services/web \
   && /sbin/setuser www-data /usr/bin/node scripts/history/migrate_ranges_support.mjs --all --concurrency 2
