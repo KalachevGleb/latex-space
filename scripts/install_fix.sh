@@ -7,7 +7,6 @@ set -e
 #  Использование:
 #    ./install_fix.sh overleaf-fix.tar.gz              обновить
 #    ./install_fix.sh --rollback                       вернуть предыдущую версию
-#    ./install_fix.sh --fix-history                    включить восстановление версий у всех проектов (без обновления)
 #    ./install_fix.sh overleaf-fix.tar.gz --no-backup  обновить без резервной копии (не рекомендуется)
 #
 #  Что делает при обновлении:
@@ -28,7 +27,6 @@ ARCHIVES=()
 INSTALL_DIR=""
 DO_BACKUP=true
 DO_ROLLBACK=false
-DO_FIX_HISTORY=false
 RESTART_SERVICES=true
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -45,7 +43,6 @@ while [[ $# -gt 0 ]]; do
         --no-backup)   DO_BACKUP=false; shift ;;
         --no-restart)  RESTART_SERVICES=false; shift ;;
         --rollback)    DO_ROLLBACK=true; shift ;;
-        --fix-history) DO_FIX_HISTORY=true; shift ;;
         --help|-h)     usage ;;
         -*)            error "Неизвестная опция: $1" ;;
         *)
@@ -109,7 +106,6 @@ start_and_check() {
     info "Запускаю сервисы..."
     $COMPOSE up -d
     if wait_for_service; then
-        fix_history_ranges
         echo
         echo "=========================================="
         echo -e "${GREEN}Готово. Работает версия: $(image_revision overleaf-custom:latest | cut -c1-10)${NC}"
@@ -129,33 +125,6 @@ start_and_check() {
         exit 1
     fi
 }
-
-# ----------------------------------------------------------------------------- history fix
-# «Восстановить проект до версии» в истории требует у проекта флага
-# overleaf.history.rangesSupportEnabled. У проектов, созданных без него, включаем
-# штатной миграцией Overleaf (идемпотентно: уже включённые пропускаются).
-fix_history_ranges() {
-    local missing
-    missing=$(docker exec mongo mongosh sharelatex --quiet --eval \
-        'db.projects.countDocuments({"overleaf.history.rangesSupportEnabled": {$ne: true}})' 2>/dev/null | tr -d '[:space:]')
-    if [ -z "$missing" ]; then warn "Не удалось проверить проекты (mongo не отвечает) — пропускаю проверку восстановления версий"; return 0; fi
-    if [ "$missing" = "0" ]; then info "Восстановление версий из истории: включено у всех проектов"; return 0; fi
-    info "Включаю восстановление версий из истории у $missing проект(ов)..."
-    if docker exec sharelatex bash -c 'cd /overleaf/services/web && node scripts/history/migrate_ranges_support.mjs --all --concurrency 2' >"$INSTALL_DIR/fix-history.log" 2>&1; then
-        missing=$(docker exec mongo mongosh sharelatex --quiet --eval \
-            'db.projects.countDocuments({"overleaf.history.rangesSupportEnabled": {$ne: true}})' 2>/dev/null | tr -d '[:space:]')
-        if [ "$missing" = "0" ]; then info "Готово: восстановление версий включено у всех проектов"
-        else warn "У $missing проект(ов) включить не удалось — см. $INSTALL_DIR/fix-history.log"; fi
-    else
-        warn "Миграция завершилась с ошибкой — см. $INSTALL_DIR/fix-history.log"
-    fi
-}
-
-if [ "$DO_FIX_HISTORY" = true ]; then
-    docker inspect -f '{{.State.Running}}' sharelatex 2>/dev/null | grep -q true || error "Контейнер sharelatex не запущен. Запустите: cd $INSTALL_DIR && $COMPOSE up -d"
-    fix_history_ranges
-    exit 0
-fi
 
 # ----------------------------------------------------------------------------- rollback
 if [ "$DO_ROLLBACK" = true ]; then
