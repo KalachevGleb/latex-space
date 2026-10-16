@@ -32,6 +32,7 @@ setup.sh
 check-ready.sh
 cookies.txt
 tmp/
+.tmp/
 
 # version info (generated automatically)
 services/web/public/version.json
