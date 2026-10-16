@@ -152,6 +152,69 @@
     }
   }
 
+  /**
+   * Начало каждого глифа — в целый пиксель экрана, как в PDFium. Иначе
+   * базовая линия строки попадает между строками пикселей: верх и низ букв
+   * расплываются на две полупрозрачные строки, перекладины встают между
+   * пикселями, и одна и та же буква в разных строках выглядит по-разному.
+   * pdf.js рисует глиф контуром последовательностью save → translate(x, y)
+   * → beginPath → контур → fill → restore; ловим её на нашем контексте и
+   * выравниваем сдвиг как PDFium: по вертикали округление, по горизонтали
+   * отбрасывание дробной части (так ближе всего к его отрисовке — проверено
+   * попиксельным сравнением). stepX — ширина пикселя экрана в единицах
+   * холста (3 при тройной ширине). Повёрнутый текст не трогаем.
+   */
+  function snapGlyphOrigins(ctx, stepX) {
+    const save = ctx.save
+    const translate = ctx.translate
+    const beginPath = ctx.beginPath
+    let state = 0 // 1 — сразу после save, 2 — после save + translate
+    ctx.save = function () {
+      state = 1
+      return save.call(this)
+    }
+    ctx.translate = function (x, y) {
+      state = state === 1 ? 2 : 0
+      return translate.call(this, x, y)
+    }
+    ctx.beginPath = function () {
+      if (state === 2) {
+        const m = this.getTransform()
+        if (m.b === 0 && m.c === 0) {
+          this.setTransform(
+            m.a,
+            0,
+            0,
+            m.d,
+            Math.floor(m.e / stepX) * stepX,
+            Math.round(m.f)
+          )
+        }
+      }
+      state = 0
+      return beginPath.call(this)
+    }
+    // любой другой вызов между save и translate — уже не глиф
+    for (const name of [
+      'transform',
+      'setTransform',
+      'scale',
+      'rotate',
+      'restore',
+      'fill',
+      'stroke',
+      'clip',
+      'drawImage',
+      'fillRect',
+    ]) {
+      const orig = ctx[name]
+      ctx[name] = function (...args) {
+        state = 0
+        return orig.apply(this, args)
+      }
+    }
+  }
+
   /** Нарисовать страницу в новый холст pxWidth×pxHeight пикселей экрана. */
   async function paintPage(page, viewport, pxWidth, pxHeight) {
     // очень крупный масштаб: тройная ширина слишком тяжела по памяти,
@@ -164,6 +227,7 @@
         alpha: false,
         willReadFrequently: true,
       })
+      snapGlyphOrigins(ctx, 1)
       await page.render({
         canvasContext: ctx,
         viewport,
@@ -181,6 +245,7 @@
       alpha: false,
       willReadFrequently: true,
     })
+    snapGlyphOrigins(wctx, 3)
     await page.render({
       canvasContext: wctx,
       viewport,
@@ -669,14 +734,18 @@
     }, 1800)
   }
 
+  /** масштаб на экране: в режиме «по ширине» — фактический, а не прежний ручной */
+  function shownScale() {
+    return fitWidth && prevScale > 0 ? prevScale : scale || 1
+  }
   document.getElementById('zoom-in').addEventListener('click', () => {
+    scale = Math.min(4, shownScale() * 1.2)
     fitWidth = false
-    scale = Math.min(4, (scale || 1) * 1.2)
     layout(true)
   })
   document.getElementById('zoom-out').addEventListener('click', () => {
+    scale = Math.max(0.3, shownScale() / 1.2)
     fitWidth = false
-    scale = Math.max(0.3, (scale || 1) / 1.2)
     layout(true)
   })
   document.getElementById('fit-width').addEventListener('click', () => {
