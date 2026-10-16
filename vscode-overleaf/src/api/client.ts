@@ -119,6 +119,43 @@ export class LatexSpaceClient {
     this.csrfToken = undefined
   }
 
+  /**
+   * CSRF-токен до входа. Если на сервере выключен публичный доступ
+   * (OVERLEAF_ALLOW_PUBLIC_ACCESS != true), /dev/csrf без сессии закрыт
+   * (401 или редирект на /login) — тогда берём тот же токен из мета-тега
+   * ol-csrfToken страницы входа, она доступна всегда.
+   */
+  private async fetchPreLoginCsrfToken(): Promise<string> {
+    try {
+      return (
+        await this.rawRequest<Buffer>('/dev/csrf', {
+          noAuth: true,
+          expect: 'buffer',
+        })
+      ).toString('utf8')
+    } catch (err) {
+      const closed =
+        err instanceof ApiError &&
+        (err.status === 401 || (err.status >= 300 && err.status < 400))
+      if (!closed) throw err
+    }
+    const res = await this.rawFetch('/login', {
+      noAuth: true,
+      extraHeaders: { Accept: 'text/html' },
+    })
+    this.captureCookies(res)
+    const html = await res.text().catch(() => '')
+    const m = /<meta\s+name="ol-csrfToken"\s+content="([^"]+)"/.exec(html)
+    if (!res.ok || !m) {
+      throw new ApiError(
+        `Не удалось получить CSRF-токен со страницы входа (HTTP ${res.status})`,
+        res.status,
+        html.slice(0, 500)
+      )
+    }
+    return m[1]
+  }
+
   /** Вход: CSRF → /login → новый CSRF. */
   private async login(): Promise<void> {
     const { email, password } = this.opts
@@ -128,12 +165,7 @@ export class LatexSpaceClient {
       )
     }
     this.resetSession()
-    const preToken = (
-      await this.rawRequest<Buffer>('/dev/csrf', {
-        noAuth: true,
-        expect: 'buffer',
-      })
-    ).toString('utf8')
+    const preToken = await this.fetchPreLoginCsrfToken()
     const res = await this.rawFetch('/login', {
       method: 'POST',
       jsonBody: { email, password, _csrf: preToken },
