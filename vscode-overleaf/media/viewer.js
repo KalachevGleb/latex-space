@@ -23,8 +23,6 @@
   let prevScale = 0
   const pageStates = [] // {num, wrap, canvas, viewport, pageWidthPt, pageHeightPt}
 
-  const dpr = Math.max(1, window.devicePixelRatio || 1)
-
   function setStatus(text) {
     statusEl.textContent = text || ''
   }
@@ -37,6 +35,25 @@
     while (pagesEl.clientWidth === 0) {
       await new Promise(r => setTimeout(r, 200))
     }
+  }
+
+  /**
+   * Отрисовать страницу на холст: масштаб подгоняется под его фактический
+   * размер в пикселях, а не под devicePixelRatio.
+   */
+  function renderPage(page, viewport, canvas) {
+    return page.render({
+      canvasContext: canvas.getContext('2d'),
+      viewport,
+      transform: [
+        canvas.width / viewport.width,
+        0,
+        0,
+        canvas.height / viewport.height,
+        0,
+        0,
+      ],
+    }).promise
   }
 
   /**
@@ -57,6 +74,8 @@
       await waitForSize()
       lastLayoutWidth = pagesEl.clientWidth
       const savedScroll = preserveScroll ? window.scrollY : 0
+      // читаем каждый раз: меняется с масштабом окна VS Code (window.zoomLevel)
+      const dpr = window.devicePixelRatio || 1
 
       const first = await doc.getPage(1)
       const vp0 = first.getViewport({ scale: 1 })
@@ -78,23 +97,28 @@
         const page = i === 1 ? first : await doc.getPage(i)
         const viewport = page.getViewport({ scale: effScale })
 
+        // холст — целое число пикселей экрана, CSS-размер — ровно оно же / dpr,
+        // тогда холст выводится 1:1. При дробном dpr (1.2 при zoomLevel 1)
+        // округлённый до целых CSS-пикселей размер расходился с холстом, и
+        // браузер растягивал всю страницу — текст размывался.
+        const pxWidth = Math.round(viewport.width * dpr)
+        const pxHeight = Math.round(viewport.height * dpr)
+        const cssWidth = pxWidth / dpr + 'px'
+        const cssHeight = pxHeight / dpr + 'px'
+
         const wrap = document.createElement('div')
         wrap.className = 'page-wrap'
         wrap.dataset.page = String(i)
-        wrap.style.width = Math.floor(viewport.width) + 'px'
-        wrap.style.height = Math.floor(viewport.height) + 'px'
+        wrap.style.width = cssWidth
+        wrap.style.height = cssHeight
         const canvas = document.createElement('canvas')
-        canvas.width = Math.floor(viewport.width * dpr)
-        canvas.height = Math.floor(viewport.height * dpr)
-        canvas.style.width = Math.floor(viewport.width) + 'px'
-        canvas.style.height = Math.floor(viewport.height) + 'px'
+        canvas.width = pxWidth
+        canvas.height = pxHeight
+        canvas.style.width = cssWidth
+        canvas.style.height = cssHeight
         wrap.appendChild(canvas)
 
-        await page.render({
-          canvasContext: canvas.getContext('2d'),
-          viewport,
-          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
-        }).promise
+        await renderPage(page, viewport, canvas)
 
         // текстовый слой — в том же фрагменте, до подмены (позиции спанов
         // pdf.js берёт из viewport, DOM для этого не нужен)
@@ -135,12 +159,88 @@
       const max = document.documentElement.scrollHeight - window.innerHeight
       window.scrollTo(0, Math.min(targetScroll, Math.max(0, max)))
       setStatus('')
+      watchSharpness()
     } finally {
       rendering = false
       if (pendingLayout) {
         pendingLayout = false
         layout(true)
       }
+    }
+  }
+
+  // ---------- чёткость: холст 1:1 с пикселями экрана ----------
+
+  /**
+   * Браузер сообщает точный размер холста в пикселях экрана с учётом
+   * округления его позиции (device-pixel-content-box). Если он разошёлся с
+   * размером отрисовки — округление позиции, смена масштаба окна VS Code без
+   * перерисовки, — страница перерисовывается под этот размер. Новая картинка
+   * готовится на отдельном холсте и переносится одной операцией, без мигания.
+   */
+  let sharpObserver = null
+  const sharpQueue = new Map() // состояние страницы → {width, height}
+  let sharpRunning = false
+
+  function watchSharpness() {
+    if (sharpObserver) sharpObserver.disconnect()
+    sharpQueue.clear()
+    if (typeof ResizeObserver === 'undefined') return
+    const byCanvas = new Map(pageStates.map(st => [st.canvas, st]))
+    sharpObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const box =
+          entry.devicePixelContentBoxSize && entry.devicePixelContentBoxSize[0]
+        const st = byCanvas.get(entry.target)
+        if (!box || !st) continue
+        const width = Math.round(box.inlineSize)
+        const height = Math.round(box.blockSize)
+        if (width <= 0 || height <= 0) continue
+        if (width !== st.canvas.width || height !== st.canvas.height) {
+          sharpQueue.set(st, { width, height })
+        }
+      }
+      runSharpQueue()
+    })
+    try {
+      for (const st of pageStates) {
+        sharpObserver.observe(st.canvas, { box: 'device-pixel-content-box' })
+      }
+    } catch (e) {
+      // движок без device-pixel-content-box — остаётся первичная отрисовка
+      sharpObserver.disconnect()
+      sharpObserver = null
+    }
+  }
+
+  async function runSharpQueue() {
+    if (sharpRunning) return
+    sharpRunning = true
+    try {
+      while (sharpQueue.size > 0) {
+        // идёт полная перерисовка — она сама заново проверит все страницы
+        if (rendering) {
+          sharpQueue.clear()
+          break
+        }
+        const [st, size] = sharpQueue.entries().next().value
+        sharpQueue.delete(st)
+        if (!pageStates.includes(st)) continue
+        const tmp = document.createElement('canvas')
+        tmp.width = size.width
+        tmp.height = size.height
+        try {
+          await renderPage(st.page, st.viewport, tmp)
+        } catch (e) {
+          continue // документ уже заменён
+        }
+        if (!pageStates.includes(st)) continue
+        st.canvas.width = size.width
+        st.canvas.height = size.height
+        st.canvas.getContext('2d').drawImage(tmp, 0, 0)
+      }
+    } finally {
+      sharpRunning = false
     }
   }
 
