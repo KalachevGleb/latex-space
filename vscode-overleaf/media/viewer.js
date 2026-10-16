@@ -38,12 +38,46 @@
   }
 
   /**
-   * Отрисовать страницу на холст: масштаб подгоняется под его фактический
-   * размер в пикселях, а не под devicePixelRatio.
+   * Гамма 1.4 по каналам — как «Чёткий текст в PDF» в LightView. Шрифты
+   * LaTeX (Type 1/CFF) не хинтуются, и их штрихи выходят серыми размытыми
+   * линиями; кривая возвращает им контраст. Побочный эффект: полутона
+   * картинок немного темнеют.
    */
-  function renderPage(page, viewport, canvas) {
-    return page.render({
-      canvasContext: canvas.getContext('2d'),
+  const TEXT_GAMMA = (() => {
+    const lut = new Uint8Array(256)
+    for (let v = 0; v < 256; v++) {
+      lut[v] = Math.round(255 * Math.pow(v / 255, 1.4))
+    }
+    return lut
+  })()
+
+  /** холст непрозрачный (субпиксельный текст) и в обычной памяти: пиксели
+   *  читаются для гаммы, а чтение из видеопамяти заметно медленнее */
+  const CANVAS_OPTIONS = { alpha: false, willReadFrequently: true }
+
+  function applyTextGamma(canvas) {
+    const ctx = canvas.getContext('2d', CANVAS_OPTIONS)
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const px = img.data
+    const words = new Uint32Array(px.buffer)
+    for (let i = 0; i < words.length; i++) {
+      if (words[i] === 0xffffffff) continue // белый фон не меняется
+      const o = i * 4
+      px[o] = TEXT_GAMMA[px[o]]
+      px[o + 1] = TEXT_GAMMA[px[o + 1]]
+      px[o + 2] = TEXT_GAMMA[px[o + 2]]
+    }
+    ctx.putImageData(img, 0, 0)
+  }
+
+  /**
+   * Отрисовать страницу на холст: масштаб подгоняется под его фактический
+   * размер в пикселях, а не под devicePixelRatio. Холст непрозрачный — на
+   * таком Chromium рисует текст с субпиксельным сглаживанием (ClearType).
+   */
+  async function renderPage(page, viewport, canvas) {
+    await page.render({
+      canvasContext: canvas.getContext('2d', CANVAS_OPTIONS),
       viewport,
       transform: [
         canvas.width / viewport.width,
@@ -54,6 +88,7 @@
         0,
       ],
     }).promise
+    applyTextGamma(canvas)
   }
 
   /**
