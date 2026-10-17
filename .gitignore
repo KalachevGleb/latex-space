@@ -34,6 +34,9 @@ cookies.txt
 tmp/
 .tmp/
 
+# local notes with real deployment details (server, logins, paths) — never commit
+*.local.md
+
 # version info (generated automatically)
 services/web/public/version.json
 

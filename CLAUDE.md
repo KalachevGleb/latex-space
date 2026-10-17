@@ -2,6 +2,14 @@
 
 This file provides guidance to AI when working with code in this repository.
 
+## Confidentiality: this repository is PUBLIC
+
+The GitHub repository is public. Never put real deployment or personal details into committed files or commit messages: server hostnames combined with logins, SSH/system user names, IP addresses, home directory paths (e.g. `/Users/<name>/...`), e-mail addresses, passwords, tokens or keys.
+
+- In docs and scripts use placeholders such as `<пользователь>@<сервер>`, `<папка-репозитория>`, `https://<сервер>`.
+- Keep real values only in local untracked files (`*.local.md` is gitignored, e.g. `ОБНОВЛЕНИЕ.local.md` next to `ОБНОВЛЕНИЕ.md`) or pass them via environment variables.
+- Before every commit check the diff and the commit message for such data.
+
 ## About this customized version of Overleaf
 
 Overleaf is an open-source online real-time collaborative LaTeX editor. This is the customized version of Overleaf Community Edition repository adopted for integration with peer-review system.
