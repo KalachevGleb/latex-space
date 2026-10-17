@@ -10,7 +10,12 @@ import {
 import 'pdfjs-dist/web/pdf_viewer.css'
 import browser from '@/features/source-editor/extensions/browser'
 import { PDFFile } from '@ol-types/compile'
-import { getTextRenderingMode, installCrispRender } from './crisp-text'
+import {
+  CrispCanvasFactory,
+  clearCrispCache,
+  getTextRenderingMode,
+  installCrispRender,
+} from './crisp-text'
 
 const DEFAULT_RANGE_CHUNK_SIZE = 128 * 1024 // 128K chunks
 
@@ -83,8 +88,10 @@ export default class PDFJSWrapper {
         range: rangeTransport,
         // crisp text draws glyphs as paths (as PDFium does): Chromium's
         // font rendering snaps unhinted LaTeX fonts to the grid and loses
-        // thin strokes
-        ...(crisp ? { disableFontFace: true } : {}),
+        // thin strokes; its canvas factory sets up pages with blend modes
+        ...(crisp
+          ? { disableFontFace: true, CanvasFactory: CrispCanvasFactory }
+          : {}),
       }).promise
 
       // check that this is still the current URL
@@ -93,11 +100,21 @@ export default class PDFJSWrapper {
       }
 
       // intercept page rendering before the viewer draws the first page
-      installCrispRender(await doc.getPage(1))
+      installCrispRender(await doc.getPage(1), {
+        renderingCancelledException: PDFJS.RenderingCancelledException,
+        createWorker: () =>
+          new Worker(
+            /* webpackChunkName: "crisp-pixels-worker" */
+            new URL('./crisp-pixels.worker.ts', import.meta.url),
+            { type: 'module' }
+          ),
+      })
       if (url !== this.url) {
         return
       }
 
+      // pages kept from the previous document are of no use any more
+      clearCrispCache()
       this.viewer.setDocument(doc)
       this.linkService.setDocument(doc)
 

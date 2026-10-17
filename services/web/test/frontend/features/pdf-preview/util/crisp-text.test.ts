@@ -1,13 +1,18 @@
 import { expect } from 'chai'
 
 import {
-  TEXT_GAMMA,
-  averageRows,
+  CrispCanvasFactory,
   defaultTextRendering,
-  downsample3x,
+  drawingCrispText,
   isPdfTextRendering,
   snapGlyphOrigins,
 } from '../../../../../frontend/js/features/pdf-preview/util/crisp-text'
+import {
+  TEXT_GAMMA,
+  averageRows,
+  downsample3x,
+  processStrip,
+} from '../../../../../frontend/js/features/pdf-preview/util/crisp-pixels'
 
 const WIN = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
@@ -110,6 +115,109 @@ describe('crisp-text', function () {
     })
   })
 
+  describe('processStrip', function () {
+    // straightforward implementation of the same maths, without shortcuts
+    function referenceStrip(
+      tall: Uint8ClampedArray,
+      width: number,
+      rows: number,
+      vs: number,
+      lcd: boolean
+    ) {
+      const w3 = width * 3
+      const shift = Math.log2(vs)
+      const avg = new Uint8ClampedArray(w3 * rows * 4)
+      for (let y = 0; y < rows; y++) {
+        for (let i = 0; i < w3; i++) {
+          for (let c = 0; c < 4; c++) {
+            let sum = 0
+            for (let k = 0; k < vs; k++) {
+              sum += tall[((y * vs + k) * w3 + i) * 4 + c]
+            }
+            avg[(y * w3 + i) * 4 + c] = (sum + (vs >> 1)) >> shift
+          }
+        }
+      }
+      const fir = [8, 77, 86, 77, 8]
+      const out = new Uint8ClampedArray(width * rows * 4)
+      for (let y = 0; y < rows; y++) {
+        const row = y * w3
+        for (let x = 0; x < width; x++) {
+          for (let c = 0; c < 3; c++) {
+            let v
+            if (lcd) {
+              let acc = 0
+              for (let k = -2; k <= 2; k++) {
+                const t = Math.min(w3 - 1, Math.max(0, 3 * x + c + k))
+                acc += fir[k + 2] * avg[(row + t) * 4 + c]
+              }
+              v = (acc + 128) >> 8
+            } else {
+              let sum = 0
+              for (let k = 0; k < 3; k++) sum += avg[(row + 3 * x + k) * 4 + c]
+              v = Math.round(sum / 3)
+            }
+            out[(y * width + x) * 4 + c] = TEXT_GAMMA[v]
+          }
+          out[(y * width + x) * 4 + 3] = 255
+        }
+      }
+      return out
+    }
+
+    // mostly white work canvas with ink, like a page of text
+    function randomStrip(
+      width: number,
+      rows: number,
+      vs: number,
+      seed: number
+    ) {
+      let state = seed
+      const random = () => {
+        state = (state * 1103515245 + 12345) & 0x7fffffff
+        return state / 0x7fffffff
+      }
+      const tall = new Uint8ClampedArray(width * 3 * rows * vs * 4)
+      for (let i = 0; i < tall.length; i += 4) {
+        const blankRow = Math.floor(i / 4 / (width * 3 * vs)) % 3 === 0
+        const ink = !blankRow && random() < 0.3
+        tall[i] = ink ? Math.floor(random() * 256) : 255
+        tall[i + 1] = ink ? Math.floor(random() * 256) : 255
+        tall[i + 2] = ink ? Math.floor(random() * 256) : 255
+        tall[i + 3] = 255
+      }
+      return tall
+    }
+
+    for (const vs of [1, 2, 4]) {
+      for (const lcd of [true, false]) {
+        it(`matches the reference (vs ${vs}, ${lcd ? 'ClearType' : 'grayscale'})`, function () {
+          const width = 37
+          const rows = 9
+          const tall = randomStrip(width, rows, vs, vs * 10 + (lcd ? 1 : 0))
+          const expected = referenceStrip(tall, width, rows, vs, lcd)
+          const actual = processStrip(tall.slice(), width, rows, vs, lcd)
+          expect(Array.from(actual)).to.deep.equal(Array.from(expected))
+        })
+
+        it(`reads BGRA pixels with an unused fourth byte (vs ${vs}, ${lcd ? 'ClearType' : 'grayscale'})`, function () {
+          const width = 37
+          const rows = 9
+          const tall = randomStrip(width, rows, vs, vs * 10 + (lcd ? 1 : 0))
+          const expected = referenceStrip(tall, width, rows, vs, lcd)
+          const bgrx = tall.slice()
+          for (let i = 0; i < bgrx.length; i += 4) {
+            bgrx[i] = tall[i + 2]
+            bgrx[i + 2] = tall[i]
+            bgrx[i + 3] = 0
+          }
+          const actual = processStrip(bgrx, width, rows, vs, lcd, true)
+          expect(Array.from(actual)).to.deep.equal(Array.from(expected))
+        })
+      }
+    }
+  })
+
   describe('snapGlyphOrigins', function () {
     function fakeContext() {
       let m = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
@@ -198,6 +306,62 @@ describe('crisp-text', function () {
       ctx.translate(10.7, 21.9)
       ctx.beginPath()
       expect(ctx.getTransform().e).to.be.closeTo(10.7, 1e-9)
+    })
+
+    describe('CrispCanvasFactory', function () {
+      // pdf.js asks the factory for its canvases; a document that makes
+      // canvases with fake contexts
+      function factory() {
+        const ownerDocument: any = {
+          createElement: () => {
+            const ctx = fakeContext()
+            const canvas = { width: 0, height: 0, getContext: () => ctx }
+            ctx.canvas = canvas
+            return canvas
+          },
+        }
+        return new CrispCanvasFactory({ ownerDocument })
+      }
+
+      function drawGlyph(ctx: any) {
+        ctx.save()
+        ctx.translate(10.7, 21.9)
+        ctx.scale(12, -12)
+        return ctx.getTransform()
+      }
+
+      it('places glyphs on a canvas the size of a crisp work canvas', function () {
+        const done = drawingCrispText(300, 400, 4)
+        try {
+          const { canvas, context } = factory().create(300, 400)
+          expect(canvas?.width).to.equal(300)
+          const m = drawGlyph(context)
+          expect(m.e).to.equal(10)
+          expect(m.f).to.equal(20)
+        } finally {
+          done()
+        }
+      })
+
+      it('leaves other canvases alone', function () {
+        const done = drawingCrispText(300, 400, 4)
+        try {
+          const { context } = factory().create(300, 200)
+          expect(drawGlyph(context).e).to.be.closeTo(10.7, 1e-9)
+        } finally {
+          done()
+        }
+        // the crisp render has finished
+        const { context } = factory().create(300, 400)
+        expect(drawGlyph(context).e).to.be.closeTo(10.7, 1e-9)
+      })
+
+      it('frees canvases as pdf.js expects', function () {
+        const made = factory().create(300, 400)
+        factory().destroy(made)
+        expect(made.canvas).to.equal(null)
+        expect(made.context).to.equal(null)
+      })
     })
   })
 })

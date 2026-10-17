@@ -8,12 +8,20 @@
 // samples are either spread over the R, G, B subpixels with FreeType's LCD
 // filter (ClearType) or averaged (grayscale). Glyph origins are placed as
 // PDFium does: vertically on whole pixels, horizontally on 1/3 pixel. Then
-// PDFium's kTextGammaAdjust table (denser text) and a 1.4 gamma are applied.
+// PDFium's kTextGammaAdjust table (denser text) and a 1.4 gamma are applied
+// (crisp-pixels.ts). The pixel work runs in a background worker when one is
+// available, so that scrolling stays smooth.
 //
 // Rendering is intercepted by wrapping PDFPageProxy.render, which PDFViewer
 // calls for every page and for zoomed-in page detail views.
 
 import type { PDFPageProxy, RenderTask } from 'pdfjs-dist/types/src/display/api'
+import {
+  CrispPageRequest,
+  CrispWorkerResponse,
+  applyGamma,
+  processStrip,
+} from './crisp-pixels'
 
 export type PdfTextRendering = 'standard' | 'crisp' | 'crisp-cleartype'
 
@@ -51,155 +59,6 @@ export function getTextRenderingMode(): PdfTextRendering {
   return currentMode
 }
 
-// ---------- pixel processing ----------
-
-const WHITE = 0xffffffff
-
-// kTextGammaAdjust from PDFium (core/fxge/cfx_renderdevice.cpp): boosts weak
-// glyph coverage so that thin strokes stay visible
-const PDFIUM_TEXT_GAMMA = [
-  0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25,
-  26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46,
-  47, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66,
-  67, 68, 69, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86,
-  87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104,
-  105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
-  120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 129, 130, 131, 132, 133,
-  134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148,
-  149, 150, 151, 152, 153, 154, 155, 156, 156, 157, 158, 159, 160, 161, 162,
-  163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 174, 175, 176,
-  177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 190,
-  191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 204,
-  205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 217, 218,
-  219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 228, 229, 230, 231, 232,
-  233, 234, 235, 236, 237, 238, 239, 239, 240, 241, 242, 243, 244, 245, 246,
-  247, 248, 249, 250, 250, 251, 252, 253, 254, 255,
-]
-
-/** smoothed brightness -> final brightness: PDFium table + 1.4 gamma */
-export const TEXT_GAMMA = (() => {
-  const lut = new Uint8Array(256)
-  for (let v = 0; v < 256; v++) {
-    const adjusted = 255 - PDFIUM_TEXT_GAMMA[255 - v]
-    lut[v] = Math.round(255 * Math.pow(adjusted / 255, 1.4))
-  }
-  return lut
-})()
-
-/** FreeType's default LCD filter (FT_LCD_FILTER_DEFAULT) */
-const LCD_FIR = [8, 77, 86, 77, 8]
-
-/** average every `vs` rows (RGBA, `rowWords` pixels wide) into one row */
-export function averageRows(
-  tall: Uint8ClampedArray,
-  rowWords: number,
-  height: number,
-  vs: number
-): Uint8ClampedArray {
-  const tall32 = new Uint32Array(tall.buffer, tall.byteOffset, tall.length >> 2)
-  const out = new Uint8ClampedArray(rowWords * 4 * height)
-  const out32 = new Uint32Array(out.buffer)
-  const half = vs >> 1
-  for (let y = 0; y < height; y++) {
-    const t0 = y * vs * rowWords
-    const o0 = y * rowWords
-    for (let i = 0; i < rowWords; i++) {
-      let white = true
-      for (let k = 0; k < vs; k++) {
-        if (tall32[t0 + k * rowWords + i] !== WHITE) {
-          white = false
-          break
-        }
-      }
-      if (white) {
-        out32[o0 + i] = WHITE
-        continue
-      }
-      for (let c = 0; c < 3; c++) {
-        let acc = 0
-        for (let k = 0; k < vs; k++)
-          acc += tall[(t0 + k * rowWords + i) * 4 + c]
-        // integer division: assigning a fraction to Uint8ClampedArray would
-        // round a second time (half to even)
-        out[(o0 + i) * 4 + c] = ((acc + half) / vs) | 0
-      }
-      out[(o0 + i) * 4 + 3] = 255
-    }
-  }
-  return out
-}
-
-/**
- * Reduce rows of triple width to `width` pixels (RGBA). With `lcd` the
- * samples are spread over the R, G, B subpixels with FreeType's LCD filter,
- * otherwise the three samples are averaged (grayscale). TEXT_GAMMA is
- * applied to the result.
- */
-export function downsample3x(
-  src: Uint8ClampedArray,
-  dst: Uint8ClampedArray,
-  width: number,
-  height: number,
-  lcd: boolean
-) {
-  const src32 = new Uint32Array(src.buffer, src.byteOffset, src.length >> 2)
-  const dst32 = new Uint32Array(dst.buffer, dst.byteOffset, dst.length >> 2)
-  const w3 = width * 3
-  for (let y = 0; y < height; y++) {
-    const row = y * w3
-    const rowEnd = row + w3 - 1
-    for (let x = 0; x < width; x++) {
-      const s = row + 3 * x
-      const o = y * width + x
-      const lo = s - 2 < row ? row : s - 2
-      const hi = s + 4 > rowEnd ? rowEnd : s + 4
-      let white = true
-      for (let t = lo; t <= hi; t++) {
-        if (src32[t] !== WHITE) {
-          white = false
-          break
-        }
-      }
-      if (white) {
-        dst32[o] = WHITE
-        continue
-      }
-      if (lcd) {
-        // subpixel c: sample s+c of the same channel and two neighbours on
-        // each side
-        for (let c = 0; c < 3; c++) {
-          let acc = 0
-          for (let k = -2; k <= 2; k++) {
-            let t = s + c + k
-            if (t < row) t = row
-            else if (t > rowEnd) t = rowEnd
-            acc += LCD_FIR[k + 2] * src[t * 4 + c]
-          }
-          dst[o * 4 + c] = TEXT_GAMMA[(acc + 128) >> 8]
-        }
-      } else {
-        for (let c = 0; c < 3; c++) {
-          const sum =
-            src[s * 4 + c] + src[(s + 1) * 4 + c] + src[(s + 2) * 4 + c]
-          dst[o * 4 + c] = TEXT_GAMMA[Math.round(sum / 3)]
-        }
-      }
-      dst[o * 4 + 3] = 255
-    }
-  }
-}
-
-function applyGamma(data: Uint8ClampedArray) {
-  const words = new Uint32Array(data.buffer, data.byteOffset, data.length >> 2)
-  for (let i = 0; i < words.length; i++) {
-    if (words[i] === WHITE) continue
-    const o = i * 4
-    data[o] = TEXT_GAMMA[data[o]]
-    data[o + 1] = TEXT_GAMMA[data[o + 1]]
-    data[o + 2] = TEXT_GAMMA[data[o + 2]]
-  }
-}
-
 // ---------- glyph placement ----------
 
 /**
@@ -211,11 +70,25 @@ function applyGamma(data: Uint8ClampedArray) {
  * anywhere else. `stepX`/`stepY` are the grid steps in canvas units. Rotated
  * text is left alone.
  */
+const snapSteps = new WeakMap<
+  CanvasRenderingContext2D,
+  { x: number; y: number }
+>()
+
 export function snapGlyphOrigins(
   ctx: CanvasRenderingContext2D,
   stepX: number,
   stepY: number
 ) {
+  // a reused context keeps its wrappers; only the steps change
+  const known = snapSteps.get(ctx)
+  if (known) {
+    known.x = stepX
+    known.y = stepY
+    return
+  }
+  const steps = { x: stepX, y: stepY }
+  snapSteps.set(ctx, steps)
   const anyCtx = ctx as any
   const save = ctx.save
   const translate = ctx.translate
@@ -230,8 +103,8 @@ export function snapGlyphOrigins(
         0,
         0,
         m.d,
-        Math.floor(m.e / stepX) * stepX,
-        Math.round(m.f / stepY) * stepY
+        Math.floor(m.e / steps.x) * steps.x,
+        Math.round(m.f / steps.y) * steps.y
       )
     }
   }
@@ -277,43 +150,636 @@ export function snapGlyphOrigins(
   }
 }
 
+// ---------- incremental rasterisation ----------
+
+// Chromium records canvas drawing and rasterises it only when the pixels
+// are needed: for the large work canvas that is one long stall (50-130 ms)
+// when the page is handed to the worker. Reading one pixel every few
+// hundred drawing operations rasterises in small pieces instead, inside
+// pdf.js' time-sliced rendering, which yields to the browser between
+// slices.
+const OPS_PER_RASTER = 256
+const rasterising = new WeakSet<CanvasRenderingContext2D>()
+
+function rasteriseIncrementally(ctx: CanvasRenderingContext2D) {
+  if (rasterising.has(ctx)) return
+  rasterising.add(ctx)
+  const anyCtx = ctx as any
+  const getImageData = ctx.getImageData
+  let ops = 0
+  for (const name of ['fill', 'stroke', 'fillRect', 'drawImage', 'fillText']) {
+    const orig = anyCtx[name]
+    anyCtx[name] = function (...args: unknown[]) {
+      const result = orig.apply(this, args)
+      if (++ops >= OPS_PER_RASTER) {
+        ops = 0
+        getImageData.call(this, 0, 0, 1, 1)
+      }
+      return result
+    }
+  }
+}
+
+// ---------- pages with blend modes ----------
+
+// pdf.js draws a page that uses blend modes (other than Normal, anywhere in
+// its resources) on a transparent canvas of the same size made by its canvas
+// factory, and copies that onto the canvas it was given at the end. The
+// hooks above must be on that canvas too, or glyphs on such pages are not
+// placed on the pixel grid (with TikZ blend modes that is every page of a
+// document: pgf shares its graphics states between pages).
+
+/** sizes ("WxH") of canvases being drawn with crisp text -> vertical step */
+const crispSizes = new Map<string, { vs: number; renders: number }>()
+
+/**
+ * A crisp render draws on a canvas of this size until the returned function
+ * is called: canvases of the same size made by CrispCanvasFactory meanwhile
+ * get the same hooks.
+ */
+export function drawingCrispText(width: number, height: number, vs: number) {
+  const size = `${width}x${height}`
+  const entry = crispSizes.get(size)
+  if (entry) entry.renders++
+  else crispSizes.set(size, { vs, renders: 1 })
+  return () => {
+    const current = crispSizes.get(size)
+    if (current && --current.renders === 0) crispSizes.delete(size)
+  }
+}
+
+function hookIfCrispSize(
+  ctx: CanvasRenderingContext2D | null,
+  width: number,
+  height: number
+) {
+  const entry = crispSizes.get(`${width}x${height}`)
+  if (!ctx || !entry) return
+  snapGlyphOrigins(ctx, 1, entry.vs)
+  rasteriseIncrementally(ctx)
+}
+
+type CanvasAndContext = {
+  canvas: HTMLCanvasElement | null
+  context: CanvasRenderingContext2D | null
+}
+
+// Like the work canvas, a canvas of its size (the transparent canvas, or
+// the layer of a soft mask) is as large as ~80 MB: one is kept for the next
+// page. These stay canvas elements: pdf.js applies soft masks with SVG
+// filters, which only work on canvases of a document.
+const pageCanvases = new WeakSet<HTMLCanvasElement>()
+let sparePageCanvas: HTMLCanvasElement | null = null
+
+/**
+ * pdf.js' canvas factory (DOMCanvasFactory, which is not exported) that also
+ * hooks the transparent canvas of pages with blend modes; passed to
+ * getDocument as `CanvasFactory`.
+ */
+export class CrispCanvasFactory {
+  private readonly ownerDocument: Document
+  private readonly enableHWA: boolean
+
+  constructor({
+    ownerDocument = globalThis.document,
+    enableHWA = false,
+  }: { ownerDocument?: Document; enableHWA?: boolean } = {}) {
+    this.ownerDocument = ownerDocument
+    this.enableHWA = enableHWA
+  }
+
+  create(width: number, height: number): CanvasAndContext {
+    if (width <= 0 || height <= 0) {
+      throw new Error('Invalid canvas size')
+    }
+    const canvas = crispSizes.has(`${width}x${height}`)
+      ? this.pageCanvas(width, height)
+      : this.newCanvas(width, height)
+    const context = canvas.getContext('2d', {
+      willReadFrequently: !this.enableHWA,
+    })
+    hookIfCrispSize(context, width, height)
+    return { canvas, context }
+  }
+
+  reset(canvasAndContext: CanvasAndContext, width: number, height: number) {
+    if (!canvasAndContext.canvas) {
+      throw new Error('Canvas is not specified')
+    }
+    if (width <= 0 || height <= 0) {
+      throw new Error('Invalid canvas size')
+    }
+    canvasAndContext.canvas.width = width
+    canvasAndContext.canvas.height = height
+    hookIfCrispSize(canvasAndContext.context, width, height)
+  }
+
+  destroy(canvasAndContext: CanvasAndContext) {
+    const canvas = canvasAndContext.canvas
+    if (!canvas) {
+      throw new Error('Canvas is not specified')
+    }
+    if (!sparePageCanvas && pageCanvases.has(canvas)) {
+      sparePageCanvas = canvas
+    } else {
+      canvas.width = 0
+      canvas.height = 0
+    }
+    canvasAndContext.canvas = null
+    canvasAndContext.context = null
+  }
+
+  private newCanvas(width: number, height: number) {
+    const canvas = this.ownerDocument.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    return canvas
+  }
+
+  /** the kept canvas of the work canvas' size, cleared, or a new one */
+  private pageCanvas(width: number, height: number) {
+    const spare = sparePageCanvas
+    sparePageCanvas = null
+    if (spare && spare.width === width && spare.height === height) {
+      const ctx = spare.getContext('2d', {
+        willReadFrequently: !this.enableHWA,
+      })
+      // transparent, with the default state, as a new canvas
+      if (ctx && typeof ctx.reset === 'function') {
+        ctx.reset()
+        return spare
+      }
+    }
+    if (spare) spare.width = spare.height = 0
+    const canvas = this.newCanvas(width, height)
+    pageCanvases.add(canvas)
+    return canvas
+  }
+}
+
 // ---------- page rendering interception ----------
 
 /** maximum work canvas area (pixels) */
 const MAX_WORK_PIXELS = 24e6
+/** output rows per strip when processing on the main thread */
+const STRIP_ROWS = 16
+/** main-thread time slice before yielding to the browser (ms) */
+const SLICE_MS = 8
 
 type RenderParameters = Parameters<PDFPageProxy['render']>[0]
+type CancelledErrorClass = new (message: string, extraDelay?: number) => unknown
+
+// replaced with pdf.js' RenderingCancelledException by installCrispRender:
+// PDFViewer recognises cancelled rendering by this class
+let CancelledError: CancelledErrorClass = class extends Error {}
+
+/** counters for tests and diagnostics (times are main-thread milliseconds) */
+export const crispStats = {
+  rendered: 0,
+  fromCache: 0,
+  workRenderMs: 0,
+  postProcessMs: 0,
+  // time spent in the worker (its own thread)
+  workerCopyMs: 0,
+  workerReadMs: 0,
+  workerMathsMs: 0,
+}
+
+function timed<T>(fn: () => T): T {
+  const start = performance.now()
+  try {
+    return fn()
+  } finally {
+    crispStats.postProcessMs += performance.now() - start
+  }
+}
+
+// ---------- finished pages ----------
+
+// PDFViewer keeps only about 10 pages and draws evicted pages again when
+// they scroll back into view, which takes far too long with this pipeline.
+// Finished pages are kept here instead: recent ones as ready bitmaps (shown
+// at once), and above about 1 GB of bitmaps the oldest are kept only as
+// lossless PNG (a text page is a few hundred KB, decoding takes tens of
+// milliseconds). A page drawn once is never rendered again. Zoomed-in
+// detail views are not kept.
+const MAX_CACHED_PIXELS = 256e6
+const MAX_CACHED_PAGE_PIXELS = 16e6
+
+type CacheEntry = {
+  bitmap: ImageBitmap | null
+  png: Blob | null
+  pixels: number
+}
+// Map iteration order is insertion order: the first entry is the oldest
+const cache = new Map<string, CacheEntry>()
+// pixels held in bitmaps
+let cachedPixels = 0
+const pageIds = new WeakMap<PDFPageProxy, number>()
+let nextPageId = 1
+
+function cacheKey(
+  page: PDFPageProxy,
+  params: RenderParameters,
+  t: number[],
+  W: number,
+  H: number,
+  mode: PdfTextRendering
+) {
+  if (W * H > MAX_CACHED_PAGE_PIXELS || t[4] !== 0 || t[5] !== 0) {
+    return null
+  }
+  let id = pageIds.get(page)
+  if (!id) {
+    id = nextPageId++
+    pageIds.set(page, id)
+  }
+  const { scale, rotation, offsetX, offsetY } = params.viewport
+  return [id, W, H, t[0], t[3], scale, rotation, offsetX, offsetY, mode].join()
+}
+
+function cacheGet(key: string) {
+  const entry = cache.get(key)
+  if (entry) {
+    // most recently used goes to the end
+    cache.delete(key)
+    cache.set(key, entry)
+  }
+  return entry
+}
+
+/** keep bitmaps within the budget: the oldest stay only as PNG */
+function trimBitmaps() {
+  for (const entry of cache.values()) {
+    if (cachedPixels <= MAX_CACHED_PIXELS) break
+    if (entry.bitmap && entry.png) {
+      entry.bitmap.close()
+      entry.bitmap = null
+      cachedPixels -= entry.pixels
+    }
+  }
+}
+
+function setBitmap(entry: CacheEntry, bitmap: ImageBitmap) {
+  if (entry.bitmap) {
+    entry.bitmap.close()
+    cachedPixels -= entry.pixels
+  }
+  entry.bitmap = bitmap
+  entry.pixels = bitmap.width * bitmap.height
+  cachedPixels += entry.pixels
+  trimBitmaps()
+}
+
+function cachePut(key: string, canvas: HTMLCanvasElement) {
+  if (typeof createImageBitmap === 'undefined') return
+  const old = cache.get(key)
+  if (old?.bitmap) {
+    old.bitmap.close()
+    cachedPixels -= old.pixels
+  }
+  const entry: CacheEntry = { bitmap: null, png: null, pixels: 0 }
+  cache.delete(key)
+  cache.set(key, entry)
+  // both copy the canvas at call time, before PDFViewer reuses it
+  canvas.toBlob(blob => {
+    if (cache.get(key) === entry) entry.png = blob
+    trimBitmaps()
+  }, 'image/png')
+  createImageBitmap(canvas)
+    .then(bitmap => {
+      if (cache.get(key) === entry) setBitmap(entry, bitmap)
+      else bitmap.close()
+    })
+    .catch(() => {})
+}
+
+/** an entry for a page finished in the worker, as the most recent */
+function cacheEntryFor(key: string) {
+  const entry = cache.get(key) ?? { bitmap: null, png: null, pixels: 0 }
+  cache.delete(key)
+  cache.set(key, entry)
+  return entry
+}
+
+// results that arrive after a new document was loaded are dropped
+let cacheGeneration = 0
+// pages being processed in the worker: key -> job id
+const inWorker = new Map<string, number>()
+
+/** drop all kept pages (a new document was loaded) */
+export function clearCrispCache() {
+  for (const entry of cache.values()) entry.bitmap?.close()
+  cache.clear()
+  cachedPixels = 0
+  cacheGeneration++
+  inWorker.clear()
+  worker?.postMessage({ type: 'clear' })
+}
+
+// ---------- background worker ----------
+
+// The work canvas is an OffscreenCanvas: after pdf.js has drawn the page,
+// its pixels are handed to the worker without copying
+// (transferToImageBitmap), and reading them back and all the pixel maths
+// happen there. Until the worker has started, or where it is not
+// available, pages are processed on the main thread.
+
+let createWorker: (() => Worker) | null = null
+// undefined: not created yet; null: not available
+let worker: Worker | null | undefined
+let workerReady = false
+type PageJob = {
+  key: string | null
+  generation: number
+  // the page is drawn by the task that started the job (unless cancelled)
+  onStrip: (y: number, rows: number, out: Uint8ClampedArray) => void
+  resolve: () => void
+  reject: (error: unknown) => void
+  // tasks for the same page waiting for this job (the page came back)
+  waiters: (() => void)[]
+}
+const pageJobs = new Map<number, PageJob>()
+let nextJobId = 1
+
+function startWorker() {
+  worker = null
+  if (
+    !createWorker ||
+    typeof Worker === 'undefined' ||
+    typeof OffscreenCanvas === 'undefined'
+  ) {
+    return
+  }
+  try {
+    const w = createWorker()
+    w.addEventListener(
+      'message',
+      (event: MessageEvent<CrispWorkerResponse>) => {
+        const message = event.data
+        if (message.type === 'ready') {
+          workerReady = true
+          return
+        }
+        const job = pageJobs.get(message.id)
+        if (!job) return
+        const current = job.generation === cacheGeneration
+        if (message.type === 'strip') {
+          job.onStrip(
+            message.y,
+            message.rows,
+            new Uint8ClampedArray(message.out)
+          )
+        } else if (message.type === 'done') {
+          if (message.timing) {
+            crispStats.workerCopyMs += message.timing.copy
+            crispStats.workerReadMs += message.timing.read
+            crispStats.workerMathsMs += message.timing.maths
+          }
+          // keep the finished page even if its rendering was cancelled
+          if (message.bitmap && job.key && current) {
+            setBitmap(cacheEntryFor(job.key), message.bitmap)
+          } else {
+            message.bitmap?.close()
+          }
+          if (job.key && inWorker.get(job.key) === message.id) {
+            inWorker.delete(job.key)
+          }
+          if (!job.key || !message.bitmap) pageJobs.delete(message.id)
+          if (message.bitmap) job.resolve()
+          else job.reject(new Error('crisp-pixels worker failed on a page'))
+          for (const waiter of job.waiters) waiter()
+        } else {
+          // the PNG comes last
+          pageJobs.delete(message.id)
+          const entry = job.key && current ? cache.get(job.key) : undefined
+          if (entry && message.png) {
+            entry.png = message.png
+            trimBitmaps()
+          }
+        }
+      }
+    )
+    w.addEventListener('error', () => {
+      // e.g. the worker script could not be loaded: use the main thread
+      worker = null
+      workerReady = false
+      w.terminate()
+      for (const job of pageJobs.values()) {
+        job.reject(new Error('crisp-pixels worker failed'))
+        for (const waiter of job.waiters) waiter()
+      }
+      pageJobs.clear()
+      inWorker.clear()
+    })
+    worker = w
+  } catch {
+    worker = null
+  }
+}
+
+/** the worker once it has started; null while starting or if unavailable */
+function readyWorker() {
+  if (worker === undefined) startWorker()
+  return worker && workerReady ? worker : null
+}
+
+// ---------- incremental post-processing ----------
+
+/** let the browser handle input and paint a frame */
+function yieldToBrowser() {
+  return new Promise<void>(resolve => {
+    const channel = new MessageChannel()
+    channel.port1.onmessage = () => {
+      channel.port1.close()
+      resolve()
+    }
+    channel.port2.postMessage(null)
+  })
+}
+
+/**
+ * Process the page in strips of rows on the main thread, yielding to the
+ * browser every few milliseconds: one pass over a whole page would block
+ * scrolling. Finished strips appear on the page right away.
+ */
+async function processInStrips(
+  task: CrispRenderTask,
+  H: number,
+  processRows: (y: number, rows: number) => void
+) {
+  let sliceStart = performance.now()
+  for (let y = 0; y < H; y += STRIP_ROWS) {
+    if (task.cancelled) {
+      throw new CancelledError('Rendering cancelled')
+    }
+    timed(() => processRows(y, Math.min(STRIP_ROWS, H - y)))
+    if (performance.now() - sliceStart > SLICE_MS) {
+      await yieldToBrowser()
+      sliceStart = performance.now()
+    }
+  }
+}
+
+/**
+ * The same in the worker: the work canvas is handed over without copying,
+ * finished strips come back and are written to the page.
+ */
+async function processInWorker(
+  task: CrispRenderTask,
+  w: Worker,
+  key: string | null,
+  work: OffscreenCanvas,
+  target: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  vs: number,
+  lcd: boolean
+) {
+  const id = nextJobId++
+  const done = new Promise<void>((resolve, reject) => {
+    pageJobs.set(id, {
+      key,
+      generation: cacheGeneration,
+      onStrip: (y, rows, out) => {
+        if (!task.cancelled) {
+          timed(() => target.putImageData(new ImageData(out, W, rows), 0, y))
+        }
+      },
+      resolve,
+      reject,
+      waiters: [],
+    })
+  })
+  done.catch(() => {}) // may fail after the task was cancelled
+  if (key) inWorker.set(key, id)
+  const request: CrispPageRequest = {
+    type: 'page',
+    id,
+    bitmap: work.transferToImageBitmap(),
+    width: W,
+    height: H,
+    vs,
+    lcd,
+  }
+  w.postMessage(request, [request.bitmap])
+  // a cancelled page is still finished in the worker and kept, but the
+  // viewer is released at once
+  const cancelled = new Promise<never>((resolve, reject) => {
+    task.onCancel = () => reject(new CancelledError('Rendering cancelled'))
+  })
+  try {
+    await Promise.race([done, cancelled])
+  } finally {
+    task.onCancel = null
+  }
+}
+
+/**
+ * The page is still being processed in the worker (its rendering was
+ * cancelled when it left the screen): wait for that result instead of
+ * rendering it again, and have the worker do it next.
+ */
+function waitForWorker(
+  w: Worker,
+  id: number,
+  key: string,
+  target: CanvasRenderingContext2D,
+  renderAgain: () => RenderTask
+): RenderTask {
+  const job = pageJobs.get(id)
+  const task = new CrispRenderTask(null, async task => {
+    if (job) {
+      w.postMessage({ type: 'promote', id })
+      await new Promise<void>(resolve => {
+        job.waiters.push(resolve)
+        task.onCancel = resolve
+      })
+      task.onCancel = null
+    }
+    if (task.cancelled) {
+      throw new CancelledError('Rendering cancelled')
+    }
+    const entry = cache.get(key)
+    if (entry?.bitmap) {
+      target.drawImage(entry.bitmap, 0, 0)
+      return
+    }
+    // the worker failed: render the page after all
+    const again = renderAgain()
+    task.onCancel = () => again.cancel()
+    await again.promise
+  })
+  return task as unknown as RenderTask
+}
+
+async function processWorkCanvas(
+  task: CrispRenderTask,
+  key: string | null,
+  work: WorkCanvas,
+  wctx: CanvasRenderingContext2D,
+  target: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  vs: number,
+  lcd: boolean
+) {
+  const w = readyWorker()
+  if (
+    w &&
+    typeof OffscreenCanvas !== 'undefined' &&
+    work instanceof OffscreenCanvas
+  ) {
+    // the worker also keeps the finished page
+    await processInWorker(task, w, key, work, target, W, H, vs, lcd)
+    return
+  }
+  await processInStrips(task, H, (y, rows) => {
+    const tall = wctx.getImageData(0, y * vs, W * 3, rows * vs).data
+    const out = processStrip(tall, W, rows, vs, lcd)
+    target.putImageData(new ImageData(out, W, rows), 0, y)
+  })
+  if (key) cachePut(key, target.canvas)
+}
 
 /** RenderTask with post-processing; exposes what PDFViewer uses */
 class CrispRenderTask {
-  // eslint-disable-next-line no-useless-constructor
-  constructor(
-    private readonly inner: RenderTask,
-    readonly promise: Promise<void>
-  ) {}
+  cancelled = false
+  /** stops work handed to the worker */
+  onCancel: (() => void) | null = null
+  readonly promise: Promise<void>
 
-  get onContinue() {
-    return this.inner.onContinue
+  constructor(
+    private readonly inner: RenderTask | null,
+    run: (task: CrispRenderTask) => Promise<void>
+  ) {
+    this.promise = run(this)
   }
 
-  set onContinue(fn) {
-    this.inner.onContinue = fn
+  get onContinue() {
+    return this.inner?.onContinue
+  }
+
+  set onContinue(fn: RenderTask['onContinue'] | undefined) {
+    if (this.inner && fn) this.inner.onContinue = fn
   }
 
   get onError() {
-    return (this.inner as any).onError
+    return (this.inner as any)?.onError
   }
 
   set onError(fn) {
-    ;(this.inner as any).onError = fn
+    if (this.inner) (this.inner as any).onError = fn
   }
 
   get separateAnnots() {
-    return this.inner.separateAnnots
+    return this.inner?.separateAnnots ?? false
   }
 
   cancel(extraDelay = 0) {
-    this.inner.cancel(extraDelay)
+    this.cancelled = true
+    this.inner?.cancel(extraDelay)
+    this.onCancel?.()
   }
 }
 
@@ -342,43 +808,135 @@ function crispRender(
   const H = target.canvas.height
   const lcd = mode === 'crisp-cleartype'
 
+  // PDFViewer shows the (opaque) canvas while rendering is still going on;
+  // until the result is written it would be black
+  target.fillStyle = '#ffffff'
+  target.fillRect(0, 0, W, H)
+
+  // a page drawn before: show it at once (or after decoding its PNG)
+  const key = cacheKey(page, params, t, W, H, mode)
+  const kept = key ? cacheGet(key) : undefined
+  if (kept?.bitmap) {
+    target.drawImage(kept.bitmap, 0, 0)
+    crispStats.fromCache++
+    return new CrispRenderTask(null, async () => {}) as unknown as RenderTask
+  }
+  if (key && kept?.png) {
+    const png = kept.png
+    crispStats.fromCache++
+    const task = new CrispRenderTask(null, async task => {
+      const bitmap = await createImageBitmap(png)
+      if (task.cancelled) {
+        bitmap.close()
+        throw new CancelledError('Rendering cancelled')
+      }
+      target.drawImage(bitmap, 0, 0)
+      if (cache.get(key) === kept) setBitmap(kept, bitmap)
+      else bitmap.close()
+    })
+    return task as unknown as RenderTask
+  }
+  // still being processed in the worker after an earlier cancellation
+  const jobId = key ? inWorker.get(key) : undefined
+  if (key && jobId !== undefined && worker) {
+    crispStats.fromCache++
+    return waitForWorker(worker, jobId, key, target, () => {
+      inWorker.delete(key)
+      return crispRender(originalRender, page, params)
+    })
+  }
+  crispStats.rendered++
+
   // very large canvas (high zoom): glyphs are big anyway, placement and
   // gamma are enough
   if (W * 3 * H > MAX_WORK_PIXELS) {
     snapGlyphOrigins(target, 1, 1)
+    const drawn = drawingCrispText(W, H, 1)
     const inner = originalRender.call(page, params)
-    const promise = inner.promise.then(() => {
-      const img = target.getImageData(0, 0, W, H)
-      applyGamma(img.data)
-      target.putImageData(img, 0, 0)
+    const task = new CrispRenderTask(inner, async task => {
+      try {
+        await inner.promise
+      } finally {
+        drawn()
+      }
+      await processInStrips(task, H, (y, rows) => {
+        const img = target.getImageData(0, y, W, rows)
+        applyGamma(img.data)
+        target.putImageData(img, 0, y)
+      })
     })
-    return new CrispRenderTask(inner, promise) as unknown as RenderTask
+    return task as unknown as RenderTask
   }
 
   let vs = 4
   while (vs > 1 && W * 3 * H * vs > MAX_WORK_PIXELS) vs >>= 1
-  const work = document.createElement('canvas')
-  work.width = W * 3
-  work.height = H * vs
-  const wctx = work.getContext('2d', {
-    alpha: false,
-    willReadFrequently: true,
-  }) as CanvasRenderingContext2D
+  const work = acquireWorkCanvas(W * 3, H * vs)
+  const wctx = workContext(work)
   snapGlyphOrigins(wctx, 1, vs)
+  rasteriseIncrementally(wctx)
+  const drawn = drawingCrispText(W * 3, H * vs, vs)
   const inner = originalRender.call(page, {
     ...params,
     canvasContext: wctx,
     transform: [3 * t[0], 0, 0, vs * t[3], 3 * t[4], vs * t[5]],
   })
-  const promise = inner.promise.then(() => {
-    const tall = wctx.getImageData(0, 0, work.width, work.height).data
-    const src = vs > 1 ? averageRows(tall, work.width, H, vs) : tall
-    const img = target.createImageData(W, H)
-    downsample3x(src, img.data, W, H, lcd)
-    target.putImageData(img, 0, 0)
-    work.width = work.height = 0 // release the memory right away
+  const renderStart = performance.now()
+  const task = new CrispRenderTask(inner, async task => {
+    try {
+      try {
+        await inner.promise
+      } finally {
+        drawn()
+      }
+      crispStats.workRenderMs += performance.now() - renderStart
+      await processWorkCanvas(task, key, work, wctx, target, W, H, vs, lcd)
+    } finally {
+      releaseWorkCanvas(work)
+    }
   })
-  return new CrispRenderTask(inner, promise) as unknown as RenderTask
+  return task as unknown as RenderTask
+}
+
+// The work canvas (3x wider, 4x taller than the page, ~80 MB) is reused:
+// allocating such a canvas for every page stalls scrolling. PDFViewer
+// renders pages one after another, so one spare canvas is enough; a
+// concurrent render gets a temporary one.
+type WorkCanvas = HTMLCanvasElement | OffscreenCanvas
+let spareWorkCanvas: WorkCanvas | null = null
+
+function workContext(canvas: WorkCanvas) {
+  return canvas.getContext('2d', {
+    alpha: false,
+    willReadFrequently: true,
+  }) as CanvasRenderingContext2D
+}
+
+function acquireWorkCanvas(width: number, height: number): WorkCanvas {
+  let canvas = spareWorkCanvas
+  spareWorkCanvas = null
+  if (canvas && canvas.width === width && canvas.height === height) {
+    // same size: clear the pixels and the state left by the previous page
+    const ctx = workContext(canvas)
+    if (typeof ctx.reset === 'function') ctx.reset()
+    else canvas.width = width
+    return canvas
+  }
+  if (canvas) canvas.width = canvas.height = 0
+  if (typeof OffscreenCanvas !== 'undefined') {
+    return new OffscreenCanvas(width, height)
+  }
+  canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  return canvas
+}
+
+function releaseWorkCanvas(canvas: WorkCanvas) {
+  if (spareWorkCanvas) {
+    canvas.width = canvas.height = 0
+  } else {
+    spareWorkCanvas = canvas
+  }
 }
 
 const patchedPrototypes = new WeakSet<object>()
@@ -386,8 +944,24 @@ const patchedPrototypes = new WeakSet<object>()
 /**
  * Intercept page rendering (once per page class: PDFPageProxy is not
  * exported, so its prototype is taken from a page instance).
+ * `renderingCancelledException` is pdf.js' class for cancelled rendering;
+ * `createWorker` creates the worker for pixel processing (crisp-pixels.worker).
  */
-export function installCrispRender(page: PDFPageProxy) {
+export function installCrispRender(
+  page: PDFPageProxy,
+  options: {
+    renderingCancelledException?: CancelledErrorClass
+    createWorker?: () => Worker
+  } = {}
+) {
+  if (options.renderingCancelledException) {
+    CancelledError = options.renderingCancelledException
+  }
+  if (options.createWorker && !createWorker) {
+    createWorker = options.createWorker
+    // start now, so that it is ready by the time the first page is drawn
+    startWorker()
+  }
   const proto = Object.getPrototypeOf(page)
   if (!proto || patchedPrototypes.has(proto)) return
   patchedPrototypes.add(proto)
