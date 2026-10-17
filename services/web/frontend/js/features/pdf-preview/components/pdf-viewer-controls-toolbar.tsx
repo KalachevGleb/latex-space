@@ -9,6 +9,7 @@ import { useDetachCompileContext as useCompileContext } from '../../../shared/co
 import { useCommandProvider } from '@/features/ide-react/hooks/use-command-provider'
 import { useTranslation } from 'react-i18next'
 import { useLayoutContext } from '@/shared/context/layout-context'
+import { PdfTextRendering } from '../util/crisp-text'
 
 type PdfViewerControlsToolbarProps = {
   requestPresentationMode: () => void
@@ -18,6 +19,8 @@ type PdfViewerControlsToolbarProps = {
   page: number
   totalPages: number
   pdfContainer?: HTMLDivElement
+  textRendering: PdfTextRendering
+  setTextRendering: (mode: PdfTextRendering) => void
 }
 
 function PdfViewerControlsToolbar({
@@ -28,6 +31,8 @@ function PdfViewerControlsToolbar({
   page,
   totalPages,
   pdfContainer,
+  textRendering,
+  setTextRendering,
 }: PdfViewerControlsToolbarProps) {
   const { t } = useTranslation()
   const { showLogs } = useCompileContext()
@@ -105,6 +110,8 @@ function PdfViewerControlsToolbar({
         page={page}
         totalPages={totalPages}
         pdfContainer={pdfContainer}
+        textRendering={textRendering}
+        setTextRendering={setTextRendering}
       />
     </div>,
 
@@ -121,6 +128,8 @@ type InnerControlsProps = {
   totalPages: number
   // eslint-disable-next-line react/no-unused-prop-types
   pdfContainer?: HTMLDivElement
+  textRendering: PdfTextRendering
+  setTextRendering: (mode: PdfTextRendering) => void
 }
 
 function PdfViewerControlsToolbarFull({
@@ -130,6 +139,8 @@ function PdfViewerControlsToolbarFull({
   setPage,
   page,
   totalPages,
+  textRendering,
+  setTextRendering,
 }: InnerControlsProps) {
   return (
     <>
@@ -144,6 +155,8 @@ function PdfViewerControlsToolbarFull({
           requestPresentationMode={requestPresentationMode}
           rawScale={rawScale}
           setZoom={setZoom}
+          textRendering={textRendering}
+          setTextRendering={setTextRendering}
         />
       </div>
     </>
@@ -158,6 +171,8 @@ function PdfViewerControlsToolbarSmall({
   page,
   totalPages,
   pdfContainer,
+  textRendering,
+  setTextRendering,
 }: InnerControlsProps) {
   return (
     <div className="pdfjs-viewer-controls-small">
@@ -165,6 +180,8 @@ function PdfViewerControlsToolbarSmall({
         requestPresentationMode={requestPresentationMode}
         rawScale={rawScale}
         setZoom={setZoom}
+        textRendering={textRendering}
+        setTextRendering={setTextRendering}
       />
       <PdfViewerControlsMenuButton
         setZoom={setZoom}

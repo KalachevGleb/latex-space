@@ -16,6 +16,12 @@ import usePresentationMode from '../hooks/use-presentation-mode'
 import useMouseWheelZoom from '../hooks/use-mouse-wheel-zoom'
 import { PDFJS } from '../util/pdf-js'
 import { PDFFile } from '@ol-types/compile'
+import {
+  PdfTextRendering,
+  defaultTextRendering,
+  isPdfTextRendering,
+  setTextRenderingMode,
+} from '../util/crisp-text'
 
 type PdfJsViewerProps = {
   url: string
@@ -35,6 +41,20 @@ function PdfJsViewer({ url, pdfFile }: PdfJsViewerProps) {
     `pdf-viewer-scale:${projectId}`,
     'page-width'
   )
+
+  // text rendering mode, stored per browser: the best mode depends on the
+  // screen (ClearType suits ordinary Windows monitors only)
+  const [storedTextRendering, setTextRendering] =
+    usePersistedState<PdfTextRendering>(
+      'pdf-viewer-text-rendering',
+      defaultTextRendering()
+    )
+  const textRendering = isPdfTextRendering(storedTextRendering)
+    ? storedTextRendering
+    : defaultTextRendering()
+  // glyphs are drawn as paths in the crisp modes: switching to or from
+  // 'standard' reloads the document, other switches only redraw the pages
+  const glyphsAsPaths = textRendering !== 'standard'
 
   // rawScale is different from scale as it is always a number.
   // This is relevant when scale is e.g. 'page-width'.
@@ -167,6 +187,13 @@ function PdfJsViewer({ url, pdfFile }: PdfJsViewerProps) {
     }
   }, [pdfJsWrapper, firstRenderDone, startFetch])
 
+  // apply the text rendering mode (declared before loading the document, so
+  // that the mode is set when the document loads)
+  useEffect(() => {
+    setTextRenderingMode(textRendering)
+    pdfJsWrapper?.rerender()
+  }, [pdfJsWrapper, textRendering])
+
   // load the PDF document from the URL
   useEffect(() => {
     if (pdfJsWrapper && url) {
@@ -200,7 +227,8 @@ function PdfJsViewer({ url, pdfFile }: PdfJsViewerProps) {
         abortController.abort()
       }
     }
-  }, [pdfJsWrapper, url, pdfFile, setError, setStartFetch])
+    // glyphsAsPaths: reload when glyphs switch between fonts and paths
+  }, [pdfJsWrapper, url, pdfFile, setError, setStartFetch, glyphsAsPaths])
 
   // listen for scroll events
   useEffect(() => {
@@ -527,6 +555,8 @@ function PdfJsViewer({ url, pdfFile }: PdfJsViewerProps) {
           page={page}
           totalPages={totalPages}
           pdfContainer={pdfJsWrapper?.container}
+          textRendering={textRendering}
+          setTextRendering={setTextRendering}
         />
       )}
     </div>

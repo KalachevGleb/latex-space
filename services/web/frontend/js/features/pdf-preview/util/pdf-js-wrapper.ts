@@ -10,6 +10,7 @@ import {
 import 'pdfjs-dist/web/pdf_viewer.css'
 import browser from '@/features/source-editor/extensions/browser'
 import { PDFFile } from '@ol-types/compile'
+import { getTextRenderingMode, installCrispRender } from './crisp-text'
 
 const DEFAULT_RANGE_CHUNK_SIZE = 128 * 1024 // 128K chunks
 
@@ -76,12 +77,23 @@ export default class PDFJSWrapper {
     }
 
     try {
+      const crisp = getTextRenderingMode() !== 'standard'
       const doc = await loadPdfDocumentFromUrl(url, {
         rangeChunkSize,
         range: rangeTransport,
+        // crisp text draws glyphs as paths (as PDFium does): Chromium's
+        // font rendering snaps unhinted LaTeX fonts to the grid and loses
+        // thin strokes
+        ...(crisp ? { disableFontFace: true } : {}),
       }).promise
 
       // check that this is still the current URL
+      if (url !== this.url) {
+        return
+      }
+
+      // intercept page rendering before the viewer draws the first page
+      installCrispRender(await doc.getPage(1))
       if (url !== this.url) {
         return
       }
@@ -106,6 +118,11 @@ export default class PDFJSWrapper {
 
   async fetchAllData() {
     await this.viewer.pdfDocument?.getData()
+  }
+
+  // redraw all pages (e.g. after the text rendering mode changed)
+  rerender() {
+    this.viewer.refresh()
   }
 
   // update the current scale value if the container size changes

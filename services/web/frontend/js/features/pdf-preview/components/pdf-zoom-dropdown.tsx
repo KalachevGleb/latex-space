@@ -11,6 +11,11 @@ import {
 } from '@/shared/components/dropdown/dropdown-menu'
 import FormControl from '@/shared/components/form/form-control'
 import { isMac } from '@/shared/utils/os'
+import {
+  PDF_TEXT_RENDERING_MODES,
+  PdfTextRendering,
+  isPdfTextRendering,
+} from '../util/crisp-text'
 
 const shortcuts = isMac
   ? {
@@ -30,9 +35,13 @@ type PdfZoomDropdownProps = {
   requestPresentationMode: () => void
   setZoom: (zoom: string) => void
   rawScale: number
+  textRendering: PdfTextRendering
+  setTextRendering: (mode: PdfTextRendering) => void
 }
 
 const zoomValues = ['0.5', '0.75', '1', '1.5', '2', '4']
+
+const TEXT_RENDERING_EVENT_PREFIX = 'text-rendering:'
 
 const rawScaleToPercentage = (rawScale: number) => {
   return `${Math.round(rawScale * 100)}%`
@@ -42,8 +51,16 @@ function PdfZoomDropdown({
   requestPresentationMode,
   setZoom,
   rawScale,
+  textRendering,
+  setTextRendering,
 }: PdfZoomDropdownProps) {
   const { t } = useTranslation()
+
+  const textRenderingLabels: Record<PdfTextRendering, string> = {
+    standard: t('pdf_text_rendering_standard'),
+    crisp: t('pdf_text_rendering_crisp'),
+    'crisp-cleartype': t('pdf_text_rendering_crisp_cleartype'),
+  }
 
   const [customZoomValue, setCustomZoomValue] = useState<string>(
     rawScaleToPercentage(rawScale)
@@ -64,6 +81,14 @@ function PdfZoomDropdown({
 
         if (eventKey === 'present') {
           requestPresentationMode()
+          return
+        }
+
+        if (eventKey?.startsWith(TEXT_RENDERING_EVENT_PREFIX)) {
+          const mode = eventKey.slice(TEXT_RENDERING_EVENT_PREFIX.length)
+          if (isPdfTextRendering(mode)) {
+            setTextRendering(mode)
+          }
           return
         }
 
@@ -162,6 +187,23 @@ function PdfZoomDropdown({
           <li role="none" key={value}>
             <DropdownItem as="button" eventKey={value}>
               {rawScaleToPercentage(Number(value))}
+            </DropdownItem>
+          </li>
+        ))}
+        <DropdownDivider />
+        <DropdownHeader aria-hidden="true">
+          {t('pdf_text_rendering')}
+        </DropdownHeader>
+        {PDF_TEXT_RENDERING_MODES.map(mode => (
+          <li role="none" key={mode}>
+            <DropdownItem
+              as="button"
+              eventKey={`${TEXT_RENDERING_EVENT_PREFIX}${mode}`}
+              active={mode === textRendering}
+              aria-current={mode === textRendering}
+              trailingIcon={mode === textRendering ? 'check' : null}
+            >
+              {textRenderingLabels[mode]}
             </DropdownItem>
           </li>
         ))}
