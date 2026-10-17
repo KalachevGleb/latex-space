@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as vscode from 'vscode'
+import { getConfig } from '../config'
 
 /** Состояние, которое viewer.js сохраняет через vscode.setState. */
 interface PersistedPdfState {
@@ -121,7 +122,7 @@ function initViewerWebview(
 <link rel="stylesheet" href="${uri('viewer.css')}">
 <title>PDF</title>
 </head>
-<body>
+<body data-bold-text="${getConfig().pdfBoldText ? 1 : 0}">
 <div id="toolbar">
   <button id="zoom-out" title="Уменьшить">−</button>
   <span id="zoom-label">100%</span>
@@ -178,6 +179,12 @@ export class PdfPreview implements vscode.Disposable {
   private queue: unknown[] = []
   /** обработчик Ctrl/Cmd+Click по PDF (обратный SyncTeX) */
   onSyncToCode?: (click: PdfSyncClick) => void
+  /** смена настройки «плотнее текст» применяется к открытой панели сразу */
+  private configListener = vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('latexspace.pdf.boldText') && this.panel) {
+      this.post({ type: 'options', boldText: getConfig().pdfBoldText })
+    }
+  })
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -185,6 +192,7 @@ export class PdfPreview implements vscode.Disposable {
   ) {}
 
   dispose(): void {
+    this.configListener.dispose()
     this.panel?.dispose()
     this.panel = undefined
   }

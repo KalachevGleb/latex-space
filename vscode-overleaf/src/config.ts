@@ -32,6 +32,7 @@ export function getConfig() {
     ignore: cfg.get<string[]>('sync.ignore', []),
     hiddenFilePatterns: cfg.get<string[]>('ui.hiddenFilePatterns', []),
     syncFineGrained: cfg.get<boolean>('synctex.fineGrained', true),
+    pdfBoldText: cfg.get<boolean>('pdf.boldText', false),
     splitEnvironments: cfg.get<string[]>(
       'synctex.splitEnvironments',
       DEFAULT_SPLIT_ENVS

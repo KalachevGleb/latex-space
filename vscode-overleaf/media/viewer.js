@@ -57,16 +57,49 @@
   // рисуются контурами (disableFontFace) — буквы получаются цельными, как в
   // PDFium. Субпиксельное сглаживание делается так же, как в FreeType:
   // страница рисуется втрое шире, и каждые три отсчёта через LCD-фильтр
-  // раскладываются по субпикселям R, G, B. Затем гамма 1.4 возвращает
-  // штрихам контраст (полутона картинок при этом немного темнеют).
+  // раскладываются по субпикселям R, G, B. По вертикали страница рисуется
+  // вчетверо выше и строки усредняются: Chromium сглаживает мелкие контуры
+  // всего по 4 подстрокам на строку пикселя, и без этого тонкие штрихи
+  // («р» сверху, «з» снизу) бледнели, а над буквами оставались бледные
+  // выступы. Затем гамма 1.4 возвращает штрихам контраст (полутона картинок
+  // при этом немного темнеют).
 
-  const TEXT_GAMMA = (() => {
+  // kTextGammaAdjust из PDFium (core/fxge/cfx_renderdevice.cpp): поднимает
+  // слабое покрытие глифа — буквы плотнее, тонкие штрихи заметнее.
+  // Включается настройкой latexspace.pdf.boldText.
+  const PDFIUM_TEXT_GAMMA = [
+    0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18,
+    19, 21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35,
+    36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 52,
+    53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67,
+    68, 69, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+    84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98,
+    99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113,
+    114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128,
+    129, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142,
+    143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 156,
+    157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171,
+    172, 173, 174, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185,
+    186, 187, 188, 189, 190, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199,
+    200, 201, 202, 203, 204, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
+    214, 215, 216, 217, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227,
+    228, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 239, 240,
+    241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 250, 251, 252, 253, 254,
+    255,
+  ]
+
+  /** яркость после сглаживания → итоговая: [таблица PDFium] + гамма 1.4 */
+  function buildTextGamma(boldText) {
     const lut = new Uint8Array(256)
     for (let v = 0; v < 256; v++) {
-      lut[v] = Math.round(255 * Math.pow(v / 255, 1.4))
+      const adjusted = boldText ? 255 - PDFIUM_TEXT_GAMMA[255 - v] : v
+      lut[v] = Math.round(255 * Math.pow(adjusted / 255, 1.4))
     }
     return lut
-  })()
+  }
+
+  let boldText = document.body.dataset.boldText === '1'
+  let TEXT_GAMMA = buildTextGamma(boldText)
 
   /** LCD-фильтр FreeType по умолчанию (FT_LCD_FILTER_DEFAULT): 8 77 86 77 8 */
   const LCD_FIR = [8, 77, 86, 77, 8]
@@ -159,12 +192,13 @@
    * пикселями, и одна и та же буква в разных строках выглядит по-разному.
    * pdf.js рисует глиф контуром последовательностью save → translate(x, y)
    * → beginPath → контур → fill → restore; ловим её на нашем контексте и
-   * выравниваем сдвиг как PDFium: по вертикали округление, по горизонтали
-   * отбрасывание дробной части (так ближе всего к его отрисовке — проверено
-   * попиксельным сравнением). stepX — ширина пикселя экрана в единицах
-   * холста (3 при тройной ширине). Повёрнутый текст не трогаем.
+   * выравниваем сдвиг как PDFium: по вертикали округление до пикселя, по
+   * горизонтали отбрасывание дробной части субпикселя (PDFium ставит глифы
+   * с точностью до трети пикселя). stepX, stepY — размер шага сетки в
+   * единицах холста (субпиксель при тройной ширине — 1; пиксель при
+   * четырёхкратной высоте — 4). Повёрнутый текст не трогаем.
    */
-  function snapGlyphOrigins(ctx, stepX) {
+  function snapGlyphOrigins(ctx, stepX, stepY = 1) {
     const save = ctx.save
     const translate = ctx.translate
     const beginPath = ctx.beginPath
@@ -187,7 +221,7 @@
             0,
             m.d,
             Math.floor(m.e / stepX) * stepX,
-            Math.round(m.f)
+            Math.round(m.f / stepY) * stepY
           )
         }
       }
@@ -215,11 +249,50 @@
     }
   }
 
+  /** предел площади рабочего холста (пикселей): дальше — меньше передискретизации */
+  const MAX_WORK_PIXELS = 24e6
+
+  /** усреднить по vs строк холста шириной rowWords пикселей в одну строку */
+  function averageRows(tall, rowWords, height, vs) {
+    const tall32 = new Uint32Array(tall.buffer, tall.byteOffset, tall.length >> 2)
+    const out = new Uint8ClampedArray(rowWords * 4 * height)
+    const out32 = new Uint32Array(out.buffer)
+    const half = vs >> 1
+    for (let y = 0; y < height; y++) {
+      const t0 = y * vs * rowWords
+      const o0 = y * rowWords
+      for (let i = 0; i < rowWords; i++) {
+        let white = true
+        for (let k = 0; k < vs; k++) {
+          if (tall32[t0 + k * rowWords + i] !== WHITE) {
+            white = false
+            break
+          }
+        }
+        if (white) {
+          out32[o0 + i] = WHITE
+          continue
+        }
+        for (let c = 0; c < 3; c++) {
+          let acc = 0
+          for (let k = 0; k < vs; k++) acc += tall[(t0 + k * rowWords + i) * 4 + c]
+          out[(o0 + i) * 4 + c] = (acc + half) / vs
+        }
+        out[(o0 + i) * 4 + 3] = 255
+      }
+    }
+    return out
+  }
+
   /** Нарисовать страницу в новый холст pxWidth×pxHeight пикселей экрана. */
   async function paintPage(page, viewport, pxWidth, pxHeight) {
-    // очень крупный масштаб: тройная ширина слишком тяжела по памяти,
-    // там глифы и так крупные — достаточно гаммы
-    if (pxWidth * 3 * pxHeight > 24e6) {
+    // вертикальная передискретизация: 4, а на крупном масштабе (большой
+    // холст) — меньше, там глифы и так крупные
+    let vs = 4
+    while (vs > 1 && pxWidth * 3 * pxHeight * vs > MAX_WORK_PIXELS) vs >>= 1
+    // очень крупный масштаб: даже тройная ширина слишком тяжела по памяти —
+    // достаточно гаммы
+    if (pxWidth * 3 * pxHeight > MAX_WORK_PIXELS) {
       const canvas = document.createElement('canvas')
       canvas.width = pxWidth
       canvas.height = pxHeight
@@ -240,18 +313,19 @@
     }
     const wide = document.createElement('canvas')
     wide.width = pxWidth * 3
-    wide.height = pxHeight
+    wide.height = pxHeight * vs
     const wctx = wide.getContext('2d', {
       alpha: false,
       willReadFrequently: true,
     })
-    snapGlyphOrigins(wctx, 3)
+    snapGlyphOrigins(wctx, 1, vs)
     await page.render({
       canvasContext: wctx,
       viewport,
-      transform: [wide.width / viewport.width, 0, 0, pxHeight / viewport.height, 0, 0],
+      transform: [wide.width / viewport.width, 0, 0, wide.height / viewport.height, 0, 0],
     }).promise
-    const src = wctx.getImageData(0, 0, wide.width, pxHeight).data
+    const tall = wctx.getImageData(0, 0, wide.width, wide.height).data
+    const src = vs > 1 ? averageRows(tall, wide.width, pxHeight, vs) : tall
     const canvas = document.createElement('canvas')
     canvas.width = pxWidth
     canvas.height = pxHeight
@@ -799,6 +873,13 @@
       loadPdf(msg.url)
     } else if (msg.type === 'highlight') showHighlight(msg)
     else if (msg.type === 'empty') showEmpty()
+    else if (msg.type === 'options') {
+      // настройка «плотнее текст» изменена — перерисовать на том же месте
+      if (!!msg.boldText === boldText) return
+      boldText = !!msg.boldText
+      TEXT_GAMMA = buildTextGamma(boldText)
+      layout(true)
+    }
   })
 
   setStatus('ожидание PDF…')

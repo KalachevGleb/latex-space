@@ -2,7 +2,7 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.8.21",
+  "version": "0.8.22",
   "publisher": "peer-review",
   "license": "MIT",
   "private": true,
@@ -117,6 +117,11 @@
             "flushright"
           ],
           "description": "Окружения, внутри которых точный SyncTeX может дробить пробелы (плюс преамбула и глобальная область). Verbatim-подобные окружения исключены всегда"
+        },
+        "latexspace.pdf.boldText": {
+          "type": "boolean",
+          "default": false,
+          "description": "Плотнее текст в PDF: дополнительно усиливать бледные края букв, как это делает PDFium. Тонкие штрихи заметнее, но буквы чуть жирнее. Применяется к открытой панели PDF сразу"
         },
         "latexspace.compile.onSave": {
           "type": "boolean",
