@@ -160,11 +160,15 @@ async function processPage(request: CrispPageRequest) {
     reader?.close()
     bitmap.close()
     if (result && complete) {
-      // both take the pixels at call time
-      const png = result.convertToBlob({ type: 'image/png' })
+      // both take the pixels at call time. PNG rather than lossless WebP:
+      // that is up to half the size, but takes three times longer to
+      // encode, and scrolling got less smooth with it.
+      const stored = result.convertToBlob({ type: 'image/png' })
       const finished = result.transferToImageBitmap()
       send({ type: 'done', id, bitmap: finished, timing }, [finished])
-      send({ type: 'png', id, png: await png.catch(() => null) })
+      // the next page waits for the compression: letting them overlap made
+      // scrolling back less smooth
+      send({ type: 'stored', id, blob: await stored.catch(() => null) })
     } else {
       send({ type: 'done', id, bitmap: null })
     }

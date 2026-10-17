@@ -226,10 +226,26 @@ type CanvasAndContext = {
 
 // Like the work canvas, a canvas of its size (the transparent canvas, or
 // the layer of a soft mask) is as large as ~80 MB: one is kept for the next
-// page. These stay canvas elements: pdf.js applies soft masks with SVG
-// filters, which only work on canvases of a document.
+// page, and freed when no page has needed it for a while. These stay canvas
+// elements: pdf.js applies soft masks with SVG filters, which only work on
+// canvases of a document.
 const pageCanvases = new WeakSet<HTMLCanvasElement>()
 let sparePageCanvas: HTMLCanvasElement | null = null
+let spareTimer: ReturnType<typeof setTimeout> | undefined
+// long enough not to free them during a pause for reading: allocating them
+// again stalls the next page
+const SPARE_KEPT_MS = 30000
+
+function keepSparePageCanvas(canvas: HTMLCanvasElement) {
+  sparePageCanvas = canvas
+  clearTimeout(spareTimer)
+  spareTimer = setTimeout(() => {
+    if (sparePageCanvas === canvas) {
+      sparePageCanvas = null
+      canvas.width = canvas.height = 0
+    }
+  }, SPARE_KEPT_MS)
+}
 
 /**
  * pdf.js' canvas factory (DOMCanvasFactory, which is not exported) that also
@@ -280,7 +296,7 @@ export class CrispCanvasFactory {
       throw new Error('Canvas is not specified')
     }
     if (!sparePageCanvas && pageCanvases.has(canvas)) {
-      sparePageCanvas = canvas
+      keepSparePageCanvas(canvas)
     } else {
       canvas.width = 0
       canvas.height = 0
@@ -358,23 +374,45 @@ function timed<T>(fn: () => T): T {
 
 // PDFViewer keeps only about 10 pages and draws evicted pages again when
 // they scroll back into view, which takes far too long with this pipeline.
-// Finished pages are kept here instead: recent ones as ready bitmaps (shown
-// at once), and above about 1 GB of bitmaps the oldest are kept only as
-// lossless PNG (a text page is a few hundred KB, decoding takes tens of
-// milliseconds). A page drawn once is never rendered again. Zoomed-in
-// detail views are not kept.
-const MAX_CACHED_PIXELS = 256e6
+// Finished pages are kept here instead, within limits on memory: the most
+// recently shown as ready bitmaps (drawn at once), the others as lossless
+// PNG (a few hundred KB per page, decoded off the main thread in tens of
+// milliseconds). Only beyond the limit for PNGs (documents of hundreds of
+// pages) are the least recently shown pages dropped; they are drawn again
+// if they come back. Zoomed-in detail views are not kept.
+export const crispCacheLimits = {
+  /**
+   * pixels of ready bitmaps (4 bytes each): PDFViewer itself keeps the
+   * canvases of the 10 most recent pages, so a few more are enough
+   */
+  bitmapPixels: 16e6,
+  /**
+   * bytes of PNGs: 1/32 of the device's memory where the browser tells it
+   * (navigator.deviceMemory, in GB, at most 8), else 256 MB
+   */
+  storedBytes: storedBytesLimit(),
+}
+
+function storedBytesLimit() {
+  const gb =
+    typeof navigator === 'undefined'
+      ? undefined
+      : (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+  return typeof gb === 'number' && gb > 0 ? (gb * 1e9) / 32 : 256e6
+}
 const MAX_CACHED_PAGE_PIXELS = 16e6
 
 type CacheEntry = {
   bitmap: ImageBitmap | null
-  png: Blob | null
+  /** the page compressed without loss */
+  stored: Blob | null
   pixels: number
 }
 // Map iteration order is insertion order: the first entry is the oldest
 const cache = new Map<string, CacheEntry>()
-// pixels held in bitmaps
+// pixels held in bitmaps, bytes held in compressed pages
 let cachedPixels = 0
+let storedBytes = 0
 const pageIds = new WeakMap<PDFPageProxy, number>()
 let nextPageId = 1
 
@@ -408,43 +446,69 @@ function cacheGet(key: string) {
   return entry
 }
 
-/** keep bitmaps within the budget: the oldest stay only as PNG */
-function trimBitmaps() {
+function dropBitmap(entry: CacheEntry) {
+  if (!entry.bitmap) return
+  entry.bitmap.close()
+  entry.bitmap = null
+  cachedPixels -= entry.pixels
+}
+
+function removeEntry(key: string, entry: CacheEntry) {
+  dropBitmap(entry)
+  if (entry.stored) storedBytes -= entry.stored.size
+  entry.stored = null
+  cache.delete(key)
+}
+
+/**
+ * keep within the limits: the oldest pages stay only compressed, the
+ * oldest compressed pages are dropped (pages still being compressed keep
+ * their bitmaps)
+ */
+function trimCache() {
   for (const entry of cache.values()) {
-    if (cachedPixels <= MAX_CACHED_PIXELS) break
-    if (entry.bitmap && entry.png) {
-      entry.bitmap.close()
-      entry.bitmap = null
-      cachedPixels -= entry.pixels
-    }
+    if (cachedPixels <= crispCacheLimits.bitmapPixels) break
+    if (entry.stored) dropBitmap(entry)
+  }
+  for (const [key, entry] of cache) {
+    if (storedBytes <= crispCacheLimits.storedBytes) break
+    if (entry.stored) removeEntry(key, entry)
   }
 }
 
 function setBitmap(entry: CacheEntry, bitmap: ImageBitmap) {
-  if (entry.bitmap) {
-    entry.bitmap.close()
-    cachedPixels -= entry.pixels
-  }
+  dropBitmap(entry)
   entry.bitmap = bitmap
   entry.pixels = bitmap.width * bitmap.height
   cachedPixels += entry.pixels
-  trimBitmaps()
+  trimCache()
+}
+
+function setStored(entry: CacheEntry, blob: Blob) {
+  if (entry.stored) storedBytes -= entry.stored.size
+  entry.stored = blob
+  storedBytes += blob.size
+  trimCache()
+}
+
+function newEntry(): CacheEntry {
+  return { bitmap: null, stored: null, pixels: 0 }
+}
+
+/** what the kept pages take now */
+export function crispCacheUsage() {
+  return { pages: cache.size, bitmapPixels: cachedPixels, storedBytes }
 }
 
 function cachePut(key: string, canvas: HTMLCanvasElement) {
   if (typeof createImageBitmap === 'undefined') return
   const old = cache.get(key)
-  if (old?.bitmap) {
-    old.bitmap.close()
-    cachedPixels -= old.pixels
-  }
-  const entry: CacheEntry = { bitmap: null, png: null, pixels: 0 }
-  cache.delete(key)
+  if (old) removeEntry(key, old)
+  const entry = newEntry()
   cache.set(key, entry)
   // both copy the canvas at call time, before PDFViewer reuses it
   canvas.toBlob(blob => {
-    if (cache.get(key) === entry) entry.png = blob
-    trimBitmaps()
+    if (blob && cache.get(key) === entry) setStored(entry, blob)
   }, 'image/png')
   createImageBitmap(canvas)
     .then(bitmap => {
@@ -456,7 +520,7 @@ function cachePut(key: string, canvas: HTMLCanvasElement) {
 
 /** an entry for a page finished in the worker, as the most recent */
 function cacheEntryFor(key: string) {
-  const entry = cache.get(key) ?? { bitmap: null, png: null, pixels: 0 }
+  const entry = cache.get(key) ?? newEntry()
   cache.delete(key)
   cache.set(key, entry)
   return entry
@@ -472,6 +536,7 @@ export function clearCrispCache() {
   for (const entry of cache.values()) entry.bitmap?.close()
   cache.clear()
   cachedPixels = 0
+  storedBytes = 0
   cacheGeneration++
   inWorker.clear()
   worker?.postMessage({ type: 'clear' })
@@ -550,13 +615,10 @@ function startWorker() {
           else job.reject(new Error('crisp-pixels worker failed on a page'))
           for (const waiter of job.waiters) waiter()
         } else {
-          // the PNG comes last
+          // the compressed page comes last
           pageJobs.delete(message.id)
           const entry = job.key && current ? cache.get(job.key) : undefined
-          if (entry && message.png) {
-            entry.png = message.png
-            trimBitmaps()
-          }
+          if (entry && message.blob) setStored(entry, message.blob)
         }
       }
     )
@@ -813,7 +875,7 @@ function crispRender(
   target.fillStyle = '#ffffff'
   target.fillRect(0, 0, W, H)
 
-  // a page drawn before: show it at once (or after decoding its PNG)
+  // a page drawn before: show it at once (or after decoding it)
   const key = cacheKey(page, params, t, W, H, mode)
   const kept = key ? cacheGet(key) : undefined
   if (kept?.bitmap) {
@@ -821,11 +883,11 @@ function crispRender(
     crispStats.fromCache++
     return new CrispRenderTask(null, async () => {}) as unknown as RenderTask
   }
-  if (key && kept?.png) {
-    const png = kept.png
+  if (key && kept?.stored) {
+    const stored = kept.stored
     crispStats.fromCache++
     const task = new CrispRenderTask(null, async task => {
-      const bitmap = await createImageBitmap(png)
+      const bitmap = await createImageBitmap(stored)
       if (task.cancelled) {
         bitmap.close()
         throw new CancelledError('Rendering cancelled')
@@ -931,12 +993,22 @@ function acquireWorkCanvas(width: number, height: number): WorkCanvas {
   return canvas
 }
 
+let spareWorkTimer: ReturnType<typeof setTimeout> | undefined
+
 function releaseWorkCanvas(canvas: WorkCanvas) {
   if (spareWorkCanvas) {
     canvas.width = canvas.height = 0
-  } else {
-    spareWorkCanvas = canvas
+    return
   }
+  spareWorkCanvas = canvas
+  // freed when no page has been rendered for a while
+  clearTimeout(spareWorkTimer)
+  spareWorkTimer = setTimeout(() => {
+    if (spareWorkCanvas === canvas) {
+      spareWorkCanvas = null
+      canvas.width = canvas.height = 0
+    }
+  }, SPARE_KEPT_MS)
 }
 
 const patchedPrototypes = new WeakSet<object>()

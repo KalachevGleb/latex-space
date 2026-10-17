@@ -299,11 +299,11 @@ export type CrispWorkerResponse =
   | { type: 'strip'; id: number; y: number; rows: number; out: ArrayBuffer }
   // the finished page, null if it failed or was dropped (and the worker's
   // time in ms: copying the work canvas, reading its pixels, the maths),
-  // then its lossless PNG for the kept-pages cache
+  // then the page compressed without loss (PNG) for the kept-pages cache
   | {
       type: 'done'
       id: number
       bitmap: ImageBitmap | null
       timing?: { copy: number; read: number; maths: number }
     }
-  | { type: 'png'; id: number; png: Blob | null }
+  | { type: 'stored'; id: number; blob: Blob | null }
