@@ -773,6 +773,34 @@ class CrispRenderTask {
   }
 }
 
+/**
+ * PDFViewer matches the canvas to the screen scale with a fraction of
+ * denominator at most 8 (pdf.js' approximateFraction). At scales such as
+ * 1.125 or 1.375 (Windows at 125% and the browser zoomed to 90% or 110%)
+ * the canvas is then 1-3 pixels off the page's size on the screen, and the
+ * browser stretches it: the whole page is blurred. In the crisp modes the
+ * canvas of a whole page gets its exact size in screen pixels instead (as
+ * in the VS Code plugin). Returns the transform for the canvas.
+ */
+export function fitCanvasToScreen(
+  canvas: { width: number; height: number },
+  t: number[]
+) {
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  // zoomed-in detail views (a part of the page) stay as they are
+  if (t[4] !== 0 || t[5] !== 0 || !(t[0] > 0) || !(t[3] > 0)) return t
+  // the page's size in CSS pixels: PDFViewer's scale is canvas / page
+  const pageWidth = canvas.width / t[0]
+  const pageHeight = canvas.height / t[3]
+  const width = Math.round(pageWidth * dpr)
+  const height = Math.round(pageHeight * dpr)
+  if (width <= 0 || height <= 0) return t
+  if (width === canvas.width && height === canvas.height) return t
+  canvas.width = width
+  canvas.height = height
+  return [width / pageWidth, 0, 0, height / pageHeight, 0, 0]
+}
+
 function crispRender(
   originalRender: PDFPageProxy['render'],
   page: PDFPageProxy,
@@ -780,7 +808,7 @@ function crispRender(
 ): RenderTask {
   const mode = currentMode
   const target = params.canvasContext as CanvasRenderingContext2D | undefined
-  const t = (params.transform as number[] | null | undefined) || [
+  const given = (params.transform as number[] | null | undefined) || [
     1, 0, 0, 1, 0, 0,
   ]
   if (
@@ -788,12 +816,14 @@ function crispRender(
     !target ||
     (params as any).intent === 'print' ||
     params.pageColors ||
-    t[1] !== 0 ||
-    t[2] !== 0
+    given[1] !== 0 ||
+    given[2] !== 0
   ) {
     return originalRender.call(page, params)
   }
 
+  const t = fitCanvasToScreen(target.canvas, given)
+  const renderParams = t === given ? params : { ...params, transform: t }
   const W = target.canvas.width
   const H = target.canvas.height
   const lcd = mode === 'crisp-cleartype'
@@ -832,7 +862,7 @@ function crispRender(
     crispStats.fromCache++
     return waitForWorker(worker, jobId, key, target, () => {
       inWorker.delete(key)
-      return crispRender(originalRender, page, params)
+      return crispRender(originalRender, page, renderParams)
     })
   }
   crispStats.rendered++
@@ -842,7 +872,7 @@ function crispRender(
   if (W * 3 * H > MAX_WORK_PIXELS) {
     snapGlyphOrigins(target, 1, 1)
     const drawn = drawingCrispText(W, H, 1)
-    const inner = originalRender.call(page, params)
+    const inner = originalRender.call(page, renderParams)
     const task = new CrispRenderTask(inner, async task => {
       try {
         await inner.promise

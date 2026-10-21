@@ -4,6 +4,7 @@ import {
   CrispCanvasFactory,
   defaultTextRendering,
   drawingCrispText,
+  fitCanvasToScreen,
   isPdfTextRendering,
   snapGlyphOrigins,
 } from '../../../../../frontend/js/features/pdf-preview/util/crisp-text'
@@ -58,6 +59,56 @@ describe('crisp-text', function () {
     expect(isPdfTextRendering('crisp-cleartype')).to.equal(true)
     expect(isPdfTextRendering('bold')).to.equal(false)
     expect(isPdfTextRendering(null)).to.equal(false)
+  })
+
+  describe('fitCanvasToScreen', function () {
+    let savedRatio: PropertyDescriptor | undefined
+
+    function setRatio(ratio: number) {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        configurable: true,
+        value: ratio,
+      })
+    }
+
+    beforeEach(function () {
+      savedRatio = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+    })
+
+    afterEach(function () {
+      if (savedRatio)
+        Object.defineProperty(window, 'devicePixelRatio', savedRatio)
+      else delete (window as any).devicePixelRatio
+    })
+
+    it('gives the canvas the page size in screen pixels at 112.5%', function () {
+      // what PDFViewer does at 1.125: 8/7 instead of 9/8, 696 x 984 for a
+      // page of 616 x 875 CSS pixels shown at 693 x 984.375
+      setRatio(1.125)
+      const canvas = { width: 696, height: 984 }
+      const t = fitCanvasToScreen(canvas, [696 / 616, 0, 0, 984 / 875, 0, 0])
+      expect(canvas).to.deep.equal({ width: 693, height: 984 })
+      expect(t[0]).to.be.closeTo(693 / 616, 1e-12)
+      expect(t[3]).to.be.closeTo(984 / 875, 1e-12)
+      expect(t[4]).to.equal(0)
+      expect(t[5]).to.equal(0)
+    })
+
+    it('leaves a canvas that already fits alone', function () {
+      setRatio(1.25)
+      const canvas = { width: 770, height: 1100 }
+      const given = [1.25, 0, 0, 1.25, 0, 0]
+      expect(fitCanvasToScreen(canvas, given)).to.equal(given)
+      expect(canvas).to.deep.equal({ width: 770, height: 1100 })
+    })
+
+    it('leaves zoomed-in detail views alone', function () {
+      setRatio(1.125)
+      const canvas = { width: 696, height: 984 }
+      const given = [696 / 616, 0, 0, 984 / 875, -120, -300]
+      expect(fitCanvasToScreen(canvas, given)).to.equal(given)
+      expect(canvas).to.deep.equal({ width: 696, height: 984 })
+    })
   })
 
   describe('TEXT_GAMMA', function () {
