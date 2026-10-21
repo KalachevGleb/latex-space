@@ -29,9 +29,9 @@
 
   .loading-screen-brand {
     position: relative;
-    padding-top: math.percentage(math.div(150, 130)); // dimensions of the SVG
+    padding-top: math.percentage(math.div(74, 64)); // dimensions of the SVG
     height: 0;
-    background: url(../../../../public/img/ol-brand/overleaf-o-grey.svg)
+    background: url(../../../../public/img/latexspace/latexspace-mark-grey.svg)
       no-repeat bottom / 100%;
 
     &::after {
@@ -41,8 +41,8 @@
       right: 0;
       bottom: 0;
       left: 0;
-      background: url(../../../../public/img/ol-brand/overleaf-o.svg) no-repeat
-        bottom / 100%;
+      background: url(../../../../public/img/latexspace/latexspace-mark.svg)
+        no-repeat bottom / 100%;
       transition: height 0.5s;
     }
   }

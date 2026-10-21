@@ -13,7 +13,10 @@ nav.navbar.navbar-default.navbar-main.navbar-expand-lg(
 				if settings.nav.custom_logo
 					.navbar-logo(style=`background-image:url("${settings.nav.custom_logo}")`)
 				if nav.title
-					.navbar-title #{nav.title}
+					.navbar-title
+						if !settings.nav.custom_logo
+							span.navbar-title-mark(aria-hidden='true')
+						span #{nav.title}
 				if !nav.title && !settings.nav.custom_logo
 					.navbar-logo
 

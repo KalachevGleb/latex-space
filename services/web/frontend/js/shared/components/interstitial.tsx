@@ -1,5 +1,6 @@
 import classNames from 'classnames'
-import overleafLogo from '@/shared/svgs/overleaf-green.svg'
+import latexspaceLogo from '@/shared/svgs/latexspace-logo.svg'
+import getMeta from '@/utils/meta'
 
 type InterstitialProps = {
   className?: string
@@ -16,9 +17,10 @@ export function Interstitial({
   showLogo,
   title,
 }: InterstitialProps) {
+  const { appName } = getMeta('ol-ExposedSettings')
   return (
     <div className={classNames('interstitial', className)}>
-      {showLogo && <img className="logo" src={overleafLogo} alt="Overleaf" />}
+      {showLogo && <img className="logo" src={latexspaceLogo} alt={appName} />}
       {title && <h1 className="h3 interstitial-header">{title}</h1>}
       <div className={classNames(contentClassName)}>{children}</div>
     </div>

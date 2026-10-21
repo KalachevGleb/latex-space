@@ -66,6 +66,16 @@
       &:focus {
         color: var(--navbar-title-color-hover);
       }
+
+      .navbar-title-mark {
+        display: inline-block;
+        width: 1.5em;
+        height: 1.5em;
+        margin-right: var(--spacing-04);
+        vertical-align: middle;
+        background: url('../../../public/img/latexspace/latexspace-icon.svg')
+          center / contain no-repeat;
+      }
     }
   }
 

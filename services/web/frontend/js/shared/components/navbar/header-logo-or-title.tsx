@@ -20,6 +20,9 @@ export default function HeaderLogoOrTitle({
       )}
       {title && (
         <div className="navbar-title">
+          {!customLogo && (
+            <span className="navbar-title-mark" aria-hidden="true" />
+          )}
           <span>{title}</span>
         </div>
       )}
