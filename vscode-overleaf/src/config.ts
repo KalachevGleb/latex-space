@@ -5,6 +5,19 @@ import { ProjectMeta } from './sync/state'
 
 const PASSWORD_SECRET_KEY = 'latexspace.userPassword'
 
+/** значения настройки latexspace.pdf.textRendering */
+export const PDF_TEXT_RENDERING = [
+  'auto',
+  'standard',
+  'crisp',
+  'crisp-cleartype',
+] as const
+export type PdfTextRendering = (typeof PDF_TEXT_RENDERING)[number]
+
+export function isPdfTextRendering(value: unknown): value is PdfTextRendering {
+  return (PDF_TEXT_RENDERING as readonly unknown[]).includes(value)
+}
+
 export function getConfig() {
   const cfg = vscode.workspace.getConfiguration('latexspace')
   return {
@@ -33,6 +46,10 @@ export function getConfig() {
     hiddenFilePatterns: cfg.get<string[]>('ui.hiddenFilePatterns', []),
     syncFineGrained: cfg.get<boolean>('synctex.fineGrained', true),
     pdfBoldText: cfg.get<boolean>('pdf.boldText', true),
+    pdfTextRendering: ((value: unknown): PdfTextRendering =>
+      isPdfTextRendering(value) ? value : 'auto')(
+      cfg.get<string>('pdf.textRendering', 'auto')
+    ),
     splitEnvironments: cfg.get<string[]>(
       'synctex.splitEnvironments',
       DEFAULT_SPLIT_ENVS

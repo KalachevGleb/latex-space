@@ -1,7 +1,7 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as vscode from 'vscode'
-import { getConfig } from '../config'
+import { getConfig, isPdfTextRendering } from '../config'
 
 /** Состояние, которое viewer.js сохраняет через vscode.setState. */
 interface PersistedPdfState {
@@ -63,6 +63,8 @@ export function registerPdfPanelSerializer(
           })
         } else if (msg?.type === 'compile') {
           void vscode.commands.executeCommand('latexspace.compile')
+        } else if (msg?.type === 'setTextRendering') {
+          saveTextRendering(msg.mode)
         }
       })
       initViewerWebview(panel.webview, context, rec.state.rootDir)
@@ -85,6 +87,19 @@ function takeRestoredPanel(rootDir: string): RestoredPanel | undefined {
   }
   rec.adopted = true
   return rec
+}
+
+/**
+ * Режим отрисовки текста, выбранный списком на панели PDF, — в настройки
+ * пользователя. Настройка машинная (scope: machine): она остаётся на этом
+ * компьютере и не переносится синхронизацией настроек — что лучше, зависит
+ * от экрана.
+ */
+function saveTextRendering(mode: unknown): void {
+  if (!isPdfTextRendering(mode)) return
+  void vscode.workspace
+    .getConfiguration('latexspace')
+    .update('pdf.textRendering', mode, vscode.ConfigurationTarget.Global)
 }
 
 /** Настроить webview панели: права на ресурсы и HTML со скриптами. */
@@ -122,12 +137,18 @@ function initViewerWebview(
 <link rel="stylesheet" href="${uri('viewer.css')}">
 <title>PDF</title>
 </head>
-<body data-bold-text="${getConfig().pdfBoldText ? 1 : 0}">
+<body data-bold-text="${getConfig().pdfBoldText ? 1 : 0}" data-text-rendering="${getConfig().pdfTextRendering}">
 <div id="toolbar">
   <button id="zoom-out" title="Уменьшить">−</button>
   <span id="zoom-label">100%</span>
   <button id="zoom-in" title="Увеличить">+</button>
   <button id="fit-width" title="По ширине">⇔</button>
+  <select id="text-rendering" title="Отрисовка текста (хранится только на этом компьютере)">
+    <option value="auto">Авто</option>
+    <option value="standard">Обычная</option>
+    <option value="crisp">Чёткая</option>
+    <option value="crisp-cleartype">Чёткая + ClearType</option>
+  </select>
   <span id="page-info"></span>
   <span id="hint">Ctrl/Cmd+Click — перейти к исходнику</span>
   <span id="status"></span>
@@ -179,10 +200,19 @@ export class PdfPreview implements vscode.Disposable {
   private queue: unknown[] = []
   /** обработчик Ctrl/Cmd+Click по PDF (обратный SyncTeX) */
   onSyncToCode?: (click: PdfSyncClick) => void
-  /** смена настройки «плотнее текст» применяется к открытой панели сразу */
+  /** смена настроек отрисовки применяется к открытой панели сразу */
   private configListener = vscode.workspace.onDidChangeConfiguration(e => {
-    if (e.affectsConfiguration('latexspace.pdf.boldText') && this.panel) {
-      this.post({ type: 'options', boldText: getConfig().pdfBoldText })
+    if (
+      (e.affectsConfiguration('latexspace.pdf.boldText') ||
+        e.affectsConfiguration('latexspace.pdf.textRendering')) &&
+      this.panel
+    ) {
+      const cfg = getConfig()
+      this.post({
+        type: 'options',
+        boldText: cfg.pdfBoldText,
+        textRendering: cfg.pdfTextRendering,
+      })
     }
   })
 
@@ -253,6 +283,7 @@ export class PdfPreview implements vscode.Disposable {
     h?: unknown
     v?: unknown
     word?: unknown
+    mode?: unknown
   }): void {
     if (msg?.type === 'ready') {
       this.ready = true
@@ -261,6 +292,8 @@ export class PdfPreview implements vscode.Disposable {
       for (const m of pending) void this.panel?.webview.postMessage(m)
     } else if (msg?.type === 'compile') {
       void vscode.commands.executeCommand('latexspace.compile')
+    } else if (msg?.type === 'setTextRendering') {
+      saveTextRendering(msg.mode)
     } else if (msg?.type === 'syncToCode' && this.onSyncToCode) {
       this.onSyncToCode({
         page: Number(msg.page),

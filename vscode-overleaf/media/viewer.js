@@ -101,6 +101,35 @@
   let boldText = document.body.dataset.boldText === '1'
   let TEXT_GAMMA = buildTextGamma(boldText)
 
+  // ---------- режим отрисовки текста ----------
+  //
+  // «Обычная» — как в обычном pdf.js: текст шрифтами браузера, без
+  // обработки. «Чёткая» — контуры, передискретизация и гамма, сглаживание
+  // оттенками серого. «Чёткая + ClearType» — то же с субпиксельным
+  // сглаживанием. Что лучше, зависит от экрана, поэтому режим — настройка
+  // этого компьютера (latexspace.pdf.textRendering); «auto» — ClearType на
+  // Windows с обычным экраном, иначе «Чёткая» (на Retina и экранах с другим
+  // порядком субпикселей ClearType даёт цветную кайму).
+  const TEXT_MODES = ['standard', 'crisp', 'crisp-cleartype']
+  const TEXT_MODE_LABELS = {
+    standard: 'Обычная',
+    crisp: 'Чёткая',
+    'crisp-cleartype': 'Чёткая + ClearType',
+  }
+
+  function resolveTextMode(setting) {
+    if (TEXT_MODES.includes(setting)) return setting
+    const windows = /Windows/.test(navigator.userAgent)
+    return windows && (window.devicePixelRatio || 1) < 2
+      ? 'crisp-cleartype'
+      : 'crisp'
+  }
+
+  /** значение настройки: auto или один из TEXT_MODES */
+  let textSetting = document.body.dataset.textRendering || 'auto'
+  /** режим, в котором рисуются страницы */
+  let textMode = resolveTextMode(textSetting)
+
   /** LCD-фильтр FreeType по умолчанию (FT_LCD_FILTER_DEFAULT): 8 77 86 77 8 */
   const LCD_FIR = [8, 77, 86, 77, 8]
   const WHITE = 0xffffffff
@@ -169,6 +198,32 @@
             128) >>
             8
         ]
+        dst[o * 4 + 3] = 255
+      }
+    }
+  }
+
+  /** то же без ClearType: три отсчёта усредняются (оттенки серого) */
+  function grayDownsample(src, dst, width, height) {
+    const src32 = new Uint32Array(src.buffer, src.byteOffset, src.length >> 2)
+    const dst32 = new Uint32Array(dst.buffer, dst.byteOffset, dst.length >> 2)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const s = y * width * 3 + 3 * x
+        const o = y * width + x
+        if (
+          src32[s] === WHITE &&
+          src32[s + 1] === WHITE &&
+          src32[s + 2] === WHITE
+        ) {
+          dst32[o] = WHITE
+          continue
+        }
+        const p = s * 4
+        for (let c = 0; c < 3; c++) {
+          dst[o * 4 + c] =
+            TEXT_GAMMA[Math.round((src[p + c] + src[p + 4 + c] + src[p + 8 + c]) / 3)]
+        }
         dst[o * 4 + 3] = 255
       }
     }
@@ -286,6 +341,16 @@
 
   /** Нарисовать страницу в новый холст pxWidth×pxHeight пикселей экрана. */
   async function paintPage(page, viewport, pxWidth, pxHeight) {
+    const transform = [pxWidth / viewport.width, 0, 0, pxHeight / viewport.height, 0, 0]
+    // «Обычная» — как в pdf.js: прямо в холст, без обработки
+    if (textMode === 'standard') {
+      const canvas = document.createElement('canvas')
+      canvas.width = pxWidth
+      canvas.height = pxHeight
+      const ctx = canvas.getContext('2d', { alpha: false })
+      await page.render({ canvasContext: ctx, viewport, transform }).promise
+      return canvas
+    }
     // вертикальная передискретизация: 4, а на крупном масштабе (большой
     // холст) — меньше, там глифы и так крупные
     let vs = 4
@@ -301,11 +366,7 @@
         willReadFrequently: true,
       })
       snapGlyphOrigins(ctx, 1)
-      await page.render({
-        canvasContext: ctx,
-        viewport,
-        transform: [pxWidth / viewport.width, 0, 0, pxHeight / viewport.height, 0, 0],
-      }).promise
+      await page.render({ canvasContext: ctx, viewport, transform }).promise
       const img = ctx.getImageData(0, 0, pxWidth, pxHeight)
       applyGamma(img.data)
       ctx.putImageData(img, 0, 0)
@@ -331,7 +392,11 @@
     canvas.height = pxHeight
     const ctx = canvas.getContext('2d', { alpha: false })
     const img = ctx.createImageData(pxWidth, pxHeight)
-    lcdDownsample(src, img.data, pxWidth, pxHeight)
+    if (textMode === 'crisp-cleartype') {
+      lcdDownsample(src, img.data, pxWidth, pxHeight)
+    } else {
+      grayDownsample(src, img.data, pxWidth, pxHeight)
+    }
     ctx.putImageData(img, 0, 0)
     return canvas
   }
@@ -614,6 +679,10 @@
       const savedScroll = preserveScroll ? window.scrollY : 0
       // читаем каждый раз: меняется с масштабом окна VS Code (window.zoomLevel)
       const dpr = window.devicePixelRatio || 1
+      // «авто» зависит от dpr; «Обычной» оно не бывает — документ не
+      // нужно загружать заново
+      textMode = resolveTextMode(textSetting)
+      updateTextSelect()
 
       const first = await doc.getPage(1)
       if (superseded()) return
@@ -706,14 +775,20 @@
     }
   }
 
+  /** адрес показанного PDF: при смене «Обычная» ↔ «Чёткая» он загружается заново */
+  let lastPdfUrl = null
+
   async function loadPdf(url) {
     const ticket = ++loadTicket
+    lastPdfUrl = url
     setStatus('загрузка…')
     let doc
     try {
       doc = await pdfjsLib.getDocument({
         url,
-        disableFontFace: true,
+        // в режимах «Чёткая» глифы рисуются контурами, а не шрифтами
+        // браузера (DirectWrite подгоняет их под сетку и теряет штрихи)
+        disableFontFace: textMode !== 'standard',
         // CSP панели запрещает eval — pdf.js не будет и пробовать
         isEvalSupported: false,
       }).promise
@@ -827,6 +902,38 @@
     layout(true)
   })
 
+  // ---------- переключатель режима отрисовки текста ----------
+
+  const textSelect = document.getElementById('text-rendering')
+
+  function updateTextSelect() {
+    if (!textSelect) return
+    const auto = textSelect.querySelector('option[value="auto"]')
+    if (auto) auto.textContent = 'Авто: ' + TEXT_MODE_LABELS[resolveTextMode('auto')]
+    textSelect.value = TEXT_MODES.includes(textSetting) ? textSetting : 'auto'
+  }
+
+  /** новое значение настройки: перерисовать, а если меняются шрифты — загрузить заново */
+  function applyTextSetting(setting) {
+    textSetting = setting
+    const next = resolveTextMode(setting)
+    updateTextSelect()
+    if (next === textMode) return
+    const reload = (next === 'standard') !== (textMode === 'standard')
+    textMode = next
+    if (reload && lastPdfUrl) loadPdf(lastPdfUrl)
+    else layout(true)
+  }
+
+  if (textSelect) {
+    textSelect.addEventListener('change', () => {
+      applyTextSetting(textSelect.value)
+      // расширение запишет его в настройки этого компьютера
+      vscode.postMessage({ type: 'setTextRendering', mode: textSelect.value })
+    })
+    updateTextSelect()
+  }
+
   let resizeTimer = null
   window.addEventListener('resize', () => {
     if (!fitWidth) return
@@ -874,11 +981,18 @@
     } else if (msg.type === 'highlight') showHighlight(msg)
     else if (msg.type === 'empty') showEmpty()
     else if (msg.type === 'options') {
-      // настройка «плотнее текст» изменена — перерисовать на том же месте
-      if (!!msg.boldText === boldText) return
-      boldText = !!msg.boldText
-      TEXT_GAMMA = buildTextGamma(boldText)
-      layout(true)
+      // изменены настройки отрисовки — перерисовать на том же месте
+      if (typeof msg.boldText === 'boolean' && msg.boldText !== boldText) {
+        boldText = msg.boldText
+        TEXT_GAMMA = buildTextGamma(boldText)
+        layout(true)
+      }
+      if (
+        typeof msg.textRendering === 'string' &&
+        msg.textRendering !== textSetting
+      ) {
+        applyTextSetting(msg.textRendering)
+      }
     }
   })
 

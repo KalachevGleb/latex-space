@@ -53,6 +53,17 @@ html {
   background: var(--vscode-button-secondaryHoverBackground, #45494e);
 }
 
+#toolbar select {
+  height: 22px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--vscode-dropdown-background, #3c3c3c);
+  color: var(--vscode-dropdown-foreground, #ccc);
+  border: 1px solid var(--vscode-dropdown-border, #3c3c3c);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
 #status {
   margin-left: auto;
   opacity: 0.7;
