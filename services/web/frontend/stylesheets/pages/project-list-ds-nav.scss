@@ -325,15 +325,4 @@
       }
     }
   }
-
-  .ds-nav-ds-name {
-    margin-bottom: var(--spacing-05);
-
-    span {
-      text-transform: uppercase;
-      font-weight: bold;
-
-      @include body-xs;
-    }
-  }
 }
