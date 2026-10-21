@@ -347,6 +347,11 @@
   align-items: center;
 }
 
+// an icon button with a menu: no caret
+.pdfjs-text-rendering-toggle.dropdown-toggle::after {
+  display: none;
+}
+
 .pdfjs-zoom-dropdown-button {
   width: 60px;
   text-align: right;

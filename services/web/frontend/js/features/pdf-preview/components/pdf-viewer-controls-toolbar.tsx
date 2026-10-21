@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import PdfPageNumberControl from './pdf-page-number-control'
 import PdfZoomButtons from './pdf-zoom-buttons'
 import PdfZoomDropdown from './pdf-zoom-dropdown'
+import PdfTextRenderingButton from './pdf-text-rendering-button'
 import { useResizeObserver } from '@/shared/hooks/use-resize-observer'
 import PdfViewerControlsMenuButton from './pdf-viewer-controls-menu-button'
 import { useDetachCompileContext as useCompileContext } from '../../../shared/context/detach-compile-context'
@@ -150,13 +151,17 @@ function PdfViewerControlsToolbarFull({
         totalPages={totalPages}
       />
       <div className="pdfjs-zoom-controls">
+        <div className="pdfjs-toolbar-buttons">
+          <PdfTextRenderingButton
+            textRendering={textRendering}
+            setTextRendering={setTextRendering}
+          />
+        </div>
         <PdfZoomButtons setZoom={setZoom} />
         <PdfZoomDropdown
           requestPresentationMode={requestPresentationMode}
           rawScale={rawScale}
           setZoom={setZoom}
-          textRendering={textRendering}
-          setTextRendering={setTextRendering}
         />
       </div>
     </>
