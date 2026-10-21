@@ -2,8 +2,9 @@
   "name": "latexspace",
   "displayName": "LatexSpace",
   "description": "Локальная работа с проектами LatexSpace: двусторонняя синхронизация, компиляция одной кнопкой, SyncTeX, комментарии рецензентов",
-  "version": "0.8.23",
+  "version": "0.8.24",
   "publisher": "peer-review",
+  "icon": "media/icon.png",
   "license": "MIT",
   "private": true,
   "engines": {
