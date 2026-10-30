@@ -21,7 +21,6 @@ import {
   figureModal,
   figureModalPasteHandler,
 } from '../../extensions/figure-modal'
-import { rememberEnvironmentPair } from './completions/remember-environment-pair'
 
 const completionSources: CompletionSource[] = [
   ...argumentCompletionSources,
@@ -43,7 +42,6 @@ export const latex = () => {
     latexIndentService(),
     linting(),
     metadata(),
-    rememberEnvironmentPair,
     openAutocomplete(),
     ...completionSources.map(completionSource =>
       LaTeXLanguage.data.of({

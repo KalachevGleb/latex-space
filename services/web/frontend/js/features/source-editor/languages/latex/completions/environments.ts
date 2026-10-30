@@ -1,24 +1,25 @@
 import { environments, snippet } from './data/environments'
 import { applySnippet, extendOverUnpairedClosingBrace } from './apply'
-import { Completion, CompletionContext } from '@codemirror/autocomplete'
+import {
+  Completion,
+  CompletionContext,
+  pickedCompletion,
+} from '@codemirror/autocomplete'
 import { Completions } from './types'
-import { syntaxTree } from '@codemirror/language'
 import { EditorView } from '@codemirror/view'
-import { SyntaxNode } from '@lezer/common'
-import { getRememberedEnvironmentPair } from './remember-environment-pair'
 
 /**
  * Environments from bundled data
  */
 export function buildEnvironmentCompletions(completions: Completions) {
-  for (const [item, snippet] of environments) {
+  for (const [item, template] of environments) {
     // clear snippet for some environments after inserting
     const clear =
       item === 'abstract' || item === 'itemize' || item === 'enumerate'
     completions.commands.push({
       type: 'env',
       label: `\\begin{${item}} …`,
-      apply: applyBeginCompletion(item, clear),
+      apply: applyBeginCompletion(item, clear, template),
       extend: extendOverUnpairedClosingBrace,
     })
   }
@@ -47,6 +48,18 @@ type EnvironmentCommand = {
   nameTo: number
 }
 
+const verbatimEnvironments = new Set([
+  'verbatim',
+  'verbatim*',
+  'boxedverbatim',
+  'Verbatim',
+  'lstlisting',
+  'minted',
+  'tcblisting',
+  'codeexample',
+  'comment',
+])
+
 const isAsciiLetter = (char: string): boolean => {
   if (!char) {
     return false
@@ -58,278 +71,237 @@ const isAsciiLetter = (char: string): boolean => {
   )
 }
 
-const iterateEnvironmentCommandsInText = function* (
+const readEnvironmentCommand = (
   text: string,
-  textOffset: number
-): Generator<EnvironmentCommand> {
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] !== '\\') {
-      continue
-    }
-
-    let cursor = i + 1
-    while (cursor < text.length && isAsciiLetter(text[cursor])) {
-      cursor++
-    }
-
-    const commandName = text.slice(i + 1, cursor)
-    if (commandName !== 'begin' && commandName !== 'end') {
-      continue
-    }
-
-    while (cursor < text.length) {
-      const char = text[cursor]
-      if (char === ' ' || char === '\t' || char === '\n') {
-        cursor++
-        continue
-      }
-      break
-    }
-
-    if (text[cursor] !== '{') {
-      continue
-    }
-
-    const nameStart = cursor + 1
-    let nameEnd = nameStart
-    while (nameEnd < text.length && text[nameEnd] !== '}') {
-      nameEnd++
-    }
-    if (nameEnd >= text.length) {
-      continue
-    }
-
-    yield {
-      cmd: commandName,
-      env: text.slice(nameStart, nameEnd),
-      commandFrom: textOffset + i,
-      nameFrom: textOffset + nameStart,
-      nameTo: textOffset + nameEnd,
-    }
-
-    i = nameEnd
+  commandFrom: number,
+  commandTo: number,
+  cmd: 'begin' | 'end'
+): EnvironmentCommand | null => {
+  let cursor = commandTo
+  while (
+    text[cursor] === ' ' ||
+    text[cursor] === '\t' ||
+    text[cursor] === '\n'
+  ) {
+    cursor++
   }
-}
-
-const getEnvNameNode = (node: SyntaxNode | null): SyntaxNode | null => {
-  const nameNode = node?.getChild('EnvNameGroup')?.getChild('OpenBrace')
-    ?.nextSibling
-  if (!nameNode || nameNode.type.is('CloseBrace')) {
+  if (text[cursor] !== '{') {
     return null
   }
-  return nameNode
-}
 
-const findAncestorNodeWithType = (
-  node: SyntaxNode | null,
-  type: string
-): SyntaxNode | null => {
-  while (node) {
-    if (node.type.is(type)) {
-      return node
+  const nameFrom = cursor + 1
+  let nameTo = nameFrom
+  while (nameTo < text.length && text[nameTo] !== '}') {
+    if (/[{\\%\n]/.test(text[nameTo])) {
+      return null
     }
-    node = node.parent
+    nameTo++
   }
-  return null
+  if (nameTo >= text.length) {
+    return null
+  }
+
+  return {
+    cmd,
+    env: text.slice(nameFrom, nameTo),
+    commandFrom,
+    nameFrom,
+    nameTo,
+  }
 }
 
-const findBeginEnvNode = (
-  view: EditorView,
-  from: number,
-  to: number
-): SyntaxNode | null => {
-  const { state } = view
-  const tree = syntaxTree(state)
-  const positions = Array.from(
-    new Set([
-      state.selection.main.head,
-      from,
-      to,
-      from + 1,
-      to - 1,
-    ])
-  ).filter(pos => pos >= 0 && pos <= state.doc.length)
+/**
+ * All complete `\begin{…}` and `\end{…}` commands in the text,
+ * except those in comments, `\verb` and verbatim environments
+ */
+const findEnvironmentCommands = (text: string): EnvironmentCommand[] => {
+  const commands: EnvironmentCommand[] = []
 
-  for (const pos of positions) {
-    for (const bias of [-1, 1] as const) {
-      const resolvedNode = tree.resolveInner(pos, bias)
-      const beginEnv =
-        findAncestorNodeWithType(resolvedNode, 'BeginEnv') ??
-        findAncestorNodeWithType(resolvedNode, '$Environment')?.getChild(
-          'BeginEnv'
-        )
-
-      if (beginEnv?.type.is('BeginEnv')) {
-        return beginEnv
+  let i = 0
+  while (i < text.length) {
+    if (text[i] === '%') {
+      const lineEnd = text.indexOf('\n', i)
+      if (lineEnd === -1) {
+        break
       }
-    }
-  }
-
-  return null
-}
-
-const findBeginNameByText = (
-  view: EditorView,
-  from: number,
-  to: number
-): { from: number; to: number; beginCommandFrom: number } | null => {
-  const { state } = view
-  const line = state.doc.lineAt(from)
-  const cursorPos = state.selection.main.head
-  for (const command of iterateEnvironmentCommandsInText(line.text, line.from)) {
-    if (command.cmd !== 'begin') {
+      i = lineEnd + 1
       continue
     }
 
-    const nameFrom = command.nameFrom
-    const nameTo = command.nameTo
-    const intersects =
-      (from >= nameFrom && from <= nameTo) ||
-      (to >= nameFrom && to <= nameTo) ||
-      (cursorPos >= nameFrom && cursorPos <= nameTo)
-
-    if (intersects) {
-      return {
-        from: nameFrom,
-        to: nameTo,
-        beginCommandFrom: command.commandFrom,
-      }
-    }
-  }
-
-  return null
-}
-
-const findEndNameRangeByStructure = (
-  view: EditorView,
-  beginCommandFrom: number
-): { from: number; to: number } | null => {
-  const docTail = view.state.doc.sliceString(beginCommandFrom)
-  let hasSeenTargetBegin = false
-  let depth = 0
-
-  for (const command of iterateEnvironmentCommandsInText(docTail, beginCommandFrom)) {
-    if (!hasSeenTargetBegin) {
-      if (command.cmd === 'begin') {
-        hasSeenTargetBegin = true
-      }
+    if (text[i] !== '\\') {
+      i++
       continue
     }
 
+    let commandTo = i + 1
+    while (commandTo < text.length && isAsciiLetter(text[commandTo])) {
+      commandTo++
+    }
+    const commandName = text.slice(i + 1, commandTo)
+
+    if (commandName === '') {
+      // control symbol, e.g. `\\` or `\%`
+      i += 2
+      continue
+    }
+
+    if (commandName === 'verb') {
+      const delimiterPos = text[commandTo] === '*' ? commandTo + 1 : commandTo
+      const delimiter = text[delimiterPos]
+      const closePos = delimiter
+        ? text.indexOf(delimiter, delimiterPos + 1)
+        : -1
+      const lineEnd = text.indexOf('\n', delimiterPos)
+      i =
+        delimiter !== '\n' &&
+        closePos !== -1 &&
+        (lineEnd === -1 || closePos < lineEnd)
+          ? closePos + 1
+          : commandTo
+      continue
+    }
+
+    if (commandName !== 'begin' && commandName !== 'end') {
+      i = commandTo
+      continue
+    }
+
+    const command = readEnvironmentCommand(text, i, commandTo, commandName)
+    if (!command) {
+      i = commandTo
+      continue
+    }
+    commands.push(command)
+    i = command.nameTo + 1
+
+    if (command.cmd === 'begin' && verbatimEnvironments.has(command.env)) {
+      const endCommand = `\\end{${command.env}}`
+      const endFrom = text.indexOf(endCommand, i)
+      if (endFrom === -1) {
+        break
+      }
+      const nameFrom = endFrom + '\\end{'.length
+      commands.push({
+        cmd: 'end',
+        env: command.env,
+        commandFrom: endFrom,
+        nameFrom,
+        nameTo: nameFrom + command.env.length,
+      })
+      i = endFrom + endCommand.length
+    }
+  }
+
+  return commands
+}
+
+/**
+ * The number of commands left without a pair when each `\end{name}` closes
+ * the innermost open `\begin{name}`
+ */
+const countUnmatchedCommands = (commands: EnvironmentCommand[]): number => {
+  const open: string[] = []
+  let unmatched = 0
+
+  for (const command of commands) {
     if (command.cmd === 'begin') {
-      depth++
+      open.push(command.env)
       continue
     }
 
-    if (depth === 0) {
-      return {
-        from: command.nameFrom,
-        to: command.nameTo,
-      }
+    const index = open.lastIndexOf(command.env)
+    if (index === -1) {
+      unmatched++
+    } else {
+      unmatched += open.length - 1 - index
+      open.length = index
     }
-
-    depth--
   }
 
-  return null
+  return unmatched + open.length
 }
 
-const tryRenameCurrentEnvironment = (
+const findPairedEnd = (
+  commands: EnvironmentCommand[],
+  begin: EnvironmentCommand
+): EnvironmentCommand | null => {
+  const open: string[] = []
+  let candidate: EnvironmentCommand | null = null
+
+  for (const command of commands.slice(commands.indexOf(begin) + 1)) {
+    if (command.cmd === 'begin') {
+      open.push(command.env)
+    } else if (open.length === 0) {
+      candidate = command
+      break
+    } else {
+      const index = open.lastIndexOf(command.env)
+      if (index !== -1) {
+        open.length = index
+      }
+    }
+  }
+
+  if (!candidate) {
+    return null
+  }
+
+  // The first `\end` on the same level may close an enclosing environment
+  // (e.g. `\end{document}` after a newly typed `\begin`). It belongs to the
+  // edited `\begin` only if removing both leaves fewer unmatched commands
+  // than removing the `\begin` alone.
+  const withoutBegin = commands.filter(command => command !== begin)
+  const withoutPair = withoutBegin.filter(command => command !== candidate)
+
+  return countUnmatchedCommands(withoutPair) <
+    countUnmatchedCommands(withoutBegin)
+    ? candidate
+    : null
+}
+
+const tryRenameEnvironment = (
   view: EditorView,
+  completion: Completion,
   name: string,
   from: number,
   to: number
 ): boolean => {
-  const remembered = getRememberedEnvironmentPair(view)
-  const cursorPos = view.state.selection.main.head
-  if (
-    remembered &&
-    cursorPos >= remembered.beginNameFrom - 1 &&
-    cursorPos <= remembered.beginNameTo + 1
-  ) {
-    view.dispatch({
-      changes: [
-        {
-          from: remembered.beginNameFrom,
-          to: remembered.beginNameTo,
-          insert: name,
-        },
-        {
-          from: remembered.endNameFrom,
-          to: remembered.endNameTo,
-          insert: name,
-        },
-      ],
-    })
-    return true
-  }
+  const commands = findEnvironmentCommands(view.state.doc.toString())
 
-  const beginEnvNode = findBeginEnvNode(view, from, to)
-  if (beginEnvNode) {
-    const beginEnvNameNode = getEnvNameNode(beginEnvNode)
-    if (!beginEnvNameNode) {
-      return false
-    }
-
-    const environmentNode = beginEnvNode.parent
-    const endEnvNameNode = getEnvNameNode(
-      environmentNode?.getChild('EndEnv') ?? null
-    )
-    if (!endEnvNameNode) {
-      // Let fallback handle malformed trees or fall through to snippet insertion.
-      // This preserves auto-insert of \end{...} for brand-new \begin{...}.
-      return false
-    }
-
-    const changes: { from: number; to: number; insert: string }[] = [
-      {
-        from: beginEnvNameNode.from,
-        to: beginEnvNameNode.to,
-        insert: name,
-      },
-      {
-        from: endEnvNameNode.from,
-        to: endEnvNameNode.to,
-        insert: name,
-      },
-    ]
-
-    view.dispatch({ changes })
-    return true
-  }
-
-  // Fallback for temporarily malformed syntax trees (e.g. after Delete in \begin{...})
-  const beginNameRange = findBeginNameByText(view, from, to)
-  if (!beginNameRange) {
+  const begin = commands.find(
+    command =>
+      command.cmd === 'begin' &&
+      command.commandFrom >= from &&
+      command.nameFrom <= to &&
+      to <= command.nameTo + 1
+  )
+  if (!begin) {
     return false
   }
 
-  const changes: { from: number; to: number; insert: string }[] = [
-    {
-      from: beginNameRange.from,
-      to: beginNameRange.to,
-      insert: name,
-    },
-  ]
-
-  const endNameRange = findEndNameRangeByStructure(
-    view,
-    beginNameRange.beginCommandFrom
-  )
-  if (endNameRange) {
-    changes.push({
-      from: endNameRange.from,
-      to: endNameRange.to,
-      insert: name,
-    })
+  const end = findPairedEnd(commands, begin)
+  if (!end) {
+    return false
   }
 
-  view.dispatch({ changes })
+  view.dispatch({
+    changes: [
+      { from: begin.nameFrom, to: begin.nameTo, insert: name },
+      { from: end.nameFrom, to: end.nameTo, insert: name },
+    ],
+    selection: { anchor: begin.nameFrom + name.length + 1 },
+    annotations: pickedCompletion.of(completion),
+    userEvent: 'input.complete',
+  })
   return true
 }
 
-export const applyBeginCompletion = (name: string, clear = false) => {
-  const applyDefaultSnippet = applySnippet(snippet(name), clear)
+export const applyBeginCompletion = (
+  name: string,
+  clear = false,
+  template = snippet(name)
+) => {
+  const applyDefaultSnippet = applySnippet(template, clear)
 
   return (
     view: EditorView,
@@ -337,7 +309,7 @@ export const applyBeginCompletion = (name: string, clear = false) => {
     from: number,
     to: number
   ) => {
-    if (tryRenameCurrentEnvironment(view, name, from, to)) {
+    if (tryRenameEnvironment(view, completion, name, from, to)) {
       return
     }
     applyDefaultSnippet(view, completion, from, to)
@@ -352,7 +324,7 @@ export function customEndCompletions(context: CompletionContext): Completion[] {
   const openEnvironments = new Set<string>()
   const text = context.state.doc.sliceString(0, context.pos)
 
-  for (const command of iterateEnvironmentCommandsInText(text, 0)) {
+  for (const command of findEnvironmentCommands(text)) {
     if (command.cmd === 'begin') {
       openEnvironments.add(command.env)
     } else {
