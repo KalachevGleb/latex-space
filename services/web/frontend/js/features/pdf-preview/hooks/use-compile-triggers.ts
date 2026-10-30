@@ -2,6 +2,13 @@ import { useCallback, useEffect } from 'react'
 import useEventListener from '../../../shared/hooks/use-event-listener'
 import useDetachAction from '../../../shared/hooks/use-detach-action'
 
+// "s", also with Caps Lock on, or the physical S key in layouts without Latin
+// letters (e.g. Russian), where `key` is the local letter
+const isKeyS = (event: KeyboardEvent | React.KeyboardEvent<Element>) =>
+  event.key === 's' ||
+  event.key === 'S' ||
+  (event.code === 'KeyS' && !/^[a-zA-Z]$/.test(event.key))
+
 export const startCompileKeypress = (
   event: KeyboardEvent | React.KeyboardEvent<Element>
 ) => {
@@ -11,22 +18,12 @@ export const startCompileKeypress = (
 
   if (event.ctrlKey) {
     // Ctrl+s / Ctrl+Enter / Ctrl+.
-    if (event.key === 's' || event.key === 'Enter' || event.key === '.') {
-      return true
-    }
-
-    // Ctrl+s with Caps-Lock on
-    if (event.key === 'S' && !event.shiftKey) {
+    if (isKeyS(event) || event.key === 'Enter' || event.key === '.') {
       return true
     }
   } else if (event.metaKey) {
     // Cmd+s / Cmd+Enter
-    if (event.key === 's' || event.key === 'Enter') {
-      return true
-    }
-
-    // Cmd+s with Caps-Lock on
-    if (event.key === 'S' && !event.shiftKey) {
+    if (isKeyS(event) || event.key === 'Enter') {
       return true
     }
   }
